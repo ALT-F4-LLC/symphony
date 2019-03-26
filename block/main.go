@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net"
 
@@ -20,28 +19,6 @@ const (
 
 // server is used to implement proto.BlockServer.
 type server struct{}
-
-// CreatePv implements proto.BlockServer
-func (s *server) CreatePv(ctx context.Context, in *pb.PvRequest) (*pb.PvReply, error) {
-	log.Printf("CreatePv: received %s create request.", in.Device)
-	pv, err := PVCreate(in.Device)
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("CreatePv: %s successfully created.", in.Device)
-	return &pb.PvReply{Message: pv.PvName}, nil
-}
-
-// CreatePv implements proto.BlockServer
-func (s *server) RemovePv(ctx context.Context, in *pb.PvRequest) (*pb.PvReply, error) {
-	log.Printf("RemovePv: received %s remove request.", in.Device)
-	err := PVRemove(in.Device)
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("RemovePv: %s successfully removed.", in.Device)
-	return &pb.PvReply{Message: "success"}, nil
-}
 
 func main() {
 	// Set static variables
