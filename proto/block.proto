@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package symproto;
+
+service Block {
+  rpc CreatePv (PvRequest) returns (PvReply) {}
+  rpc RemovePv (PvRequest) returns (PvReply) {}
+}
+
+message PvRequest {
+  string device = 1;
+}
+
+message PvReply {
+  string message = 1;
+}
