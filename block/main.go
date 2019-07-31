@@ -10,15 +10,12 @@ import (
 )
 
 const (
-	device = "/dev/sdb"
-	group  = "virtual"
-	name   = "test"
-	port   = ":50051"
-	size   = "1G"
+	port = ":50051"
 )
 
 // server is used to implement proto.BlockServer.
-type server struct{}
+type blockServer struct {
+}
 
 func main() {
 	// Set static variables
@@ -27,7 +24,8 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterBlockServer(s, &server{})
+	pb.RegisterBlockServer(s, &blockServer{})
+	log.Printf("Started block service.")
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
