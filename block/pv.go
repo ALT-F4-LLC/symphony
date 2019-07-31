@@ -113,7 +113,7 @@ func pvRemove(device string) error {
 }
 
 // CreatePv : implements proto.BlockServer CreatePv request
-func (s *server) CreatePv(ctx context.Context, in *pb.PvRequest) (*pb.PvObject, error) {
+func (s *blockServer) CreatePv(ctx context.Context, in *pb.CreatePvRequest) (*pb.PvObject, error) {
 	pv, err := pvCreate(in.Device)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (s *server) CreatePv(ctx context.Context, in *pb.PvRequest) (*pb.PvObject, 
 }
 
 // GetPv : implements proto.BlockServer GetPv request
-func (s *server) GetPv(ctx context.Context, in *pb.PvRequest) (*pb.PvObject, error) {
+func (s *blockServer) GetPv(ctx context.Context, in *pb.GetPvRequest) (*pb.PvObject, error) {
 	pv, err := pvExists(in.Device)
 	if err != nil {
 		return nil, err
@@ -147,11 +147,11 @@ func (s *server) GetPv(ctx context.Context, in *pb.PvRequest) (*pb.PvObject, err
 }
 
 // RemovePv : implements proto.BlockServer RemovePv request
-func (s *server) RemovePv(ctx context.Context, in *pb.PvRequest) (*pb.PvMessage, error) {
+func (s *blockServer) RemovePv(ctx context.Context, in *pb.RemovePvRequest) (*pb.BlockMessage, error) {
 	err := pvRemove(in.Device)
 	if err != nil {
 		return nil, err
 	}
 	log.Printf("RemovePv: %s successfully removed.", in.Device)
-	return &pb.PvMessage{Message: "success"}, nil
+	return &pb.BlockMessage{Message: "success"}, nil
 }

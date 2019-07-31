@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
+	"log"
 	"os/exec"
+
+	pb "gitlab.drn.io/erikreinert/symphony/proto"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // VGStruct : struct for virtual group output
@@ -27,53 +32,57 @@ type VGDisplayStruct struct {
 }
 
 // VGCreate : creates LVM volume group
-func VGCreate(device string, group string) bool {
-	vg := VGExists(group)
-	if vg != nil {
-		fmt.Println("Already existing LVM virtual group.")
-		return false
+func vgCreate(device string, group string) (*VGStruct, error) {
+	// Check if a VG already exists
+	exists, _ := vgExists(group)
+	// If exists - return error
+	if exists != nil {
+		return nil, status.Error(codes.AlreadyExists, "vg already exists")
 	}
-	_, err := exec.Command("vgcreate", group, device).Output()
+	// Create VG with command
+	_, vgcreateErr := exec.Command("vgcreate", group, device).Output()
+	if vgcreateErr != nil {
+		return nil, HandleInternalError(vgcreateErr)
+	}
+	// Lookup new device
+	vg, err := vgExists(group)
 	if err != nil {
-		fmt.Println(err)
-		return false
+		return nil, err
 	}
-	fmt.Printf("Successfully created volume group '%s' for '%s'.", group, device)
-	return true
+	// Return new volume group
+	return vg, nil
 }
 
 // VGDisplay : displays all LVM devices
-func VGDisplay() *VGDisplayStruct {
+func vgDisplay() (*VGDisplayStruct, error) {
 	// Handle pvdisplay command
-	vgd, err := exec.Command("vgdisplay", "--columns", "--reportformat", "json").Output()
+	vgdisplay, err := exec.Command("vgdisplay", "--columns", "--reportformat", "json").Output()
 	if err != nil {
-		return nil
+		return nil, HandleInternalError(err)
 	}
 	// Handle output JSON
-	res := VGDisplayStruct{}
-	if err := json.Unmarshal(vgd, &res); err != nil {
-		return nil
+	output := VGDisplayStruct{}
+	if err := json.Unmarshal(vgdisplay, &output); err != nil {
+		return nil, HandleInternalError(err)
 	}
 	// Return JSON data
-	return &res
+	return &output, nil
 }
 
 // VGExists : verifies if volume group exists
-func VGExists(group string) *VGStruct {
-	// Handle pvdisplay command
-	vgd, err := exec.Command("vgdisplay", "--columns", "--reportformat", "json", group).Output()
-	if err != nil {
-		return nil
+func vgExists(group string) (*VGStruct, error) {
+	// Handle vgdisplay command
+	vgd, vgdErr := exec.Command("vgdisplay", "--columns", "--reportformat", "json", group).Output()
+	if vgdErr != nil {
+		return nil, HandleInternalError(vgdErr)
 	}
 	// Handle output JSON
 	res := VGDisplayStruct{}
 	if err := json.Unmarshal(vgd, &res); err != nil {
-		return nil
+		return nil, HandleInternalError(err)
 	}
 	// Check if any volumes exist
-	if len(res.Report) == 0 {
-		fmt.Println("No existing LVM volume groups.")
-	} else {
+	if len(res.Report) > 0 {
 		// Display data for each volume
 		for _, vg := range res.Report[0].Vg {
 			if vg.VgName == group {
@@ -86,25 +95,69 @@ func VGExists(group string) *VGStruct {
 					VgSize:    vg.VgSize,
 					VgFree:    vg.VgFree,
 				}
-				return &output
+				return &output, nil
 			}
 		}
+	}
+	return nil, nil
+}
+
+// VGRemove : removes LVM volume group
+func vgRemove(group string) error {
+	exists, _ := vgExists(group)
+	if exists == nil {
+		err := status.Error(codes.NotFound, "vg not found")
+		return err
+	}
+	_, err := exec.Command("vgremove", "--force", group).Output()
+	if err != nil {
+		return HandleInternalError(err)
 	}
 	return nil
 }
 
-// VGRemove : removes LVM volume group
-func VGRemove(group string) bool {
-	vg := VGExists(group)
-	if vg == nil {
-		fmt.Println("No existing LVM volume group.")
-		return false
-	}
-	_, err := exec.Command("vgremove", "--force", group).Output()
+// CreateVg : implements proto.BlockServer CreateVg request
+func (s *blockServer) CreateVg(ctx context.Context, in *pb.CreateVgRequest) (*pb.VgObject, error) {
+	vg, err := vgCreate(in.Device, in.Group)
 	if err != nil {
-		fmt.Println(err)
-		return false
+		return nil, err
 	}
-	fmt.Printf("Successfully removed '%s' volume group.", group)
-	return true
+	log.Printf("CreateVg: %s successfully created for %s.", in.Group, in.Device)
+	return &pb.VgObject{
+		VgName:    vg.VgName,
+		PvCount:   vg.PvCount,
+		LvCount:   vg.LvCount,
+		SnapCount: vg.SnapCount,
+		VgAttr:    vg.VgAttr,
+		VgSize:    vg.VgSize,
+		VgFree:    vg.VgFree,
+	}, nil
+}
+
+// GetVg : implements proto.BlockServer GetVg request
+func (s *blockServer) GetVg(ctx context.Context, in *pb.GetVgRequest) (*pb.VgObject, error) {
+	vg, err := vgExists(in.Group)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("GetVg: %s successfully found.", in.Group)
+	return &pb.VgObject{
+		VgName:    vg.VgName,
+		PvCount:   vg.PvCount,
+		LvCount:   vg.LvCount,
+		SnapCount: vg.SnapCount,
+		VgAttr:    vg.VgAttr,
+		VgSize:    vg.VgSize,
+		VgFree:    vg.VgFree,
+	}, nil
+}
+
+// RemoveVg : implements proto.BlockServer RemoveVg request
+func (s *blockServer) RemoveVg(ctx context.Context, in *pb.RemoveVgRequest) (*pb.BlockMessage, error) {
+	err := vgRemove(in.Group)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("RemovePv: %s successfully removed.", in.Group)
+	return &pb.BlockMessage{Message: "success"}, nil
 }

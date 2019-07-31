@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os/exec"
+
+	pb "gitlab.drn.io/erikreinert/symphony/proto"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-// LVStruct : struct for LVM volume
+// LVStruct : struct for logical volume
 type LVStruct struct {
 	LvName          string `json:"lv_name"`
 	VgName          string `json:"vg_name"`
@@ -31,55 +37,58 @@ type LVDisplayStruct struct {
 	} `json:"report"`
 }
 
-// LVCreate : creates LVM volume group
-func LVCreate(group string, name string, size string) bool {
-	lv := LVExists(group, name)
-	if lv != nil {
-		fmt.Println("LVM volume already exists.")
-		return false
+// LVCreate : creates a logical volume
+func lvCreate(group string, name string, size string) (*LVStruct, error) {
+	// Check if LV exists
+	exists, _ := lvExists(group, name)
+	if exists != nil {
+		return nil, status.Error(codes.AlreadyExists, "lv already exists")
 	}
-	_, err := exec.Command("lvcreate", "-n", name, "-L", size, group).Output()
+	// Create logical volume
+	_, lvcreateErr := exec.Command("lvcreate", "-n", name, "-L", size, group).Output()
+	if lvcreateErr != nil {
+		return nil, HandleInternalError(lvcreateErr)
+	}
+	// Lookup new volume
+	lv, err := lvExists(group, name)
 	if err != nil {
-		fmt.Println(err)
-		return false
+		return nil, err
 	}
-	fmt.Printf("Successfully created volume '%s' in '%s' group.", name, group)
-	return true
+	// Return new volume
+	return lv, nil
 }
 
-// LVDisplay : displays all LVM volumes
-func LVDisplay() *LVDisplayStruct {
-	// Handle pvdisplay command
-	lvd, err := exec.Command("lvdisplay", "--columns", "--reportformat", "json").Output()
+// LVDisplay : displays all logical volumes
+func lvDisplay() (*LVDisplayStruct, error) {
+	// Handle lvdisplay command
+	lvdisplay, err := exec.Command("lvdisplay", "--columns", "--reportformat", "json").Output()
 	if err != nil {
-		return nil
+		return nil, HandleInternalError(err)
 	}
 	// Handle output JSON
-	res := LVDisplayStruct{}
-	if err := json.Unmarshal(lvd, &res); err != nil {
-		return nil
+	output := LVDisplayStruct{}
+	if err := json.Unmarshal(lvdisplay, &output); err != nil {
+		return nil, HandleInternalError(err)
 	}
 	// Return JSON data
-	return &res
+	return &output, nil
 }
 
-// LVExists : verifies if volume group exists
-func LVExists(group string, name string) *LVStruct {
-	// Handle pvdisplay command
+// lvExists : verifies if volume group exists
+func lvExists(group string, name string) (*LVStruct, error) {
+	// Handle lvdisplay command
 	path := fmt.Sprintf("/dev/%s/%s", group, name)
-	lvd, err := exec.Command("lvdisplay", "--columns", "--reportformat", "json", path).Output()
-	if err != nil {
-		return nil
+	lvd, lvdError := exec.Command("lvdisplay", "--columns", "--reportformat", "json", path).Output()
+	if lvdError != nil {
+		return nil, HandleInternalError(lvdError)
 	}
 	// Handle output JSON
 	res := LVDisplayStruct{}
 	if err := json.Unmarshal(lvd, &res); err != nil {
-		return nil
+		return nil, HandleInternalError(err)
 	}
 	// Check if any volumes exist
-	if len(res.Report) == 0 {
-		fmt.Println("No existing LVM volumes.")
-	} else {
+	if len(res.Report) > 0 {
 		// Display data for each volume
 		for _, lv := range res.Report[0].Lv {
 			if lv.VgName == group && lv.LvName == name {
@@ -97,26 +106,82 @@ func LVExists(group string, name string) *LVStruct {
 					CopyPercent:     lv.CopyPercent,
 					ConvertLv:       lv.ConvertLv,
 				}
-				return &output
+				return &output, nil
 			}
 		}
+	}
+	return nil, nil
+}
+
+// lvRemove : removes logical volume
+func lvRemove(group string, name string) error {
+	// Check if logical volume exists
+	exists, _ := lvExists(group, name)
+	if exists == nil {
+		err := status.Error(codes.NotFound, "lv not found")
+		return err
+	}
+	// Remove logical volume
+	path := fmt.Sprintf("/dev/%s/%s", group, name)
+	_, err := exec.Command("lvremove", "--force", path).Output()
+	if err != nil {
+		return HandleInternalError(err)
 	}
 	return nil
 }
 
-// LVRemove : removes LVM volume group
-func LVRemove(group string, name string) bool {
-	lv := LVExists(group, name)
-	if lv == nil {
-		fmt.Println("No existing LVM volume group.")
-		return false
-	}
-	path := fmt.Sprintf("/dev/%s/%s", group, name)
-	_, err := exec.Command("lvremove", "--force", path).Output()
+// CreateLv : implements proto.BlockServer CreateLv request
+func (s *blockServer) CreateLv(ctx context.Context, in *pb.CreateLvRequest) (*pb.LvObject, error) {
+	lv, err := lvCreate(in.Group, in.Name, in.Size)
 	if err != nil {
-		fmt.Println(err)
-		return false
+		return nil, err
 	}
-	fmt.Printf("Successfully removed '%s' volume from '%s' group.", name, group)
-	return true
+	log.Printf("CreateLv: %s successfully created in %s with %s space.", in.Name, in.Group, in.Size)
+	return &pb.LvObject{
+		LvName:          lv.LvName,
+		VgName:          lv.VgName,
+		LvAttr:          lv.LvAttr,
+		LvSize:          lv.LvSize,
+		PoolLv:          lv.PoolLv,
+		Origin:          lv.Origin,
+		DataPercent:     lv.DataPercent,
+		MetadataPercent: lv.MetadataPercent,
+		MovePv:          lv.MovePv,
+		MirrorLog:       lv.MirrorLog,
+		CopyPercent:     lv.CopyPercent,
+		ConvertLv:       lv.ConvertLv,
+	}, nil
+}
+
+// GetLv : implements proto.BlockServer GetLv request
+func (s *blockServer) GetLv(ctx context.Context, in *pb.GetLvRequest) (*pb.LvObject, error) {
+	lv, err := lvExists(in.Group, in.Name)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("GetLv: %s successfully found in %s.", in.Name, in.Group)
+	return &pb.LvObject{
+		LvName:          lv.LvName,
+		VgName:          lv.VgName,
+		LvAttr:          lv.LvAttr,
+		LvSize:          lv.LvSize,
+		PoolLv:          lv.PoolLv,
+		Origin:          lv.Origin,
+		DataPercent:     lv.DataPercent,
+		MetadataPercent: lv.MetadataPercent,
+		MovePv:          lv.MovePv,
+		MirrorLog:       lv.MirrorLog,
+		CopyPercent:     lv.CopyPercent,
+		ConvertLv:       lv.ConvertLv,
+	}, nil
+}
+
+// RemoveLv : implements proto.BlockServer RemoveLv request
+func (s *blockServer) RemoveLv(ctx context.Context, in *pb.RemoveLvRequest) (*pb.BlockMessage, error) {
+	err := lvRemove(in.Group, in.Name)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("RemoveLv: %s successfully removed from %s.", in.Name, in.Group)
+	return &pb.BlockMessage{Message: "success"}, nil
 }
