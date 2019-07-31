@@ -31,7 +31,7 @@ type VGDisplayStruct struct {
 	} `json:"report"`
 }
 
-// VGCreate : creates LVM volume group
+// vgCreate : creates volume group
 func vgCreate(device string, group string) (*VGStruct, error) {
 	// Check if a VG already exists
 	exists, _ := vgExists(group)
@@ -53,7 +53,7 @@ func vgCreate(device string, group string) (*VGStruct, error) {
 	return vg, nil
 }
 
-// VGDisplay : displays all LVM devices
+// vgDisplay : displays all volume groups
 func vgDisplay() (*VGDisplayStruct, error) {
 	// Handle pvdisplay command
 	vgdisplay, err := exec.Command("vgdisplay", "--columns", "--reportformat", "json").Output()
@@ -69,7 +69,7 @@ func vgDisplay() (*VGDisplayStruct, error) {
 	return &output, nil
 }
 
-// VGExists : verifies if volume group exists
+// vgExists : verifies if volume group exists
 func vgExists(group string) (*VGStruct, error) {
 	// Handle vgdisplay command
 	vgd, vgdErr := exec.Command("vgdisplay", "--columns", "--reportformat", "json", group).Output()
@@ -102,7 +102,7 @@ func vgExists(group string) (*VGStruct, error) {
 	return nil, nil
 }
 
-// VGRemove : removes LVM volume group
+// vgRemove : removes volume group
 func vgRemove(group string) error {
 	exists, _ := vgExists(group)
 	if exists == nil {

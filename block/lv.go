@@ -37,9 +37,9 @@ type LVDisplayStruct struct {
 	} `json:"report"`
 }
 
-// LVCreate : creates a logical volume
+// lvCreate : creates a logical volume
 func lvCreate(group string, name string, size string) (*LVStruct, error) {
-	// Check if LV exists
+	// Check if logical volume exists
 	exists, _ := lvExists(group, name)
 	if exists != nil {
 		return nil, status.Error(codes.AlreadyExists, "lv already exists")
@@ -58,7 +58,7 @@ func lvCreate(group string, name string, size string) (*LVStruct, error) {
 	return lv, nil
 }
 
-// LVDisplay : displays all logical volumes
+// lvDisplay : displays all logical volumes
 func lvDisplay() (*LVDisplayStruct, error) {
 	// Handle lvdisplay command
 	lvdisplay, err := exec.Command("lvdisplay", "--columns", "--reportformat", "json").Output()
@@ -74,7 +74,7 @@ func lvDisplay() (*LVDisplayStruct, error) {
 	return &output, nil
 }
 
-// lvExists : verifies if volume group exists
+// lvExists : verifies if logical volume exists
 func lvExists(group string, name string) (*LVStruct, error) {
 	// Handle lvdisplay command
 	path := fmt.Sprintf("/dev/%s/%s", group, name)
@@ -87,7 +87,7 @@ func lvExists(group string, name string) (*LVStruct, error) {
 	if err := json.Unmarshal(lvd, &res); err != nil {
 		return nil, HandleInternalError(err)
 	}
-	// Check if any volumes exist
+	// Check if any logical volumes exist
 	if len(res.Report) > 0 {
 		// Display data for each volume
 		for _, lv := range res.Report[0].Lv {

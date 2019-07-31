@@ -30,6 +30,7 @@ type PvDisplayStruct struct {
 	} `json:"report"`
 }
 
+// pvCreate : creates a pv from a physical device
 func pvCreate(device string) (*PvStruct, error) {
 	// Check if PV already exists
 	exists, _ := pvExists(device)
@@ -51,6 +52,7 @@ func pvCreate(device string) (*PvStruct, error) {
 	return pv, nil
 }
 
+// pvDisplay : displays all pv devices
 func pvDisplay() (*PvDisplayStruct, error) {
 	// Handle pvdisplay command
 	pvdisplay, err := exec.Command("pvdisplay", "--columns", "--reportformat", "json").Output()
@@ -66,6 +68,7 @@ func pvDisplay() (*PvDisplayStruct, error) {
 	return &output, nil
 }
 
+// pvExists : verifies if pv exists
 func pvExists(device string) (*PvStruct, error) {
 	// Handle pvdisplay command
 	pvd, pvdErr := exec.Command("pvdisplay", "--columns", "--reportformat", "json", device).Output()
@@ -97,6 +100,7 @@ func pvExists(device string) (*PvStruct, error) {
 	return nil, nil
 }
 
+// pvRemove : removes pv if exists
 func pvRemove(device string) error {
 	exists, _ := pvExists(device)
 	// Handle if no PV exists
