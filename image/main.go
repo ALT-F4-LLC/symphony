@@ -21,6 +21,8 @@ func main() {
 	}
 
 	r := mux.NewRouter()
+	r.HandleFunc("/image", GetImageHandler(db)).Methods("GET")
+	r.HandleFunc("/image", PostImageHandler(db)).Methods("POST")
 	r.HandleFunc("/image/{id}", GetImageByIDHandler(db)).Methods("GET")
 
 	// Log successful listen
