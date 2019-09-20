@@ -13,16 +13,16 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// Error : struct for handling errors
+type Error struct {
+	Error string
+}
+
 // Image : struct for image in postgres
 type Image struct {
 	Filename string `json:"filename"`
 	ID       string `json:"id"`
 	Name     string `json:"name"`
-}
-
-// Error : struct for handling errors
-type Error struct {
-	Error string
 }
 
 // HandleError : handles response
@@ -129,6 +129,7 @@ func GetImageByIDHandler(db *sql.DB) http.HandlerFunc {
 			w.Write(data)
 			return
 		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(json)
