@@ -1,0 +1,20 @@
+networks:
+  postgres: {}
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres.password.txt
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - "CMD"
+      - "su"
+      - "-c"
+      - "pg_isready"
+      - "postgres"
+      timeout: 5s
+    image: postgres:11.4-alpine
+    networks:
+      postgres: null
+version: '3.6'
