@@ -3,8 +3,14 @@ package main
 import (
 	"database/sql"
 	"log"
+	"net/http"
 
+	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
+)
+
+const (
+	port = ":22878"
 )
 
 func main() {
@@ -13,9 +19,13 @@ func main() {
 	if connErr != nil {
 		log.Fatal(connErr)
 	}
-	images, err := GetImages(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println(images)
+
+	r := mux.NewRouter()
+	r.HandleFunc("/image/{id}", GetImageByIDHandler(db)).Methods("GET")
+
+	// Log successful listen
+	log.Printf("Started image service")
+
+	// Logs the error if ListenAndServe fails.
+	log.Fatal(http.ListenAndServe(port, r))
 }
