@@ -12,20 +12,14 @@ import (
 )
 
 const (
-	port = ":50051"
+	port = ":36837"
 )
 
 func main() {
 	// Get service configuration from FS
-	config, configErr := GetServiceConfig(os.Getenv("BLOCK_CONFIG_FILE"))
+	config, configErr := GetServiceConfig(os.Getenv("CONDUCTOR_CONFIG_FILE"))
 	if configErr != nil {
 		panic(configErr)
-	}
-
-	// Handle service discovery
-	service, err := HandleInit(config)
-	if err != nil {
-		panic(err)
 	}
 
 	// Setup connection to Postgres database
@@ -35,11 +29,19 @@ func main() {
 		panic(connErr)
 	}
 
+	// Endpoints that handle cluster initialization
 	r := mux.NewRouter()
-	r.Path("/pv").Queries("device", "{device}").HandlerFunc(GetPvsByDeviceHandler(db, service)).Methods("GET")
+
+	// Resources: service
+	r.Path("/service").Queries("hostname", "{hostname}").HandlerFunc(GetServiceByHostnameHandler(db)).Methods("GET")
+	r.Path("/service").HandlerFunc(PostServiceHandler(db)).Methods("POST")
+	r.Path("/service/{id}").HandlerFunc(GetServiceByIDHandler(db)).Methods("GET")
+
+	// Resources: servicetype
+	r.Path("/servicetype").Queries("name", "{name}").HandlerFunc(GetServiceTypeByNameHandler(db)).Methods("GET")
 
 	// Log successful listen
-	log.Printf("Started block service with identifier: %s", service.ID)
+	log.Printf("Started conductor listening on 0.0.0.0" + port)
 
 	// Logs the error if ListenAndServe fails.
 	log.Fatal(http.ListenAndServe(port, r))

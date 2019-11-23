@@ -1,4 +1,10 @@
+networks:
+  internal: {}
 secrets:
+  minio.access_key.txt:
+    file: ./docker/secret.d/localhost/minio.access_key.txt
+  minio.secret_key.txt:
+    file: ./docker/secret.d/localhost/minio.secret_key.txt
   postgres.password.txt:
     file: ./docker/secret.d/localhost/postgres.password.txt
 services:
@@ -8,18 +14,40 @@ services:
       - postgres
     image: boxfuse/flyway:5.2-alpine
     networks:
-      postgres: null
+      - internal
     restart: on-failure
     volumes:
       - ./docker/secret.d/localhost/flyway.conf:/flyway/conf/flyway.conf:rw
       - ./migration:/flyway/sql:rw
-  postgres:
+  minio:
+    command: server /data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    image: minio/minio:RELEASE.2019-10-12T01-39-57Z
+    networks:
+      - internal
     ports:
-      - 127.0.0.1:5432:5432/tcp
+      - 15511:9000/tcp
+    secrets:
+      - source: minio.access_key.txt
+        target: access_key
+      - source: minio.secret_key.txt
+        target: secret_key
+    volumes:
+      - minio:/data
+  postgres:
+    networks:
+      - internal
+    ports:
+      - 40178:5432/tcp
     secrets:
       - source: postgres.password.txt
     volumes:
       - postgres:/var/lib/postgresql/data:rw
 version: '3.6'
 volumes:
+  minio: {}
   postgres: {}

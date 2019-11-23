@@ -1,0 +1,6 @@
+postgres:
+  dbname: postgres
+  host: localhost
+  password: b774e74299739cc265a03bc9eecf12b241d3e5c1a2011b9a9d
+  port: 40178
+  user: postgres
