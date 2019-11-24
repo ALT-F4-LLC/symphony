@@ -3,8 +3,10 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os/exec"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -15,15 +17,16 @@ import (
 // 	Device string
 // }
 
-// PvEntry : database entry for Pv data
-type PvEntry struct {
-	Device    string
-	ID        uuid.UUID
-	serviceID uuid.UUID
+// PvError : struct for describing a pv error
+type PvError struct {
+	Message string `json:"message"`
 }
 
-// PvEntries : list of Pv database entries
-type PvEntries []PvEntry
+// PvEntry : database entry for Pv data
+type PvEntry struct {
+	Device string
+	ID     uuid.UUID
+}
 
 // PvMetadata : struct for describing a pv in LVM
 type PvMetadata struct {
@@ -85,7 +88,12 @@ type PvMetadataJSON struct {
 // pvExists : verifies if pv exists
 func pvExists(device string) (*PvMetadata, error) {
 	// Handle pvdisplay command
-	pvd, pvdErr := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device).Output()
+	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device)
+	pvd, pvdErr := cmd.CombinedOutput()
+	notExists := strings.Contains(string(pvd), "Failed to find physical volume")
+	if notExists {
+		return nil, errors.New("invalid_pv_device")
+	}
 	if pvdErr != nil {
 		return nil, pvdErr
 	}
@@ -156,9 +164,34 @@ func pvExists(device string) (*PvMetadata, error) {
 // 	}
 // }
 
-// GetPvsFromDevice : lookup PV in database from id
-func GetPvsFromDevice(db *sql.DB, device string, service *Service) (*PvEntries, error) {
-	pvs := make(PvEntries, 0)
+// HandleResponse : translates response to json
+func HandleResponse(w http.ResponseWriter, data interface{}) {
+	json, err := json.Marshal(data)
+	if err != nil {
+		HandleErrorResponse(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(json)
+}
+
+// HandleErrorResponse : translates error to json responses
+func HandleErrorResponse(w http.ResponseWriter, err error) {
+	res := &PvError{Message: err.Error()}
+	json, err := json.Marshal(res)
+	if err != nil {
+		http.Error(w, "invalid_json", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write(json)
+}
+
+// GetPvsByDevice : lookup PV in database from id
+func GetPvsByDevice(db *sql.DB, device string, service *Service) ([]PvEntry, error) {
+	pvs := make([]PvEntry, 0)
 	rows, err := db.Query("SELECT device, id FROM pv WHERE device = $1 AND service_id = $2", device, service.ID)
 	if err != nil {
 		return nil, err
@@ -171,53 +204,35 @@ func GetPvsFromDevice(db *sql.DB, device string, service *Service) (*PvEntries, 
 		}
 		pvs = append(pvs, pv)
 	}
-	return &pvs, nil
+	return pvs, nil
 }
 
 // GetPvsByDeviceHandler : handles HTTP request for getting pvs
 func GetPvsByDeviceHandler(db *sql.DB, service *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Lookup pv by service id and device in database
 		device := r.FormValue("device")
 
-		// Lookup PV entry and make sure it exists in db
-		pvs, err := GetPvsFromDevice(db, device, service)
+		pvs, err := GetPvsByDevice(db, device, service)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			HandleErrorResponse(w, err)
+			return
+		}
+		if len(pvs) <= 0 {
+			HandleResponse(w, pvs)
 			return
 		}
 
-		// Return empty array if none found
-		if len(*pvs) == 0 {
-			json, err := json.Marshal(make([]string, 0))
-			if err != nil {
-				panic(err)
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write(json)
-			return
-		}
-
-		// Lookup PV entry on host and make sure device exists
 		pvd, pvdErr := pvExists(device)
 		if pvdErr != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			HandleErrorResponse(w, pvdErr)
 			return
 		}
 		if pvd == nil {
-			http.Error(w, "invalid_pv_device", http.StatusInternalServerError)
+			HandleErrorResponse(w, errors.New("invalid_pv_device"))
 			return
 		}
 
-		// Marshall JSON for response
-		json, err := json.Marshal(pvs)
-		if err != nil {
-			panic(err)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(json)
+		HandleResponse(w, pvs)
 	}
 }
 
