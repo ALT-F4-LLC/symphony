@@ -3,30 +3,15 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"gopkg.in/yaml.v2"
 )
 
 // Error : struct for handling errors
 type Error struct {
 	Error string
-}
-
-// Service : struct for service in postgres
-type Service struct {
-	ID            uuid.UUID
-	Hostname      string
-	ServiceTypeID uuid.UUID
-}
-
-// ServiceType : struct for service in postgres
-type ServiceType struct {
-	ID   uuid.UUID
-	Name string
 }
 
 // ServiceConfig : service configuration
@@ -56,38 +41,6 @@ func HandleError(error string) []byte {
 		panic(e)
 	}
 	return json
-}
-
-// GetServiceConfig : gets service configuration data
-func GetServiceConfig(path string) (*ServiceConfig, error) {
-	config := ServiceConfig{}
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	yamlErr := yaml.Unmarshal(data, &config)
-	if yamlErr != nil {
-		return nil, yamlErr
-	}
-	return &config, nil
-}
-
-// GetServiceByHostname : gets specific service from database
-func GetServiceByHostname(db *sql.DB, hostname string) (Services, error) {
-	services := make(Services, 0)
-	rows, queryErr := db.Query("SELECT hostname, id FROM service WHERE hostname = $1", hostname)
-	if queryErr != nil {
-		return nil, queryErr
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var service Service
-		if e := rows.Scan(&service.Hostname, &service.ID); e != nil {
-			return nil, e
-		}
-		services = append(services, service)
-	}
-	return services, nil
 }
 
 // GetServiceByID : gets specific service from database

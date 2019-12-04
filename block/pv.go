@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/erkrnt/symphony/services"
+
 	"github.com/google/uuid"
 )
 
@@ -190,7 +192,7 @@ func HandleErrorResponse(w http.ResponseWriter, err error) {
 }
 
 // GetPvsByDevice : lookup PV in database from id
-func GetPvsByDevice(db *sql.DB, device string, service *Service) ([]PvEntry, error) {
+func GetPvsByDevice(db *sql.DB, device string, service *services.Service) ([]PvEntry, error) {
 	pvs := make([]PvEntry, 0)
 	rows, err := db.Query("SELECT device, id FROM pv WHERE device = $1 AND service_id = $2", device, service.ID)
 	if err != nil {
@@ -208,7 +210,7 @@ func GetPvsByDevice(db *sql.DB, device string, service *Service) ([]PvEntry, err
 }
 
 // GetPvsByDeviceHandler : handles HTTP request for getting pvs
-func GetPvsByDeviceHandler(db *sql.DB, service *Service) http.HandlerFunc {
+func GetPvsByDeviceHandler(db *sql.DB, service *services.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		device := r.FormValue("device")
 
