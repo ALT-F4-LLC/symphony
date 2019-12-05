@@ -2,12 +2,7 @@ package main
 
 import (
 	"log"
-	"net/http"
-	"os"
 
-	"github.com/erkrnt/symphony/services"
-
-	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
@@ -20,31 +15,33 @@ func main() {
 	flags := GetFlags()
 
 	// Get service configuration from FS
-	config, configErr := GetConfig(os.Getenv("BLOCK_CONFIG_FILE"))
+	config, configErr := GetConfig(flags.Config)
 	if configErr != nil {
 		panic(configErr)
 	}
 
+	log.Println(config)
+
 	// Handle service discovery
-	service, err := services.GetService(config)
-	if err != nil {
-		panic(err)
-	}
+	// service, err := services.GetService(config)
+	// if err != nil {
+	// 	panic(err)
+	// }
 
 	// Handle database initialization
-	db, err := LoadDB(flags)
-	if err != nil {
-		panic(err)
-	}
+	// db, err := LoadDB(flags)
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	log.Println(db)
+	// log.Println(db)
 
-	r := mux.NewRouter()
+	// r := mux.NewRouter()
 	// r.Path("/pv").Queries("device", "{device}").HandlerFunc(GetPvsByDeviceHandler(db, service)).Methods("GET")
 
 	// Log successful listen
-	log.Printf("Started block service with identifier: %s", service.ID)
+	// log.Printf("Started block service with identifier: %s", service.ID)
 
 	// Logs the error if ListenAndServe fails.
-	log.Fatal(http.ListenAndServe(port, r))
+	// log.Fatal(http.ListenAndServe(port, r))
 }
