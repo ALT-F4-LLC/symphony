@@ -1,20 +1,14 @@
 networks:
-  postgres: {}
-services:
-  postgres:
-    environment:
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres.password.txt
+  internal: {}
+services: 
+  minio:
+    command: server /data
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
+      timeout: 20s
       retries: 3
-      test:
-      - "CMD"
-      - "su"
-      - "-c"
-      - "pg_isready"
-      - "postgres"
-      timeout: 5s
-    image: postgres:11.4-alpine
+    image: minio/minio:RELEASE.2019-10-12T01-39-57Z
     networks:
-      postgres: null
+      - internal
 version: '3.6'
