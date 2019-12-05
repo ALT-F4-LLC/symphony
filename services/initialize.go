@@ -9,8 +9,6 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
 // serviceType : struct for service in postgres
@@ -26,8 +24,8 @@ type Service struct {
 }
 
 // getServiceTypeByName : requests servicetype from conductor
-func getServiceTypeByName(config *Config) (*serviceType, error) {
-	url := fmt.Sprintf("http://%s/servicetype?name=%s", config.Conductor.Hostname, "block")
+func getServiceTypeByName(conductorHostname string) (*serviceType, error) {
+	url := fmt.Sprintf("http://%s/servicetype?name=%s", conductorHostname, "block")
 	serviceTypesRes, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -48,13 +46,13 @@ func getServiceTypeByName(config *Config) (*serviceType, error) {
 }
 
 // newService : creates a service entry in conductor
-func newService(config *Config) (*Service, error) {
-	serviceType, err := getServiceTypeByName(config)
+func newService(conductorHostname string, hostname string) (*Service, error) {
+	serviceType, err := getServiceTypeByName(conductorHostname)
 	if err != nil {
 		return nil, err
 	}
-	data := fmt.Sprintf(`{"hostname":"%s","servicetype_id":"%s"}`, config.Hostname, serviceType.id)
-	baseURL := fmt.Sprintf("http://%s/service", config.Conductor.Hostname)
+	data := fmt.Sprintf(`{"hostname":"%s","servicetype_id":"%s"}`, hostname, serviceType.id)
+	baseURL := fmt.Sprintf("http://%s/service", conductorHostname)
 	serviceRes, err := http.Post(baseURL, "application/json", bytes.NewBuffer([]byte(data)))
 	if err != nil {
 		return nil, err
@@ -72,9 +70,9 @@ func newService(config *Config) (*Service, error) {
 }
 
 // getServiceByHostname : requests service id from conductor
-func getServiceByHostname(config *Config) (*Service, error) {
-	base := fmt.Sprintf("http://%s/service", config.Conductor.Hostname)
-	url := fmt.Sprintf("%s?hostname=%s", base, config.Hostname)
+func getServiceByHostname(conductorHostname string, hostname string) (*Service, error) {
+	base := fmt.Sprintf("http://%s/service", conductorHostname)
+	url := fmt.Sprintf("%s?hostname=%s", base, hostname)
 	serviceRes, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -95,29 +93,17 @@ func getServiceByHostname(config *Config) (*Service, error) {
 }
 
 // GetService : handles initialization and clustering of instance
-func GetService(config *Config) (*Service, error) {
-	service, err := getServiceByHostname(config)
+func GetService(conductorHostname string, hostname string) (*Service, error) {
+	service, err := getServiceByHostname(conductorHostname, hostname)
 	if err != nil {
 		return nil, err
 	}
 	if service == nil {
-		srvc, err := newService(config)
+		srvc, err := newService(conductorHostname, hostname)
 		if err != nil {
 			return nil, err
 		}
 		return srvc, nil
 	}
 	return service, nil
-}
-
-// GetDatabase : get database connection for service
-func GetDatabase(debug bool) (*gorm.DB, error) {
-	db, err := gorm.Open("sqlite3", "data.db")
-	if err != nil {
-		return nil, err
-	}
-	if debug == true {
-		db.LogMode(true)
-	}
-	return db, nil
 }

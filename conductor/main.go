@@ -1,7 +1,10 @@
 package main
 
 import (
-	_ "github.com/lib/pq"
+	"log"
+	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 const (
@@ -13,26 +16,26 @@ func main() {
 	flags := GetFlags()
 
 	// Load database here
-	db, err := LoadDB(flags)
+	db, err := GetDatabase(flags)
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
 
 	// Endpoints that handle cluster initialization
-	// r := mux.NewRouter()
+	r := mux.NewRouter()
 
 	// Resources: service
-	// r.Path("/service").Queries("hostname", "{hostname}").HandlerFunc(GetServiceByHostnameHandler(db)).Methods("GET")
-	// r.Path("/service").HandlerFunc(PostServiceHandler(db)).Methods("POST")
+	r.Path("/service").Queries("hostname", "{hostname}").HandlerFunc(GetServiceByHostnameHandler(db)).Methods("GET")
+	r.Path("/service").HandlerFunc(PostServiceHandler(db)).Methods("POST")
 	// r.Path("/service/{id}").HandlerFunc(GetServiceByIDHandler(db)).Methods("GET")
 
 	// Resources: servicetype
-	// r.Path("/servicetype").Queries("name", "{name}").HandlerFunc(GetServiceTypeByNameHandler(db)).Methods("GET")
+	r.Path("/servicetype").Queries("name", "{name}").HandlerFunc(GetServiceTypeByNameHandler(db)).Methods("GET")
 
 	// Log successful listen
-	// log.Printf("Started conductor listening on 0.0.0.0" + port)
+	log.Printf("Started conductor listening on 0.0.0.0" + port)
 
 	// Logs the error if ListenAndServe fails.
-	// log.Fatal(http.ListenAndServe(port, r))
+	log.Fatal(http.ListenAndServe(port, r))
 }

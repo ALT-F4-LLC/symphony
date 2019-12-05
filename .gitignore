@@ -1,11 +1,9 @@
-### symphony/block ###
+### symphony ###
+*.db
 block/block
-
-### symphony/image ###
+conductor/conductor
 image/data
-
-### symphony/proto ###
-proto/*.pb.go
+image/image
 
 # Created by https://www.gitignore.io/api/go,osx,linux,windows
 # Edit at https://www.gitignore.io/?templates=go,osx,linux,windows
