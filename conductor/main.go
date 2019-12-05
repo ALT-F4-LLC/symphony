@@ -28,7 +28,7 @@ func main() {
 	// Resources: service
 	r.Path("/service").Queries("hostname", "{hostname}").HandlerFunc(GetServiceByHostnameHandler(db)).Methods("GET")
 	r.Path("/service").HandlerFunc(PostServiceHandler(db)).Methods("POST")
-	// r.Path("/service/{id}").HandlerFunc(GetServiceByIDHandler(db)).Methods("GET")
+	r.Path("/service/{id}").HandlerFunc(GetServiceByIDHandler(db)).Methods("GET")
 
 	// Resources: servicetype
 	r.Path("/servicetype").Queries("name", "{name}").HandlerFunc(GetServiceTypeByNameHandler(db)).Methods("GET")

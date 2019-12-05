@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"github.com/jinzhu/gorm"
 )
 
@@ -12,23 +13,6 @@ import (
 type Error struct {
 	Error string
 }
-
-// ServiceConfig : service configuration
-type ServiceConfig struct {
-	Postgres struct {
-		DBName   string
-		Host     string
-		Password string
-		Port     int
-		User     string
-	}
-}
-
-// Services : struct for multiple services
-type Services []Service
-
-// ServiceTypes : struct for multiple servicetypes
-type ServiceTypes []ServiceType
 
 // HandleError : handles response
 func HandleError(error string) []byte {
@@ -42,83 +26,65 @@ func HandleError(error string) []byte {
 	return json
 }
 
-// GetServiceByID : gets specific service from database
-// func GetServiceByID(db *sql.DB, id string) (Services, error) {
-// 	var services []Service
-// 	rows, queryErr := db.Query("SELECT hostname, id FROM service WHERE id = $1", id)
-// 	if queryErr != nil {
-// 		return nil, queryErr
-// 	}
-// 	defer rows.Close()
-// 	for rows.Next() {
-// 		var service Service
-// 		if e := rows.Scan(&service.Hostname, &service.ID); e != nil {
-// 			return nil, e
-// 		}
-// 		services = append(services, service)
-// 	}
-// 	return services, nil
-// }
-
 // GetServiceByIDHandler : handles retrival of service from API request
-// func GetServiceByIDHandler(db *sql.DB) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		params := mux.Vars(r)
-// 		id := params["id"]
+func GetServiceByIDHandler(db *gorm.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 
-// 		services, err := GetServiceByID(db, id)
-// 		if len(services) < 1 {
-// 			json, err := json.Marshal(services)
-// 			if err != nil {
-// 				panic(err)
-// 			}
-// 			w.Header().Set("Content-Type", "application/json")
-// 			w.WriteHeader(http.StatusOK)
-// 			w.Write(json)
-// 			return
-// 		}
+		params := mux.Vars(r)
+		id := params["id"]
 
-// 		service := &Service{
-// 			ID:       services[0].ID,
-// 			Hostname: services[0].Hostname,
-// 		}
+		service, err := GetServiceByID(db, id)
+		if err != nil {
+			json := HandleError(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(json)
+			return
+		}
 
-// 		json, err := json.Marshal(service)
-// 		if err != nil {
-// 			panic(err)
-// 		}
-
-// 		w.Header().Set("Content-Type", "application/json")
-// 		w.WriteHeader(http.StatusOK)
-// 		w.Write(json)
-// 	}
-// }
-
-// PostGuestHandler : Handles creation of guests on compute nodes
-// func PostGuestHandler(db *sql.DB) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		// TODO: Create a block volume
-// 		// TODO: Inject the OS image into the volume
-// 		// TODO: Expose the volume over ISCSI
-// 		// TODO: Mount the ISCSI target on the compute node
-// 		// TODO: Create the virtual machine
-// 		// TODO: Cloudinit configuration stuff
-// 	}
-// }
+		data := make([]Service, 0)
+		if service != nil {
+			data = append(data, *service)
+		}
+		json, err := json.Marshal(data)
+		if err != nil {
+			json := HandleError(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(json)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(json)
+	}
+}
 
 // GetServiceByHostnameHandler : handles retrival of service from API request
 func GetServiceByHostnameHandler(db *gorm.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		hostname := r.FormValue("hostname")
-		services, err := GetServiceByHostname(db, hostname)
-		if err != nil {
-			panic(err)
-		}
-		json, err := json.Marshal(services)
-		if err != nil {
-			panic(err)
-		}
 		w.Header().Set("Content-Type", "application/json")
+
+		hostname := r.FormValue("hostname")
+		service, err := GetServiceByHostname(db, hostname)
+		if err != nil {
+			json := HandleError(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(json)
+			return
+		}
+
+		data := make([]Service, 0)
+		if service != nil {
+			data = append(data, *service)
+		}
+
+		json, err := json.Marshal(data)
+		if err != nil {
+			json := HandleError(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(json)
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 		w.Write(json)
 	}
@@ -133,28 +99,44 @@ func PostServiceHandler(db *gorm.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		var serviceType *ServiceType
-		db.Where(&ServiceType{Name: "block"}).First(&serviceType)
+		// Decode JSON
+		data := requestBody{}
+		_ = json.NewDecoder(r.Body).Decode(&data)
+
+		// Lookup servicetype to confirm exists
+		serviceType, err := GetServiceTypeByID(db, data.ServiceTypeID)
+		if err != nil {
+			json := HandleError(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(json)
+			return
+		}
 		if serviceType == nil {
 			json := HandleError("invalid_service_type")
-			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			w.Write(json)
 			return
 		}
 
-		var data requestBody
-		_ = json.NewDecoder(r.Body).Decode(&data)
-
+		// Create our new service
 		service := Service{Hostname: data.Hostname, ServiceTypeID: serviceType.ID}
-		db.Create(&service)
-
-		json, err := json.Marshal(service)
-		if err != nil {
-			panic(err)
+		if err := db.Create(&service).Error; err != nil {
+			json := HandleError(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(json)
+			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		// Turn into JSON
+		json, err := json.Marshal(service)
+		if err != nil {
+			json := HandleError(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(json)
+			return
+		}
+
+		// Handle response
 		w.WriteHeader(http.StatusOK)
 		w.Write(json)
 	}
@@ -163,16 +145,30 @@ func PostServiceHandler(db *gorm.DB) http.HandlerFunc {
 // GetServiceTypeByNameHandler : handles retrival of servicetype from API request
 func GetServiceTypeByNameHandler(db *gorm.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		name := r.FormValue("name")
-		servicetypes, err := GetServiceTypeByName(db, name)
-		if err != nil {
-			panic(err)
-		}
-		json, err := json.Marshal(servicetypes)
-		if err != nil {
-			panic(err)
-		}
 		w.Header().Set("Content-Type", "application/json")
+
+		name := r.FormValue("name")
+		servicetype, err := GetServiceTypeByName(db, name)
+		if err != nil {
+			json := HandleError(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(json)
+			return
+		}
+
+		data := make([]ServiceType, 0)
+		if servicetype != nil {
+			data = append(data, *servicetype)
+		}
+
+		json, err := json.Marshal(data)
+		if err != nil {
+			json := HandleError(err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(json)
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 		w.Write(json)
 	}
