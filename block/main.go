@@ -29,13 +29,13 @@ func main() {
 	}
 
 	// Handle database initialization
-	_, dbErr := GetDatabase(flags)
+	db, dbErr := GetDatabase(flags)
 	if dbErr != nil {
 		panic(dbErr)
 	}
 
 	r := mux.NewRouter()
-	// r.Path("/pv").Queries("device", "{device}").HandlerFunc(GetPvsByDeviceHandler(db, service)).Methods("GET")
+	r.Path("/pv").Queries("device", "{device}").HandlerFunc(GetPvByDeviceHandler(db, service)).Methods("GET")
 
 	// Log successful listen
 	log.Printf("Started block \"%s\" on 0.0.0.0%s", service.ID, port)

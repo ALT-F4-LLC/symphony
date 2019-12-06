@@ -1,14 +1,16 @@
 package main
 
+import (
+	"encoding/json"
+	"errors"
+	"os/exec"
+	"strings"
+)
+
 // PvTable : struct for describing a pv table entry
 // type PvTable struct {
 // 	ID     string
 // 	Device string
-// }
-
-// PvError : struct for describing a pv error
-// type PvError struct {
-// 	Message string `json:"message"`
 // }
 
 // PvEntry : database entry for Pv data
@@ -18,23 +20,23 @@ package main
 // }
 
 // PvMetadata : struct for describing a pv in LVM
-// type PvMetadata struct {
-// 	PvName string `json:"pv_name"`
-// 	VgName string `json:"vg_name"`
-// 	PvFmt  string `json:"pv_fmt"`
-// 	PvAttr string `json:"pv_attr"`
-// 	PvSize string `json:"pv_size"`
-// 	PvFree string `json:"pv_free"`
-// }
+type PvMetadata struct {
+	PvName string `json:"pv_name"`
+	VgName string `json:"vg_name"`
+	PvFmt  string `json:"pv_fmt"`
+	PvAttr string `json:"pv_attr"`
+	PvSize string `json:"pv_size"`
+	PvFree string `json:"pv_free"`
+}
 
 // PvMetadataJSON : struct for describing a series of pvs in LVM
-// type PvMetadataJSON struct {
-// 	Report []struct {
-// 		Pv []struct {
-// 			*PvMetadata
-// 		} `json:"pv"`
-// 	} `json:"report"`
-// }
+type PvMetadataJSON struct {
+	Report []struct {
+		Pv []struct {
+			*PvMetadata
+		} `json:"pv"`
+	} `json:"report"`
+}
 
 // // pvCreate : creates a pv from a physical device
 // func pvCreate(device string) (*PvMetadata, error) {
@@ -75,41 +77,41 @@ package main
 // }
 
 // pvExists : verifies if pv exists
-// func pvExists(device string) (*PvMetadata, error) {
-// 	// Handle pvdisplay command
-// 	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device)
-// 	pvd, pvdErr := cmd.CombinedOutput()
-// 	notExists := strings.Contains(string(pvd), "Failed to find physical volume")
-// 	if notExists {
-// 		return nil, errors.New("invalid_pv_device")
-// 	}
-// 	if pvdErr != nil {
-// 		return nil, pvdErr
-// 	}
-// 	// Handle output JSONs
-// 	res := &PvMetadataJSON{}
-// 	if err := json.Unmarshal(pvd, &res); err != nil {
-// 		return nil, err
-// 	}
-// 	// Check if any volumes exist
-// 	if len(res.Report) > 0 {
-// 		// Display data for each volume
-// 		for _, pv := range res.Report[0].Pv {
-// 			if pv.PvName == device {
-// 				output := PvMetadata{
-// 					PvName: pv.PvName,
-// 					VgName: pv.VgName,
-// 					PvFmt:  pv.PvFmt,
-// 					PvAttr: pv.PvAttr,
-// 					PvSize: pv.PvSize,
-// 					PvFree: pv.PvFree,
-// 				}
-// 				return &output, nil
-// 			}
-// 		}
-// 	}
-// 	return nil, nil
-// }
+func pvExists(device string) (*PvMetadata, error) {
+	// Handle pvdisplay command
+	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device)
+	pvd, pvdErr := cmd.CombinedOutput()
+	notExists := strings.Contains(string(pvd), "Failed to find physical volume")
+	if notExists {
+		return nil, errors.New("invalid_pv_device")
+	}
+	if pvdErr != nil {
+		return nil, pvdErr
+	}
+	// Handle output JSONs
+	res := &PvMetadataJSON{}
+	if err := json.Unmarshal(pvd, &res); err != nil {
+		return nil, err
+	}
+	// Check if any volumes exist
+	if len(res.Report) > 0 {
+		// Display data for each volume
+		for _, pv := range res.Report[0].Pv {
+			if pv.PvName == device {
+				output := PvMetadata{
+					PvName: pv.PvName,
+					VgName: pv.VgName,
+					PvFmt:  pv.PvFmt,
+					PvAttr: pv.PvAttr,
+					PvSize: pv.PvSize,
+					PvFree: pv.PvFree,
+				}
+				return &output, nil
+			}
+		}
+	}
+	return nil, nil
+}
 
 // // pvRemove : removes pv if exists
 // func pvRemove(device string) error {
@@ -150,78 +152,6 @@ package main
 // 		}
 // 		log.Printf("CreatePv: %s successfully created.", in.Device)
 // 		return id, nil
-// 	}
-// }
-
-// HandleResponse : translates response to json
-// func HandleResponse(w http.ResponseWriter, data interface{}) {
-// 	json, err := json.Marshal(data)
-// 	if err != nil {
-// 		HandleErrorResponse(w, err)
-// 		return
-// 	}
-// 	w.Header().Set("Content-Type", "application/json")
-// 	w.WriteHeader(http.StatusOK)
-// 	w.Write(json)
-// }
-
-// HandleErrorResponse : translates error to json responses
-// func HandleErrorResponse(w http.ResponseWriter, err error) {
-// 	res := &PvError{Message: err.Error()}
-// 	json, err := json.Marshal(res)
-// 	if err != nil {
-// 		http.Error(w, "invalid_json", http.StatusInternalServerError)
-// 		return
-// 	}
-// 	w.Header().Set("Content-Type", "application/json")
-// 	w.WriteHeader(http.StatusInternalServerError)
-// 	w.Write(json)
-// }
-
-// GetPvsByDevice : lookup PV in database from id
-// func GetPvsByDevice(db *sql.DB, device string, service *services.Service) ([]PvEntry, error) {
-// 	pvs := make([]PvEntry, 0)
-// 	rows, err := db.Query("SELECT device, id FROM pv WHERE device = $1 AND service_id = $2", device, service.ID)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer rows.Close()
-// 	for rows.Next() {
-// 		var pv PvEntry
-// 		if e := rows.Scan(&pv.Device, &pv.ID); e != nil {
-// 			return nil, e
-// 		}
-// 		pvs = append(pvs, pv)
-// 	}
-// 	return pvs, nil
-// }
-
-// GetPvsByDeviceHandler : handles HTTP request for getting pvs
-// func GetPvsByDeviceHandler(db *sql.DB, service *services.Service) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		device := r.FormValue("device")
-
-// 		pvs, err := GetPvsByDevice(db, device, service)
-// 		if err != nil {
-// 			HandleErrorResponse(w, err)
-// 			return
-// 		}
-// 		if len(pvs) <= 0 {
-// 			HandleResponse(w, pvs)
-// 			return
-// 		}
-
-// 		pvd, pvdErr := pvExists(device)
-// 		if pvdErr != nil {
-// 			HandleErrorResponse(w, pvdErr)
-// 			return
-// 		}
-// 		if pvd == nil {
-// 			HandleErrorResponse(w, errors.New("invalid_pv_device"))
-// 			return
-// 		}
-
-// 		HandleResponse(w, pvs)
 // 	}
 // }
 

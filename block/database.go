@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/erkrnt/symphony/services"
 	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -44,4 +45,13 @@ func GetDatabase(flags Flags) (*gorm.DB, error) {
 	}
 	db.AutoMigrate(&Pv{})
 	return db, nil
+}
+
+// GetPvByDevice : lookup PV in database from id
+func GetPvByDevice(db *gorm.DB, device string, service *services.Service) (*Pv, error) {
+	pv := Pv{}
+	if err := db.Where(&Pv{Device: device, ServiceID: service.ID}).First(&pv).Error; gorm.IsRecordNotFoundError(err) {
+		return nil, nil
+	}
+	return &pv, nil
 }
