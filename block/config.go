@@ -16,9 +16,6 @@ type Config struct {
 
 // GetConfig : gets service configuration data
 func GetConfig(path string) (*Config, error) {
-	if path == "" {
-		path = "./config.yml"
-	}
 	config := Config{}
 	data, err := ioutil.ReadFile(path)
 	if err != nil {

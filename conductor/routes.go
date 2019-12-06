@@ -100,11 +100,11 @@ func PostServiceHandler(db *gorm.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Decode JSON
-		data := requestBody{}
-		_ = json.NewDecoder(r.Body).Decode(&data)
+		body := requestBody{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		// Lookup servicetype to confirm exists
-		serviceType, err := GetServiceTypeByID(db, data.ServiceTypeID)
+		serviceType, err := GetServiceTypeByID(db, body.ServiceTypeID)
 		if err != nil {
 			json := HandleError(err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -119,7 +119,7 @@ func PostServiceHandler(db *gorm.DB) http.HandlerFunc {
 		}
 
 		// Create our new service
-		service := Service{Hostname: data.Hostname, ServiceTypeID: serviceType.ID}
+		service := Service{Hostname: body.Hostname, ServiceTypeID: serviceType.ID}
 		if err := db.Create(&service).Error; err != nil {
 			json := HandleError(err.Error())
 			w.WriteHeader(http.StatusInternalServerError)

@@ -34,7 +34,7 @@ func main() {
 	r.Path("/servicetype").Queries("name", "{name}").HandlerFunc(GetServiceTypeByNameHandler(db)).Methods("GET")
 
 	// Log successful listen
-	log.Printf("Started conductor listening on 0.0.0.0" + port)
+	log.Printf("Started conductor on 0.0.0.0" + port)
 
 	// Logs the error if ListenAndServe fails.
 	log.Fatal(http.ListenAndServe(port, r))

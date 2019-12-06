@@ -25,12 +25,12 @@ type ServiceType struct {
 }
 
 // loadClient : get database connection for service
-func loadClient(debug bool) (*gorm.DB, error) {
+func loadClient(verbose bool) (*gorm.DB, error) {
 	db, err := gorm.Open("sqlite3", "data.db")
 	if err != nil {
 		return nil, err
 	}
-	if debug == true {
+	if verbose == true {
 		db.LogMode(true)
 	}
 	return db, nil
@@ -57,7 +57,7 @@ func (pk *PrimaryKey) BeforeCreate(scope *gorm.Scope) error {
 
 // GetDatabase : loads database connection including migrations, etc.
 func GetDatabase(flags Flags) (*gorm.DB, error) {
-	db, err := loadClient(flags.Debug)
+	db, err := loadClient(flags.Verbose)
 	if err != nil {
 		return nil, err
 	}
