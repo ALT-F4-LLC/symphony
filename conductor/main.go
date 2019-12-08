@@ -1,10 +1,11 @@
 package main
 
 import (
-	"log"
 	"net/http"
 
+	"github.com/erkrnt/symphony/services"
 	"github.com/gorilla/mux"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -22,17 +23,17 @@ func main() {
 
 	r := mux.NewRouter()
 
-	r.Path("/service").Queries("hostname", "{hostname}").HandlerFunc(GetServiceByHostnameHandler(db)).Methods("GET")
-	r.Path("/service").HandlerFunc(PostServiceHandler(db)).Methods("POST")
-	r.Path("/service/{id}").HandlerFunc(GetServiceByIDHandler(db)).Methods("GET")
+	r.Path("/service").Queries("hostname", "{hostname}").Handler(services.RegisterHandler(GetServiceByHostnameHandler(db))).Methods("GET")
+	r.Path("/service").Handler(services.RegisterHandler(PostServiceHandler(db))).Methods("POST")
+	r.Path("/service/{id}").Handler(services.RegisterHandler(GetServiceByIDHandler(db))).Methods("GET")
 
-	r.Path("/servicetype").Queries("name", "{name}").HandlerFunc(GetServiceTypeByNameHandler(db)).Methods("GET")
+	r.Path("/servicetype").Queries("name", "{name}").Handler(services.RegisterHandler(GetServiceTypeByNameHandler(db))).Methods("GET")
 
-	r.Path("/physicalvolume").Queries("device", "{device}").Queries("service_id", "{service_id}").HandlerFunc(GetPhysicalVolumeByDeviceHandler(db)).Methods("GET")
-	r.Path("/physicalvolume").HandlerFunc(PostPhysicalVolumeHandler(db)).Methods("POST")
-	r.Path("/physicalvolume/{id}").HandlerFunc(DeletePhysicalVolumeHandler(db)).Methods("DELETE")
+	r.Path("/physicalvolume").Queries("device", "{device}").Queries("service_id", "{service_id}").Handler(services.RegisterHandler(GetPhysicalVolumeByDeviceHandler(db))).Methods("GET")
+	r.Path("/physicalvolume").Handler(services.RegisterHandler(PostPhysicalVolumeHandler(db))).Methods("POST")
+	r.Path("/physicalvolume/{id}").Handler(services.RegisterHandler(DeletePhysicalVolumeHandler(db))).Methods("DELETE")
 
-	log.Printf("Started conductor on 0.0.0.0" + port)
+	logrus.WithFields(logrus.Fields{"port": port}).Info("Started conductor service.")
 
-	log.Fatal(http.ListenAndServe(port, r))
+	logrus.Fatal(http.ListenAndServe(port, r))
 }

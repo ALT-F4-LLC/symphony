@@ -10,12 +10,13 @@ type Flags struct {
 	Verbose bool
 }
 
+var (
+	preseed = kingpin.Flag("preseed", "Enables preseeding of database.").Short('p').Bool()
+	verbose = kingpin.Flag("verbose", "Enables verbose output.").Short('v').Bool()
+)
+
 // GetFlags : gets command line flags at runtime
 func GetFlags() Flags {
-	var (
-		preseed = kingpin.Flag("preseed", "Enables preseeding of database.").Short('p').Bool()
-		verbose = kingpin.Flag("verbose", "Enables verbose output.").Short('v').Bool()
-	)
 	kingpin.Parse()
 	return Flags{Preseed: *preseed, Verbose: *verbose}
 }

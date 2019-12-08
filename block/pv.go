@@ -3,59 +3,22 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"os/exec"
 	"strings"
 
 	"github.com/erkrnt/symphony/schemas"
+	"github.com/sirupsen/logrus"
 )
 
-// PvReport : struct for describing a series of pvs in LVM
+// PvReport : describes a series of physical volumes in LVM
 type PvReport struct {
 	Report []struct {
-		Pv []struct {
-			*schemas.PhysicalVolumeMetadata
-		} `json:"pv"`
+		Pv []schemas.PhysicalVolumeMetadata `json:"pv"`
 	} `json:"report"`
 }
 
-// // pvDisplay : displays all pv devices
-// func pvDisplay() (*PvReport, error) {
-// 	// Handle pvdisplay command
-// 	pvdisplay, err := exec.Command("pvdisplay", "--columns", "--reportformat", "json").Output()
-// 	if err != nil {
-// 		return nil, HandleInternalError(err)
-// 	}
-// 	// Handle output JSON
-// 	output := PvReport{}
-// 	if err := json.Unmarshal(pvdisplay, &output); err != nil {
-// 		return nil, HandleInternalError(err)
-// 	}
-// 	// Return JSON data
-// 	return &output, nil
-// }
-
-// pvRemove : removes pv if exists
-func pvRemove(device string) error {
-	exists, _ := pvExists(device)
-	if exists == nil {
-		err := errors.New("pv_not_found")
-		return err
-	}
-
-	cmd := exec.Command("pvremove", "--force", device)
-	_, pvrErr := cmd.CombinedOutput()
-	if pvrErr != nil {
-		return pvrErr
-	}
-
-	log.Printf("pvRemove: %s successfully remove.", device)
-
-	return nil
-}
-
-// pvExists : verifies if pv exists
-func pvExists(device string) (*schemas.PhysicalVolumeMetadata, error) {
+// getPv : if exists - gets physical volume in LVM
+func getPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
 	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device)
 	pvd, pvdErr := cmd.CombinedOutput()
 	notExists := strings.Contains(string(pvd), "Failed to find physical volume")
@@ -71,31 +34,23 @@ func pvExists(device string) (*schemas.PhysicalVolumeMetadata, error) {
 		return nil, err
 	}
 
-	if len(res.Report) > 0 {
-		for _, pv := range res.Report[0].Pv {
-			if pv.PvName == device {
-				output := schemas.PhysicalVolumeMetadata{
-					PvName: pv.PvName,
-					VgName: pv.VgName,
-					PvFmt:  pv.PvFmt,
-					PvAttr: pv.PvAttr,
-					PvSize: pv.PvSize,
-					PvFree: pv.PvFree,
-				}
-				return &output, nil
-			}
+	var metadata schemas.PhysicalVolumeMetadata
+	if len(res.Report) == 1 && len(res.Report[0].Pv) == 1 {
+		pv := res.Report[0].Pv[0]
+		if pv.PvName == device {
+			metadata = pv
+			logrus.WithFields(logrus.Fields{"device": device}).Debug("Physical volume successfully discovered.")
 		}
 	}
-	return nil, nil
+
+	return &metadata, nil
 }
 
-// pvCreate : creates a pv from a physical device
-func pvCreate(device string) (*schemas.PhysicalVolumeMetadata, error) {
-	exists, _ := pvExists(device)
+// newPv : creates a physical device in LVM
+func newPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
+	exists, _ := getPv(device)
 	if exists != nil {
-		err := "pv_already_exists"
-		log.Printf("[ERROR] pvExists: %s", err)
-		return nil, errors.New(err)
+		return nil, errors.New("pv_already_exists")
 	}
 
 	cmd := exec.Command("pvcreate", device)
@@ -104,12 +59,31 @@ func pvCreate(device string) (*schemas.PhysicalVolumeMetadata, error) {
 		return nil, errors.New(strings.TrimSpace(string(pvc)))
 	}
 
-	pv, err := pvExists(device)
+	pv, err := getPv(device)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("pvCreate: %s successfully created.", device)
+	logrus.WithFields(logrus.Fields{"device": device}).Debug("Physical volume successfully created.")
 
 	return pv, nil
+}
+
+// removePv : if exists - removes physical volume in LVM
+func removePv(device string) error {
+	exists, _ := getPv(device)
+	if exists == nil {
+		err := errors.New("pv_not_found")
+		return err
+	}
+
+	cmd := exec.Command("pvremove", "--force", device)
+	_, pvrErr := cmd.CombinedOutput()
+	if pvrErr != nil {
+		return pvrErr
+	}
+
+	logrus.WithFields(logrus.Fields{"device": device}).Debug("Physical volume successfully removed.")
+
+	return nil
 }

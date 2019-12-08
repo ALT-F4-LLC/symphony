@@ -1,4 +1,4 @@
-package services // import "github.com/erkrnt/symphony/services"
+package services
 
 import (
 	"bytes"

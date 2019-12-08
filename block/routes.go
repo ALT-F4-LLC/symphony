@@ -7,13 +7,14 @@ import (
 	"github.com/erkrnt/symphony/schemas"
 )
 
-type requestBody struct {
-	Device string `json:"device"`
-}
-
 // ErrorResponse : struct for describing a pv error
 type ErrorResponse struct {
 	Message string `json:"message"`
+}
+
+// RequestBody : describes HTTP post request body
+type RequestBody struct {
+	Device string `json:"device"`
 }
 
 // HandleErrorResponse : translates error to json responses
@@ -41,13 +42,13 @@ func HandleResponse(w http.ResponseWriter, data interface{}) {
 	w.Write(json)
 }
 
-// GetPhysicalVolumeByDeviceHandler : handles HTTP request for getting pvs
+// GetPhysicalVolumeByDeviceHandler : handles getting specific physical volumes
 func GetPhysicalVolumeByDeviceHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		device := r.FormValue("device")
 		json := make([]schemas.PhysicalVolumeMetadata, 0)
 
-		pv, pvErr := pvExists(device)
+		pv, pvErr := getPv(device)
 		if pvErr != nil {
 			HandleErrorResponse(w, pvErr)
 			return
@@ -65,10 +66,10 @@ func PostPhysicalVolumeHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		body := requestBody{}
+		body := RequestBody{}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
-		pv, err := pvCreate(body.Device)
+		pv, err := newPv(body.Device)
 		if err != nil {
 			HandleErrorResponse(w, err)
 			return
@@ -83,10 +84,10 @@ func DeletePhysicalVolumeHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		body := requestBody{}
+		body := RequestBody{}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
-		err := pvRemove(body.Device)
+		err := removePv(body.Device)
 		if err != nil {
 			HandleErrorResponse(w, err)
 			return

@@ -7,8 +7,8 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
-// loadClient : get database connection for service
-func loadClient(verbose bool) (*gorm.DB, error) {
+// LoadDatabaseClient : get database connection for service
+func LoadDatabaseClient(verbose bool) (*gorm.DB, error) {
 	db, err := gorm.Open("sqlite3", "data.db")
 	if err != nil {
 		return nil, err
@@ -19,8 +19,8 @@ func loadClient(verbose bool) (*gorm.DB, error) {
 	return db, nil
 }
 
-// preseed : loads tables with preseed values (types, etc)
-func preseed(db *gorm.DB) error {
+// PreseedDatabase : loads tables with preseed values (types, etc)
+func PreseedDatabase(db *gorm.DB) error {
 	tx := db.Begin()
 	if tx.Error != nil {
 		return tx.Error
@@ -38,13 +38,13 @@ func preseed(db *gorm.DB) error {
 
 // GetDatabase : loads database connection including migrations, etc.
 func GetDatabase(flags Flags) (*gorm.DB, error) {
-	db, err := loadClient(flags.Verbose)
+	db, err := LoadDatabaseClient(flags.Verbose)
 	if err != nil {
 		return nil, err
 	}
 	db.AutoMigrate(&schemas.PhysicalVolume{}, &schemas.Service{}, &schemas.ServiceType{})
 	if flags.Preseed == true {
-		preseed(db)
+		PreseedDatabase(db)
 	}
 	return db, nil
 }
