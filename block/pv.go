@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os/exec"
 	"strings"
 
@@ -10,15 +11,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// PvReport : describes a series of physical volumes in LVM
-type PvReport struct {
+// PhysicalVolumeReport : describes a series of physical volumes in LVM
+type PhysicalVolumeReport struct {
 	Report []struct {
 		Pv []schemas.PhysicalVolumeMetadata `json:"pv"`
 	} `json:"report"`
 }
 
-// getPv : if exists - gets physical volume in LVM
-func getPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
+// getPhysicalVolume : if exists - gets physical volume in LVM
+func getPhysicalVolume(device string) (*schemas.PhysicalVolumeMetadata, error) {
 	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device)
 	pvd, pvdErr := cmd.CombinedOutput()
 	notExists := strings.Contains(string(pvd), "Failed to find physical volume")
@@ -29,7 +30,7 @@ func getPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
 		return nil, pvdErr
 	}
 
-	res := &PvReport{}
+	res := &PhysicalVolumeReport{}
 	if err := json.Unmarshal(pvd, &res); err != nil {
 		return nil, err
 	}
@@ -46,9 +47,9 @@ func getPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
 	return &metadata, nil
 }
 
-// newPv : creates a physical device in LVM
-func newPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
-	exists, _ := getPv(device)
+// newPhysicalVolume : creates a physical device in LVM
+func newPhysicalVolume(device string) (*schemas.PhysicalVolumeMetadata, error) {
+	exists, _ := getPhysicalVolume(device)
 	if exists != nil {
 		return nil, errors.New("pv_already_exists")
 	}
@@ -59,7 +60,7 @@ func newPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
 		return nil, errors.New(strings.TrimSpace(string(pvc)))
 	}
 
-	pv, err := getPv(device)
+	pv, err := getPhysicalVolume(device)
 	if err != nil {
 		return nil, err
 	}
@@ -69,9 +70,9 @@ func newPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
 	return pv, nil
 }
 
-// removePv : if exists - removes physical volume in LVM
-func removePv(device string) error {
-	exists, _ := getPv(device)
+// removePhysicalVolme : if exists - removes physical volume in LVM
+func removePhysicalVolme(device string) error {
+	exists, _ := getPhysicalVolume(device)
 	if exists == nil {
 		err := errors.New("pv_not_found")
 		return err
@@ -86,4 +87,61 @@ func removePv(device string) error {
 	logrus.WithFields(logrus.Fields{"device": device}).Debug("Physical volume successfully removed.")
 
 	return nil
+}
+
+// GetPhysicalVolumeByDeviceHandler : handles getting specific physical volumes
+func GetPhysicalVolumeByDeviceHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		device := r.FormValue("device")
+		json := make([]schemas.PhysicalVolumeMetadata, 0)
+
+		pv, pvErr := getPhysicalVolume(device)
+		if pvErr != nil {
+			HandleErrorResponse(w, pvErr)
+			return
+		}
+		if pv != nil {
+			json = append(json, *pv)
+		}
+
+		HandleResponse(w, json)
+	}
+}
+
+// PostPhysicalVolumeHandler : creates a physical volume on host
+func PostPhysicalVolumeHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := RequestBody{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+
+		pv, err := newPhysicalVolume(body.Device)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		json := append([]schemas.PhysicalVolumeMetadata{}, *pv)
+		HandleResponse(w, json)
+	}
+}
+
+// DeletePhysicalVolumeHandler : delete a physical volume on host
+func DeletePhysicalVolumeHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := RequestBody{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+
+		err := removePhysicalVolme(body.Device)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		json := make([]schemas.PhysicalVolumeMetadata, 0)
+		HandleResponse(w, json)
+	}
 }

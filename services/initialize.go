@@ -64,6 +64,7 @@ func newService(conductorHostname string, hostname string, serviceTypeName strin
 	if err != nil {
 		return nil, err
 	}
+
 	data := fmt.Sprintf(`{"hostname":"%s","service_type_id":"%s"}`, hostname, serviceType.ID)
 	url := fmt.Sprintf("http://%s/service", conductorHostname)
 	res, err := http.Post(url, "application/json", bytes.NewBuffer([]byte(data)))
@@ -71,15 +72,18 @@ func newService(conductorHostname string, hostname string, serviceTypeName strin
 		return nil, err
 	}
 	defer res.Body.Close()
+
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
-	service := schemas.Service{}
+
+	service := []schemas.Service{}
 	if err := json.Unmarshal(body, &service); err != nil {
 		return nil, err
 	}
-	return &service, nil
+
+	return &service[0], nil
 }
 
 // GetService : handles initialization and clustering of instance

@@ -37,12 +37,12 @@ func CreatePhysicalVolumeOnHost(serviceHostname string, device string) (*schemas
 		return nil, errors.New(data.Message)
 	}
 
-	pvMetadata := schemas.PhysicalVolumeMetadata{}
+	pvMetadata := []schemas.PhysicalVolumeMetadata{}
 	if err := json.Unmarshal(body, &pvMetadata); err != nil {
 		return nil, err
 	}
 
-	return &pvMetadata, nil
+	return &pvMetadata[0], nil
 }
 
 // GetPhysicalVolumeMetadataByDeviceOnHost : retrieves PhysicalVolumeMetadata from host

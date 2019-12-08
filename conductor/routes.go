@@ -59,19 +59,12 @@ func GetServiceByIDHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		data := make([]schemas.Service, 0)
+		json := make([]schemas.Service, 0)
 		if service != nil {
-			data = append(data, *service)
+			json = append(json, *service)
 		}
 
-		json, err := json.Marshal(data)
-		if err != nil {
-			HandleErrorResponse(w, err)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write(json)
+		HandleResponse(w, json)
 	}
 }
 
@@ -87,19 +80,12 @@ func GetServiceByHostnameHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		data := make([]schemas.Service, 0)
+		json := make([]schemas.Service, 0)
 		if service != nil {
-			data = append(data, *service)
+			json = append(json, *service)
 		}
 
-		json, err := json.Marshal(data)
-		if err != nil {
-			HandleErrorResponse(w, err)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write(json)
+		HandleResponse(w, json)
 	}
 }
 
@@ -131,14 +117,8 @@ func PostServiceHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		json, err := json.Marshal(service)
-		if err != nil {
-			HandleErrorResponse(w, err)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write(json)
+		json := append([]schemas.Service{}, service)
+		HandleResponse(w, json)
 	}
 }
 
@@ -154,12 +134,12 @@ func GetServiceTypeByNameHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		data := make([]schemas.ServiceType, 0)
+		json := make([]schemas.ServiceType, 0)
 		if servicetype != nil {
-			data = append(data, *servicetype)
+			json = append(json, *servicetype)
 		}
 
-		HandleResponse(w, data)
+		HandleResponse(w, json)
 	}
 }
 
@@ -195,8 +175,8 @@ func GetPhysicalVolumeByDeviceHandler(db *gorm.DB) http.HandlerFunc {
 		}
 
 		pv.Metadata = metadata
-		json = append(json, *pv)
 
+		json = append(json, *pv)
 		HandleResponse(w, json)
 	}
 }
@@ -261,7 +241,8 @@ func PostPhysicalVolumeHandler(db *gorm.DB) http.HandlerFunc {
 
 		pv.Metadata = metadata
 
-		HandleResponse(w, pv)
+		json := append([]schemas.PhysicalVolume{}, pv)
+		HandleResponse(w, json)
 	}
 }
 
