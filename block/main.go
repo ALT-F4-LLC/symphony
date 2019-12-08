@@ -16,26 +16,16 @@ func main() {
 	// Get command line flags
 	flags := GetFlags()
 
-	// Get service configuration from FS
-	config, configErr := GetConfig(flags.Config)
-	if configErr != nil {
-		panic(configErr)
-	}
-
 	// Handle service discovery
-	service, serviceErr := services.GetService(config.Conductor.Hostname, config.Hostname, "block")
+	service, serviceErr := services.GetService(flags.Conductor, flags.Hostname, "block")
 	if serviceErr != nil {
 		panic(serviceErr)
 	}
 
-	// Handle database initialization
-	db, dbErr := GetDatabase(flags)
-	if dbErr != nil {
-		panic(dbErr)
-	}
-
 	r := mux.NewRouter()
-	r.Path("/pv").Queries("device", "{device}").HandlerFunc(GetPvByDeviceHandler(db, service)).Methods("GET")
+	r.Path("/physicalvolume").Queries("device", "{device}").HandlerFunc(GetPhysicalVolumeByDeviceHandler()).Methods("GET")
+	r.Path("/physicalvolume").HandlerFunc(PostPhysicalVolumeHandler()).Methods("POST")
+	r.Path("/physicalvolume").HandlerFunc(DeletePhysicalVolumeHandler()).Methods("DELETE")
 
 	// Log successful listen
 	log.Printf("Started block \"%s\" on 0.0.0.0%s", service.ID, port)

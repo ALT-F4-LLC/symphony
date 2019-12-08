@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
-	"github.com/erkrnt/symphony/services"
-	"github.com/jinzhu/gorm"
+	"github.com/erkrnt/symphony/schemas"
 )
+
+type requestBody struct {
+	Device string `json:"device"`
+}
 
 // ErrorResponse : struct for describing a pv error
 type ErrorResponse struct {
@@ -39,31 +41,58 @@ func HandleResponse(w http.ResponseWriter, data interface{}) {
 	w.Write(json)
 }
 
-// GetPvByDeviceHandler : handles HTTP request for getting pvs
-func GetPvByDeviceHandler(db *gorm.DB, service *services.Service) http.HandlerFunc {
+// GetPhysicalVolumeByDeviceHandler : handles HTTP request for getting pvs
+func GetPhysicalVolumeByDeviceHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		device := r.FormValue("device")
-		json := make([]Pv, 0)
+		json := make([]schemas.PhysicalVolumeMetadata, 0)
 
-		pv, err := GetPvByDevice(db, device, service)
-		if err != nil {
-			HandleErrorResponse(w, err)
+		pv, pvErr := pvExists(device)
+		if pvErr != nil {
+			HandleErrorResponse(w, pvErr)
 			return
 		}
 		if pv != nil {
 			json = append(json, *pv)
 		}
 
-		pvd, pvdErr := pvExists(device)
-		if pvdErr != nil {
-			HandleErrorResponse(w, pvdErr)
-			return
-		}
-		if pvd == nil {
-			HandleErrorResponse(w, errors.New("invalid_pv_device"))
+		HandleResponse(w, json)
+	}
+}
+
+// PostPhysicalVolumeHandler : creates a physical volume on host
+func PostPhysicalVolumeHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := requestBody{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+
+		pv, err := pvCreate(body.Device)
+		if err != nil {
+			HandleErrorResponse(w, err)
 			return
 		}
 
+		HandleResponse(w, pv)
+	}
+}
+
+// DeletePhysicalVolumeHandler : delete a physical volume on host
+func DeletePhysicalVolumeHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := requestBody{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+
+		err := pvRemove(body.Device)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		json := make([]schemas.PhysicalVolumeMetadata, 0)
 		HandleResponse(w, json)
 	}
 }

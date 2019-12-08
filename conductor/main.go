@@ -33,6 +33,11 @@ func main() {
 	// Resources: servicetype
 	r.Path("/servicetype").Queries("name", "{name}").HandlerFunc(GetServiceTypeByNameHandler(db)).Methods("GET")
 
+	// Resources: physicalvolume
+	r.Path("/physicalvolume").Queries("device", "{device}").Queries("service_id", "{service_id}").HandlerFunc(GetPhysicalVolumeByDeviceHandler(db)).Methods("GET")
+	r.Path("/physicalvolume").HandlerFunc(PostPhysicalVolumeHandler(db)).Methods("POST")
+	r.Path("/physicalvolume/{id}").HandlerFunc(DeletePhysicalVolumeHandler(db)).Methods("DELETE")
+
 	// Log successful listen
 	log.Printf("Started conductor on 0.0.0.0" + port)
 

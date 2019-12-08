@@ -1,4 +1,6 @@
 ### symphony ###
+*.yaml
+*.yml
 *.db
 block/block
 conductor/conductor
