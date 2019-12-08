@@ -14,6 +14,9 @@ const (
 
 func main() {
 	flags := GetFlags()
+	if flags.Verbose {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
 	service, serviceErr := services.GetService(flags.Conductor, flags.Hostname, "block")
 	if serviceErr != nil {

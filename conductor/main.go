@@ -14,6 +14,9 @@ const (
 
 func main() {
 	flags := GetFlags()
+	if flags.Verbose {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
 	db, err := GetDatabase(flags)
 	if err != nil {
