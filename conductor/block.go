@@ -14,6 +14,37 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
+// CreatePhysicalVolumeOnHost : creates a PhysicalVolume on a block host
+func CreatePhysicalVolumeOnHost(serviceHostname string, device string) (*schemas.PhysicalVolumeMetadata, error) {
+	data := fmt.Sprintf(`{"device":"%s"}`, device)
+	url := fmt.Sprintf("http://%s:50051/physicalvolume", serviceHostname)
+	res, err := http.Post(url, "application/json", bytes.NewBuffer([]byte(data)))
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode != 200 {
+		data := ErrorResponse{}
+		if err := json.Unmarshal(body, &data); err != nil {
+			return nil, err
+		}
+		return nil, errors.New(data.Message)
+	}
+
+	pvMetadata := schemas.PhysicalVolumeMetadata{}
+	if err := json.Unmarshal(body, &pvMetadata); err != nil {
+		return nil, err
+	}
+
+	return &pvMetadata, nil
+}
+
 // GetPhysicalVolumeMetadataByDeviceOnHost : retrieves PhysicalVolumeMetadata from host
 func GetPhysicalVolumeMetadataByDeviceOnHost(db *gorm.DB, device string, serviceID uuid.UUID) (*schemas.PhysicalVolumeMetadata, error) {
 	service, err := GetServiceByID(db, serviceID)
@@ -46,37 +77,6 @@ func GetPhysicalVolumeMetadataByDeviceOnHost(db *gorm.DB, device string, service
 	}
 
 	return &pvMetadata[0], nil
-}
-
-// CreatePhysicalVolumeOnHost : creates a PhysicalVolume on a block host
-func CreatePhysicalVolumeOnHost(serviceHostname string, device string) (*schemas.PhysicalVolumeMetadata, error) {
-	data := fmt.Sprintf(`{"device":"%s"}`, device)
-	url := fmt.Sprintf("http://%s:50051/physicalvolume", serviceHostname)
-	res, err := http.Post(url, "application/json", bytes.NewBuffer([]byte(data)))
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if res.StatusCode != 200 {
-		data := ErrorResponse{}
-		if err := json.Unmarshal(body, &data); err != nil {
-			return nil, err
-		}
-		return nil, errors.New(data.Message)
-	}
-
-	pvMetadata := schemas.PhysicalVolumeMetadata{}
-	if err := json.Unmarshal(body, &pvMetadata); err != nil {
-		return nil, err
-	}
-
-	return &pvMetadata, nil
 }
 
 // DeletePhysicalVolumeOnHost : deletes a PhysicalVolume on a block host

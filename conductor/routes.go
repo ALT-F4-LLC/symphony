@@ -11,32 +11,9 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-// Error : struct for handling errors
-type Error struct {
-	Error string
-}
-
 // ErrorResponse : struct for describing a pv error
 type ErrorResponse struct {
 	Message string `json:"message"`
-}
-
-// PhysicalVolumeJSON :
-type PhysicalVolumeJSON struct {
-	schemas.PhysicalVolume
-	Metadata *schemas.PhysicalVolumeMetadata
-}
-
-// HandleError : handles response
-func HandleError(error string) []byte {
-	err := Error{
-		Error: error,
-	}
-	json, e := json.Marshal(err)
-	if e != nil {
-		panic(e)
-	}
-	return json
 }
 
 // HandleErrorResponse : translates error to json responses
@@ -144,9 +121,7 @@ func PostServiceHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 		if serviceType == nil {
-			json := HandleError("invalid_service_type")
-			w.WriteHeader(http.StatusNotFound)
-			w.Write(json)
+			HandleErrorResponse(w, errors.New("invalid_service_type"))
 			return
 		}
 
