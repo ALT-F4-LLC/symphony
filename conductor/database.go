@@ -42,7 +42,7 @@ func GetDatabase(flags Flags) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.AutoMigrate(&schemas.PhysicalVolume{}, &schemas.Service{}, &schemas.ServiceType{})
+	db.AutoMigrate(&schemas.PhysicalVolume{}, &schemas.Service{}, &schemas.ServiceType{}, &schemas.VolumeGroup{})
 	if flags.Preseed == true {
 		PreseedDatabase(db)
 	}

@@ -1,152 +1,168 @@
 package main
 
-// // VGStruct : struct for virtual group output
-// type VGStruct struct {
-// 	VgName    string `json:"vg_name"`
-// 	PvCount   string `json:"pv_count"`
-// 	LvCount   string `json:"lv_count"`
-// 	SnapCount string `json:"snap_count"`
-// 	VgAttr    string `json:"vg_attr"`
-// 	VgSize    string `json:"vg_size"`
-// 	VgFree    string `json:"vg_free"`
-// }
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"os/exec"
+	"strings"
 
-// // VGDisplayStruct : struct for VGDisplay output
-// type VGDisplayStruct struct {
-// 	Report []struct {
-// 		Vg []struct {
-// 			*VGStruct
-// 		} `json:"vg"`
-// 	} `json:"report"`
-// }
+	"github.com/erkrnt/symphony/schemas"
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
+	"github.com/sirupsen/logrus"
+)
 
-// // vgCreate : creates volume group
-// func vgCreate(device string, group string) (*VGStruct, error) {
-// 	// Check if a VG already exists
-// 	exists, _ := vgExists(group)
-// 	// If exists - return error
-// 	if exists != nil {
-// 		return nil, status.Error(codes.AlreadyExists, "vg already exists")
-// 	}
-// 	// Create VG with command
-// 	_, vgcreateErr := exec.Command("vgcreate", group, device).Output()
-// 	if vgcreateErr != nil {
-// 		return nil, HandleInternalError(vgcreateErr)
-// 	}
-// 	// Lookup new device
-// 	vg, err := vgExists(group)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	// Return new volume group
-// 	return vg, nil
-// }
+// VolumeGroupReport : struct for VGDisplay output
+type VolumeGroupReport struct {
+	Report []struct {
+		Vg []schemas.VolumeGroupMetadata `json:"vg"`
+	} `json:"report"`
+}
 
-// // vgDisplay : displays all volume groups
-// func vgDisplay() (*VGDisplayStruct, error) {
-// 	// Handle pvdisplay command
-// 	vgdisplay, err := exec.Command("vgdisplay", "--columns", "--reportformat", "json").Output()
-// 	if err != nil {
-// 		return nil, HandleInternalError(err)
-// 	}
-// 	// Handle output JSON
-// 	output := VGDisplayStruct{}
-// 	if err := json.Unmarshal(vgdisplay, &output); err != nil {
-// 		return nil, HandleInternalError(err)
-// 	}
-// 	// Return JSON data
-// 	return &output, nil
-// }
+// getVolumeGroup : verifies if volume group exists
+func getVolumeGroup(id uuid.UUID) (*schemas.VolumeGroupMetadata, error) {
+	cmd := exec.Command("vgdisplay", "--columns", "--reportformat", "json", id.String())
+	vgd, vgdErr := cmd.CombinedOutput()
+	notExists := strings.Contains(string(vgd), "not found")
+	if notExists {
+		return nil, nil
+	}
+	if vgdErr != nil {
+		return nil, vgdErr
+	}
 
-// // vgExists : verifies if volume group exists
-// func vgExists(group string) (*VGStruct, error) {
-// 	// Handle vgdisplay command
-// 	vgd, vgdErr := exec.Command("vgdisplay", "--columns", "--reportformat", "json", group).Output()
-// 	if vgdErr != nil {
-// 		return nil, HandleInternalError(vgdErr)
-// 	}
-// 	// Handle output JSON
-// 	res := VGDisplayStruct{}
-// 	if err := json.Unmarshal(vgd, &res); err != nil {
-// 		return nil, HandleInternalError(err)
-// 	}
-// 	// Check if any volumes exist
-// 	if len(res.Report) > 0 {
-// 		// Display data for each volume
-// 		for _, vg := range res.Report[0].Vg {
-// 			if vg.VgName == group {
-// 				output := VGStruct{
-// 					VgName:    vg.VgName,
-// 					PvCount:   vg.PvCount,
-// 					LvCount:   vg.LvCount,
-// 					SnapCount: vg.SnapCount,
-// 					VgAttr:    vg.VgAttr,
-// 					VgSize:    vg.VgSize,
-// 					VgFree:    vg.VgFree,
-// 				}
-// 				return &output, nil
-// 			}
-// 		}
-// 	}
-// 	return nil, nil
-// }
+	res := &VolumeGroupReport{}
+	if err := json.Unmarshal(vgd, &res); err != nil {
+		return nil, err
+	}
 
-// // vgRemove : removes volume group
-// func vgRemove(group string) error {
-// 	exists, _ := vgExists(group)
-// 	if exists == nil {
-// 		err := status.Error(codes.NotFound, "vg not found")
-// 		return err
-// 	}
-// 	_, err := exec.Command("vgremove", "--force", group).Output()
-// 	if err != nil {
-// 		return HandleInternalError(err)
-// 	}
-// 	return nil
-// }
+	var metadata schemas.VolumeGroupMetadata
+	if len(res.Report) == 1 && len(res.Report[0].Vg) == 1 {
+		vg := res.Report[0].Vg[0]
+		if vg.VgName == id.String() {
+			metadata = vg
+			logrus.WithFields(logrus.Fields{"id": id.String()}).Debug("VolumeGroup successfully discovered.")
+		}
+	}
 
-// // CreateVg : implements proto.BlockServer CreateVg request
-// func (s *blockServer) CreateVg(ctx context.Context, in *pb.CreateVgRequest) (*pb.VgObject, error) {
-// 	vg, err := vgCreate(in.Device, in.Group)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	log.Printf("CreateVg: %s successfully created for %s.", in.Group, in.Device)
-// 	return &pb.VgObject{
-// 		VgName:    vg.VgName,
-// 		PvCount:   vg.PvCount,
-// 		LvCount:   vg.LvCount,
-// 		SnapCount: vg.SnapCount,
-// 		VgAttr:    vg.VgAttr,
-// 		VgSize:    vg.VgSize,
-// 		VgFree:    vg.VgFree,
-// 	}, nil
-// }
+	return &metadata, nil
+}
 
-// // GetVg : implements proto.BlockServer GetVg request
-// func (s *blockServer) GetVg(ctx context.Context, in *pb.GetVgRequest) (*pb.VgObject, error) {
-// 	vg, err := vgExists(in.Group)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	log.Printf("GetVg: %s successfully found.", in.Group)
-// 	return &pb.VgObject{
-// 		VgName:    vg.VgName,
-// 		PvCount:   vg.PvCount,
-// 		LvCount:   vg.LvCount,
-// 		SnapCount: vg.SnapCount,
-// 		VgAttr:    vg.VgAttr,
-// 		VgSize:    vg.VgSize,
-// 		VgFree:    vg.VgFree,
-// 	}, nil
-// }
+// newVolumeGroup : creates volume group
+func newVolumeGroup(device string, id uuid.UUID) (*schemas.VolumeGroupMetadata, error) {
+	exists, _ := getVolumeGroup(id)
+	if exists != nil {
+		return nil, errors.New("vg_already_exists")
+	}
 
-// // RemoveVg : implements proto.BlockServer RemoveVg request
-// func (s *blockServer) RemoveVg(ctx context.Context, in *pb.RemoveVgRequest) (*pb.BlockMessage, error) {
-// 	err := vgRemove(in.Group)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	log.Printf("RemovePv: %s successfully removed.", in.Group)
-// 	return &pb.BlockMessage{Message: "success"}, nil
-// }
+	cmd := exec.Command("vgcreate", id.String(), device)
+	vgc, vgcErr := cmd.CombinedOutput()
+	if vgcErr != nil {
+		return nil, errors.New(strings.TrimSpace(string(vgc)))
+	}
+
+	vg, err := getVolumeGroup(id)
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.WithFields(logrus.Fields{"id": id.String()}).Debug("VolumeGroup successfully created.")
+
+	return vg, nil
+}
+
+// removeVolumeGroup : removes volume group
+func removeVolumeGroup(id uuid.UUID) error {
+	exists, _ := getVolumeGroup(id)
+	if exists == nil {
+		return errors.New("vg_not_found")
+	}
+
+	cmd := exec.Command("vgremove", "--force", id.String())
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	logrus.WithFields(logrus.Fields{"id": id.String()}).Debug("VolumeGroup successfully removed.")
+
+	return nil
+}
+
+// GetVolumeGroupByIDHandler : handles getting specific physical volumes
+func GetVolumeGroupByIDHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		params := mux.Vars(r)
+		groupID := params["id"]
+
+		id, err := uuid.Parse(groupID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		virtualGroup, err := getVolumeGroup(id)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		json := make([]schemas.VolumeGroupMetadata, 0)
+		if virtualGroup != nil {
+			json = append(json, *virtualGroup)
+		}
+
+		HandleResponse(w, json)
+	}
+}
+
+// PostVolumeGroupHandler : creates a physical volume on host
+func PostVolumeGroupHandler() http.HandlerFunc {
+	type reqBody struct {
+		Device string    `json:"device"`
+		ID     uuid.UUID `json:"id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := reqBody{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+
+		vg, err := newVolumeGroup(body.Device, body.ID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		json := append([]schemas.VolumeGroupMetadata{}, *vg)
+		HandleResponse(w, json)
+	}
+}
+
+// DeleteVolumeGroupHandler : delete a volume group on host
+func DeleteVolumeGroupHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		params := mux.Vars(r)
+		volumeGroupID := params["id"]
+
+		id, err := uuid.Parse(volumeGroupID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		rmErr := removeVolumeGroup(id)
+		if rmErr != nil {
+			HandleErrorResponse(w, rmErr)
+			return
+		}
+
+		json := make([]schemas.PhysicalVolumeMetadata, 0)
+		HandleResponse(w, json)
+	}
+}

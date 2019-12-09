@@ -29,6 +29,10 @@ func main() {
 	r.Path("/physicalvolume").Handler(services.RegisterHandler(PostPhysicalVolumeHandler())).Methods("POST")
 	r.Path("/physicalvolume").Handler(services.RegisterHandler(DeletePhysicalVolumeHandler())).Methods("DELETE")
 
+	r.Path("/volumegroup").Handler(services.RegisterHandler(PostVolumeGroupHandler())).Methods("POST")
+	r.Path("/volumegroup/{id}").Handler(services.RegisterHandler(GetVolumeGroupByIDHandler())).Methods("GET")
+	r.Path("/volumegroup/{id}").Handler(services.RegisterHandler(DeleteVolumeGroupHandler())).Methods("DELETE")
+
 	logrus.WithFields(logrus.Fields{"port": port, "service_id": service.ID}).Info("Started block service.")
 
 	logrus.Fatal(http.ListenAndServe(port, r))
