@@ -103,10 +103,46 @@ func GetPhysicalVolumeByDeviceAndServiceID(db *gorm.DB, device string, serviceID
 	return &physicalVolume, nil
 }
 
-// DeletePhysicalVolumeByDeviceID : lookup PhysicalVolume in database from id
-func DeletePhysicalVolumeByDeviceID(db *gorm.DB, deviceID uuid.UUID) error {
+// GetPhysicalVolumeByID : gets specific service from database
+func GetPhysicalVolumeByID(db *gorm.DB, id uuid.UUID) (*schemas.PhysicalVolume, error) {
+	var physicalVolume schemas.PhysicalVolume
+	if err := db.Where("id = ?", id).First(&physicalVolume).Error; gorm.IsRecordNotFoundError(err) {
+		return nil, nil
+	}
+	return &physicalVolume, nil
+}
+
+// DeletePhysicalVolumeByID : lookup PhysicalVolume in database from id
+func DeletePhysicalVolumeByID(db *gorm.DB, id uuid.UUID) error {
 	physicalVolume := schemas.PhysicalVolume{}
-	if err := db.Where("id = ?", deviceID).Unscoped().Delete(&physicalVolume).Error; err != nil {
+	if err := db.Where("id = ?", id).Unscoped().Delete(&physicalVolume).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetVolumeGroupByID : lookup VolumeGroup in database from id
+func GetVolumeGroupByID(db *gorm.DB, id uuid.UUID) (*schemas.VolumeGroup, error) {
+	volumeGroup := schemas.VolumeGroup{}
+	if err := db.Where("id = ?", id).First(&volumeGroup).Error; gorm.IsRecordNotFoundError(err) {
+		return nil, nil
+	}
+	return &volumeGroup, nil
+}
+
+// GetVolumeGroupByPhysicalVolumeIDAndServiceID : lookup VolumeGroup in database from physical volume id and service id
+func GetVolumeGroupByPhysicalVolumeIDAndServiceID(db *gorm.DB, physicalVolumeID uuid.UUID, serviceID uuid.UUID) (*schemas.VolumeGroup, error) {
+	volumeGroup := schemas.VolumeGroup{}
+	if err := db.Where(&schemas.VolumeGroup{PhysicalVolumeID: physicalVolumeID, ServiceID: serviceID}).First(&volumeGroup).Error; gorm.IsRecordNotFoundError(err) {
+		return nil, nil
+	}
+	return &volumeGroup, nil
+}
+
+// DeleteVolumeGroupByID : lookup PhysicalVolume in database from id
+func DeleteVolumeGroupByID(db *gorm.DB, id uuid.UUID) error {
+	volumeGroup := schemas.VolumeGroup{}
+	if err := db.Where("id = ?", id).Unscoped().Delete(&volumeGroup).Error; err != nil {
 		return err
 	}
 	return nil

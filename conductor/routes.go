@@ -149,16 +149,21 @@ func GetPhysicalVolumeByDeviceHandler(db *gorm.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		device := r.FormValue("device")
-		id := r.FormValue("service_id")
 		json := make([]schemas.PhysicalVolume, 0)
 
-		serviceID, err := uuid.Parse(id)
+		serviceID, err := uuid.Parse(r.FormValue("service_id"))
 		if err != nil {
 			HandleErrorResponse(w, err)
 			return
 		}
 
-		pv, err := GetPhysicalVolumeByDeviceAndServiceID(db, device, serviceID)
+		service, err := GetServiceByID(db, serviceID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		pv, err := GetPhysicalVolumeByDeviceAndServiceID(db, device, service.ID)
 		if err != nil {
 			HandleErrorResponse(w, err)
 			return
@@ -168,7 +173,7 @@ func GetPhysicalVolumeByDeviceHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		metadata, err := GetPhysicalVolumeMetadataByDeviceOnHost(db, device, serviceID)
+		metadata, err := GetPhysicalVolumeMetadataByDeviceOnHost(db, device, service.Hostname)
 		if err != nil {
 			HandleErrorResponse(w, err)
 			return
@@ -286,13 +291,201 @@ func DeletePhysicalVolumeHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		dbErr := DeletePhysicalVolumeByDeviceID(db, pv.ID)
+		dbErr := DeletePhysicalVolumeByID(db, pv.ID)
 		if dbErr != nil {
 			HandleErrorResponse(w, dbErr)
 			return
 		}
 
 		json := make([]schemas.PhysicalVolume, 0)
+		HandleResponse(w, json)
+	}
+}
+
+// GetVolumeGroupByPhysicalVolumeIDAndServiceIDHandler : handles HTTP request for getting pvs
+func GetVolumeGroupByPhysicalVolumeIDAndServiceIDHandler(db *gorm.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		json := make([]schemas.VolumeGroup, 0)
+
+		physicalVolumeID, err := uuid.Parse(r.FormValue("physical_volume_id"))
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		serviceID, err := uuid.Parse(r.FormValue("service_id"))
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		vg, err := GetVolumeGroupByPhysicalVolumeIDAndServiceID(db, physicalVolumeID, serviceID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+		if vg == nil {
+			HandleResponse(w, json)
+			return
+		}
+
+		pv, err := GetPhysicalVolumeByID(db, vg.PhysicalVolumeID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+		if pv == nil {
+			HandleErrorResponse(w, errors.New("invalid_physical_volume"))
+			return
+		}
+
+		service, err := GetServiceByID(db, serviceID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+		if service == nil {
+			HandleErrorResponse(w, errors.New("invalid_service"))
+			return
+		}
+
+		metadata, err := GetVolumeGroupMetadataByIDOnHost(db, service.Hostname, vg.ID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		vg.Metadata = metadata
+
+		json = append(json, *vg)
+		HandleResponse(w, json)
+	}
+}
+
+// PostVolumeGroupHandler : handles creation of physical volume on a host
+func PostVolumeGroupHandler(db *gorm.DB) http.HandlerFunc {
+	type requestBody struct {
+		PhysicalVolumeID uuid.UUID `json:"physical_volume_id"`
+		ServiceID        uuid.UUID `json:"service_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := requestBody{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+
+		existing, err := GetVolumeGroupByPhysicalVolumeIDAndServiceID(db, body.PhysicalVolumeID, body.ServiceID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+		if existing != nil {
+			HandleErrorResponse(w, errors.New("volume_group_exists"))
+			return
+		}
+
+		physicalVolume, err := GetPhysicalVolumeByID(db, body.PhysicalVolumeID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+		if physicalVolume == nil {
+			HandleErrorResponse(w, errors.New("invalid_physical_volume"))
+			return
+		}
+
+		service, err := GetServiceByID(db, body.ServiceID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+		if service == nil {
+			HandleErrorResponse(w, errors.New("invalid_service_id"))
+			return
+		}
+
+		serviceType, err := GetServiceTypeByID(db, service.ServiceTypeID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+		if serviceType == nil {
+			HandleErrorResponse(w, errors.New("invalid_service_type_id"))
+			return
+		}
+		if serviceType.Name != "block" {
+			HandleErrorResponse(w, errors.New("invalid_service_type"))
+			return
+		}
+
+		volumeGroup := schemas.VolumeGroup{PhysicalVolumeID: physicalVolume.ID, ServiceID: service.ID}
+		if err := db.Create(&volumeGroup).Error; err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		metadata, err := CreateVolumeGroupOnHost(service.Hostname, physicalVolume.Device, volumeGroup.ID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		volumeGroup.Metadata = metadata
+
+		json := append([]schemas.VolumeGroup{}, volumeGroup)
+		HandleResponse(w, json)
+	}
+}
+
+// DeleteVolumeGroupHandler : handles creation of physical volume on a host
+func DeleteVolumeGroupHandler(db *gorm.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		params := mux.Vars(r)
+		deviceID := params["id"]
+
+		id, err := uuid.Parse(deviceID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+
+		vg, err := GetVolumeGroupByID(db, id)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+		if vg == nil {
+			HandleErrorResponse(w, errors.New("invalid_volume_group"))
+			return
+		}
+
+		service, err := GetServiceByID(db, vg.ServiceID)
+		if err != nil {
+			HandleErrorResponse(w, err)
+			return
+		}
+		if service == nil {
+			HandleErrorResponse(w, errors.New("invalid_service_id"))
+			return
+		}
+
+		delErr := DeleteVolumeGroupOnHost(service.Hostname, vg.ID)
+		if delErr != nil {
+			HandleErrorResponse(w, delErr)
+			return
+		}
+
+		dbErr := DeleteVolumeGroupByID(db, vg.ID)
+		if dbErr != nil {
+			HandleErrorResponse(w, dbErr)
+			return
+		}
+
+		json := make([]schemas.VolumeGroup, 0)
 		HandleResponse(w, json)
 	}
 }

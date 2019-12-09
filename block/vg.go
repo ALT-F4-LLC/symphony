@@ -162,7 +162,7 @@ func DeleteVolumeGroupHandler() http.HandlerFunc {
 			return
 		}
 
-		json := make([]schemas.PhysicalVolumeMetadata, 0)
+		json := make([]schemas.VolumeGroupMetadata, 0)
 		HandleResponse(w, json)
 	}
 }

@@ -36,6 +36,10 @@ func main() {
 	r.Path("/physicalvolume").Handler(services.RegisterHandler(PostPhysicalVolumeHandler(db))).Methods("POST")
 	r.Path("/physicalvolume/{id}").Handler(services.RegisterHandler(DeletePhysicalVolumeHandler(db))).Methods("DELETE")
 
+	r.Path("/volumegroup").Queries("physical_volume_id", "{physical_volume_id}").Queries("service_id", "{service_id}").Handler(services.RegisterHandler(GetVolumeGroupByPhysicalVolumeIDAndServiceIDHandler(db))).Methods("GET")
+	r.Path("/volumegroup").Handler(services.RegisterHandler(PostVolumeGroupHandler(db))).Methods("POST")
+	r.Path("/volumegroup/{id}").Handler(services.RegisterHandler(DeleteVolumeGroupHandler(db))).Methods("DELETE")
+
 	logrus.WithFields(logrus.Fields{"port": port}).Info("Started conductor service.")
 
 	logrus.Fatal(http.ListenAndServe(port, r))
