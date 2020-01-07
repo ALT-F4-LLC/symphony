@@ -22,5 +22,6 @@ var (
 // GetFlags : gets command line flags at runtime
 func GetFlags() Flags {
 	kingpin.Parse()
+
 	return Flags{Conductor: *conductor, Config: *config, Hostname: *hostname, Verbose: *verbose}
 }

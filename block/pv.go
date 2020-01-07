@@ -114,15 +114,18 @@ func PostPhysicalVolumeHandler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		body := RequestBody{}
+
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		pv, err := newPhysicalVolume(body.Device)
+
 		if err != nil {
 			HandleErrorResponse(w, err)
 			return
 		}
 
 		json := append([]schemas.PhysicalVolumeMetadata{}, *pv)
+
 		HandleResponse(w, json)
 	}
 }
@@ -133,15 +136,18 @@ func DeletePhysicalVolumeHandler() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		body := RequestBody{}
+
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		err := removePhysicalVolme(body.Device)
+
 		if err != nil {
 			HandleErrorResponse(w, err)
 			return
 		}
 
 		json := make([]schemas.PhysicalVolumeMetadata, 0)
+
 		HandleResponse(w, json)
 	}
 }
