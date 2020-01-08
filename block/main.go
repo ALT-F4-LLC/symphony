@@ -1,45 +1,56 @@
 package main
 
 import (
-	"net/http"
+	"net"
 
+	"github.com/erkrnt/symphony/protobuff"
 	"github.com/erkrnt/symphony/services"
-	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 const (
 	port = ":50051"
 )
 
+type blockServer struct{}
+
 func main() {
-	flags := GetFlags()
+	flags := getFlags()
 
 	if flags.Verbose {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	service, serviceErr := services.GetService(flags.Conductor, flags.Hostname, "block")
+	conn, err := grpc.Dial(flags.Manager, grpc.WithInsecure())
 
-	if serviceErr != nil {
-		panic(serviceErr)
+	if err != nil {
+		panic(err)
 	}
 
-	r := mux.NewRouter()
+	defer conn.Close()
 
-	r.Path("/physicalvolume").Queries("device", "{device}").Handler(services.RegisterHandler(GetPhysicalVolumeByDeviceHandler())).Methods("GET")
+	client := protobuff.NewManagerClient(conn)
 
-	r.Path("/physicalvolume").Handler(services.RegisterHandler(PostPhysicalVolumeHandler())).Methods("POST")
+	service, err := services.Handshake(client, flags.Hostname, "block")
 
-	r.Path("/physicalvolume").Handler(services.RegisterHandler(DeletePhysicalVolumeHandler())).Methods("DELETE")
+	if err != nil {
+		panic(err)
+	}
 
-	r.Path("/volumegroup").Handler(services.RegisterHandler(PostVolumeGroupHandler())).Methods("POST")
+	lis, err := net.Listen("tcp", port)
 
-	r.Path("/volumegroup/{id}").Handler(services.RegisterHandler(GetVolumeGroupByIDHandler())).Methods("GET")
+	if err != nil {
+		logrus.Fatal("Failed to listen: %v", err)
+	}
 
-	r.Path("/volumegroup/{id}").Handler(services.RegisterHandler(DeleteVolumeGroupHandler())).Methods("DELETE")
+	s := grpc.NewServer()
 
-	logrus.WithFields(logrus.Fields{"port": port, "service_id": service.ID}).Info("Started block service.")
+	protobuff.RegisterBlockServer(s, &blockServer{})
 
-	logrus.Fatal(http.ListenAndServe(port, r))
+	logrus.WithFields(logrus.Fields{"ID": service.ID, "Port": port}).Info("Started block service.")
+
+	if err := s.Serve(lis); err != nil {
+		logrus.Fatal("Failed to serve: %v", err)
+	}
 }

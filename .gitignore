@@ -6,6 +6,7 @@ block/block
 conductor/conductor
 image/data
 image/image
+*.pb.go
 
 # Created by https://www.gitignore.io/api/go,osx,linux,windows
 # Edit at https://www.gitignore.io/?templates=go,osx,linux,windows

@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"os/exec"
 	"strings"
 
+	"github.com/erkrnt/symphony/protobuff"
 	"github.com/erkrnt/symphony/schemas"
+	"github.com/erkrnt/symphony/services"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // PhysicalVolumeReport : describes a series of physical volumes in LVM
@@ -18,136 +22,146 @@ type PhysicalVolumeReport struct {
 	} `json:"report"`
 }
 
-// getPhysicalVolume : if exists - gets physical volume in LVM
-func getPhysicalVolume(device string) (*schemas.PhysicalVolumeMetadata, error) {
+func getPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
 	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device)
+
 	pvd, pvdErr := cmd.CombinedOutput()
+
 	notExists := strings.Contains(string(pvd), "Failed to find physical volume")
+
 	if notExists {
 		return nil, nil
 	}
+
 	if pvdErr != nil {
 		return nil, pvdErr
 	}
 
 	res := &PhysicalVolumeReport{}
+
 	if err := json.Unmarshal(pvd, &res); err != nil {
 		return nil, err
 	}
 
 	var metadata schemas.PhysicalVolumeMetadata
+
 	if len(res.Report) == 1 && len(res.Report[0].Pv) == 1 {
 		pv := res.Report[0].Pv[0]
+
 		if pv.PvName == device {
 			metadata = pv
-			logrus.WithFields(logrus.Fields{"device": device}).Debug("Physical volume successfully discovered.")
+
+			logrus.WithFields(logrus.Fields{"Device": device}).Debug("Physical volume successfully discovered.")
 		}
 	}
 
 	return &metadata, nil
 }
 
-// newPhysicalVolume : creates a physical device in LVM
-func newPhysicalVolume(device string) (*schemas.PhysicalVolumeMetadata, error) {
-	exists, _ := getPhysicalVolume(device)
+func newPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
+	exists, _ := getPv(device)
+
 	if exists != nil {
 		return nil, errors.New("pv_already_exists")
 	}
 
 	cmd := exec.Command("pvcreate", device)
+
 	pvc, pvcErr := cmd.CombinedOutput()
+
 	if pvcErr != nil {
 		return nil, errors.New(strings.TrimSpace(string(pvc)))
 	}
 
-	pv, err := getPhysicalVolume(device)
+	pv, err := getPv(device)
+
 	if err != nil {
 		return nil, err
 	}
 
-	logrus.WithFields(logrus.Fields{"device": device}).Debug("Physical volume successfully created.")
+	logrus.WithFields(logrus.Fields{"Device": device}).Debug("Physical volume successfully created.")
 
 	return pv, nil
 }
 
-// removePhysicalVolme : if exists - removes physical volume in LVM
-func removePhysicalVolme(device string) error {
-	exists, _ := getPhysicalVolume(device)
+func removePv(device string) error {
+	exists, _ := getPv(device)
+
 	if exists == nil {
 		err := errors.New("pv_not_found")
 		return err
 	}
 
 	cmd := exec.Command("pvremove", "--force", device)
+
 	_, pvrErr := cmd.CombinedOutput()
+
 	if pvrErr != nil {
 		return pvrErr
 	}
 
-	logrus.WithFields(logrus.Fields{"device": device}).Debug("Physical volume successfully removed.")
+	logrus.WithFields(logrus.Fields{"Device": device}).Debug("Physical volume successfully removed.")
 
 	return nil
 }
 
-// GetPhysicalVolumeByDeviceHandler : handles getting specific physical volumes
-func GetPhysicalVolumeByDeviceHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		device := r.FormValue("device")
-		json := make([]schemas.PhysicalVolumeMetadata, 0)
+func (s *blockServer) GetPv(ctx context.Context, in *protobuff.PvFields) (*protobuff.PvMetadata, error) {
+	pv, pvErr := getPv(in.Device)
 
-		pv, pvErr := getPhysicalVolume(device)
-		if pvErr != nil {
-			HandleErrorResponse(w, pvErr)
-			return
-		}
-		if pv != nil {
-			json = append(json, *pv)
-		}
-
-		HandleResponse(w, json)
+	if pvErr != nil {
+		return nil, services.HandleProtoError(pvErr)
 	}
+
+	if pv == nil {
+		err := status.Error(codes.NotFound, "invalid_physical_volume")
+		return nil, services.HandleProtoError(err)
+	}
+
+	metadata := &protobuff.PvMetadata{
+		PvName: pv.PvName,
+		VgName: pv.VgName,
+		PvFmt:  pv.PvFmt,
+		PvAttr: pv.PvAttr,
+		PvSize: pv.PvSize,
+		PvFree: pv.PvFree,
+	}
+
+	logrus.WithFields(logrus.Fields{"Device": in.Device}).Info("GetPv")
+
+	return metadata, nil
 }
 
-// PostPhysicalVolumeHandler : creates a physical volume on host
-func PostPhysicalVolumeHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+func (s *blockServer) NewPv(ctx context.Context, in *protobuff.PvFields) (*protobuff.PvMetadata, error) {
+	pv, err := newPv(in.Device)
 
-		body := RequestBody{}
-
-		_ = json.NewDecoder(r.Body).Decode(&body)
-
-		pv, err := newPhysicalVolume(body.Device)
-
-		if err != nil {
-			HandleErrorResponse(w, err)
-			return
-		}
-
-		json := append([]schemas.PhysicalVolumeMetadata{}, *pv)
-
-		HandleResponse(w, json)
+	if err != nil {
+		return nil, services.HandleProtoError(err)
 	}
+
+	metadata := &protobuff.PvMetadata{
+		PvName: pv.PvName,
+		VgName: pv.VgName,
+		PvFmt:  pv.PvFmt,
+		PvAttr: pv.PvAttr,
+		PvSize: pv.PvSize,
+		PvFree: pv.PvFree,
+	}
+
+	logrus.WithFields(logrus.Fields{"Device": in.Device}).Info("NewPv")
+
+	return metadata, nil
 }
 
-// DeletePhysicalVolumeHandler : delete a physical volume on host
-func DeletePhysicalVolumeHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+func (s *blockServer) RemovePv(ctx context.Context, in *protobuff.PvFields) (*protobuff.RemoveStatus, error) {
+	err := removePv(in.Device)
 
-		body := RequestBody{}
-
-		_ = json.NewDecoder(r.Body).Decode(&body)
-
-		err := removePhysicalVolme(body.Device)
-
-		if err != nil {
-			HandleErrorResponse(w, err)
-			return
-		}
-
-		json := make([]schemas.PhysicalVolumeMetadata, 0)
-
-		HandleResponse(w, json)
+	if err != nil {
+		return nil, services.HandleProtoError(err)
 	}
+
+	status := &protobuff.RemoveStatus{Success: true}
+
+	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemovePv")
+
+	return status, nil
 }
