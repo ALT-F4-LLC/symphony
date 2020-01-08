@@ -1,4 +1,4 @@
-package services
+package service
 
 import (
 	"google.golang.org/grpc/codes"

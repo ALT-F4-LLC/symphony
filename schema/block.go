@@ -1,4 +1,4 @@
-package schemas
+package schema
 
 import (
 	"github.com/google/uuid"

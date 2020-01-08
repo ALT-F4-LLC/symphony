@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/erkrnt/symphony/schemas"
+	"github.com/erkrnt/symphony/schema"
 	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -29,12 +29,12 @@ func preseedDatabase(db *gorm.DB) error {
 		return tx.Error
 	}
 
-	if err := tx.FirstOrCreate(&schemas.ServiceType{}, schemas.ServiceType{Name: "block"}).Error; err != nil {
+	if err := tx.FirstOrCreate(&schema.ServiceType{}, schema.ServiceType{Name: "block"}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	if err := tx.FirstOrCreate(&schemas.ServiceType{}, schemas.ServiceType{Name: "image"}).Error; err != nil {
+	if err := tx.FirstOrCreate(&schema.ServiceType{}, schema.ServiceType{Name: "image"}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -52,11 +52,11 @@ func getDatabase(flags Flags) (*gorm.DB, error) {
 	logrus.Debug("Database client loaded successfully.")
 
 	db.AutoMigrate(
-		&schemas.LogicalVolume{},
-		&schemas.PhysicalVolume{},
-		&schemas.Service{},
-		&schemas.ServiceType{},
-		&schemas.VolumeGroup{},
+		&schema.LogicalVolume{},
+		&schema.PhysicalVolume{},
+		&schema.Service{},
+		&schema.ServiceType{},
+		&schema.VolumeGroup{},
 	)
 
 	logrus.Debug("Database auto migrate ran successfully.")
@@ -70,18 +70,18 @@ func getDatabase(flags Flags) (*gorm.DB, error) {
 	return db, nil
 }
 
-func getServiceByHostname(db *gorm.DB, hostname string) (*schemas.Service, error) {
-	var service schemas.Service
+func getServiceByHostname(db *gorm.DB, hostname string) (*schema.Service, error) {
+	var service schema.Service
 
-	if err := db.Where(&schemas.Service{Hostname: hostname}).First(&service).Error; gorm.IsRecordNotFoundError(err) {
+	if err := db.Where(&schema.Service{Hostname: hostname}).First(&service).Error; gorm.IsRecordNotFoundError(err) {
 		return nil, nil
 	}
 
 	return &service, nil
 }
 
-func getServiceByID(db *gorm.DB, id uuid.UUID) (*schemas.Service, error) {
-	var service schemas.Service
+func getServiceByID(db *gorm.DB, id uuid.UUID) (*schema.Service, error) {
+	var service schema.Service
 
 	if err := db.Where("id = ?", id).First(&service).Error; gorm.IsRecordNotFoundError(err) {
 		return nil, nil
@@ -90,8 +90,8 @@ func getServiceByID(db *gorm.DB, id uuid.UUID) (*schemas.Service, error) {
 	return &service, nil
 }
 
-func getServiceTypeByID(db *gorm.DB, id uuid.UUID) (*schemas.ServiceType, error) {
-	var serviceType schemas.ServiceType
+func getServiceTypeByID(db *gorm.DB, id uuid.UUID) (*schema.ServiceType, error) {
+	var serviceType schema.ServiceType
 
 	if err := db.Where("id = ?", id).First(&serviceType).Error; gorm.IsRecordNotFoundError(err) {
 		return nil, nil
@@ -100,10 +100,10 @@ func getServiceTypeByID(db *gorm.DB, id uuid.UUID) (*schemas.ServiceType, error)
 	return &serviceType, nil
 }
 
-func getServiceTypeByName(db *gorm.DB, name string) (*schemas.ServiceType, error) {
-	serviceType := schemas.ServiceType{}
+func getServiceTypeByName(db *gorm.DB, name string) (*schema.ServiceType, error) {
+	serviceType := schema.ServiceType{}
 
-	if err := db.Where(&schemas.ServiceType{Name: name}).Find(&serviceType).Error; gorm.IsRecordNotFoundError(err) {
+	if err := db.Where(&schema.ServiceType{Name: name}).Find(&serviceType).Error; gorm.IsRecordNotFoundError(err) {
 		return nil, nil
 	}
 

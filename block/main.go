@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/erkrnt/symphony/protobuff"
-	"github.com/erkrnt/symphony/services"
+	"github.com/erkrnt/symphony/service"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -32,7 +32,7 @@ func main() {
 
 	client := protobuff.NewManagerClient(conn)
 
-	service, err := services.Handshake(client, flags.Hostname, "block")
+	service, err := service.Handshake(client, flags.Hostname, "block")
 
 	if err != nil {
 		panic(err)

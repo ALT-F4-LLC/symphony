@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/erkrnt/symphony/protobuff"
-	"github.com/erkrnt/symphony/schemas"
-	"github.com/erkrnt/symphony/services"
+	"github.com/erkrnt/symphony/schema"
+	"github.com/erkrnt/symphony/service"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -17,11 +17,11 @@ import (
 // VolumeGroupReport : struct for VGDisplay output
 type VolumeGroupReport struct {
 	Report []struct {
-		Vg []schemas.VolumeGroupMetadata `json:"vg"`
+		Vg []schema.VolumeGroupMetadata `json:"vg"`
 	} `json:"report"`
 }
 
-func getVg(id uuid.UUID) (*schemas.VolumeGroupMetadata, error) {
+func getVg(id uuid.UUID) (*schema.VolumeGroupMetadata, error) {
 	cmd := exec.Command("vgdisplay", "--columns", "--reportformat", "json", id.String())
 
 	vgd, vgdErr := cmd.CombinedOutput()
@@ -42,7 +42,7 @@ func getVg(id uuid.UUID) (*schemas.VolumeGroupMetadata, error) {
 		return nil, err
 	}
 
-	var metadata schemas.VolumeGroupMetadata
+	var metadata schema.VolumeGroupMetadata
 
 	if len(res.Report) == 1 && len(res.Report[0].Vg) == 1 {
 		vg := res.Report[0].Vg[0]
@@ -57,7 +57,7 @@ func getVg(id uuid.UUID) (*schemas.VolumeGroupMetadata, error) {
 	return &metadata, nil
 }
 
-func newVg(device string, id uuid.UUID) (*schemas.VolumeGroupMetadata, error) {
+func newVg(device string, id uuid.UUID) (*schema.VolumeGroupMetadata, error) {
 	exists, _ := getVg(id)
 
 	if exists != nil {
@@ -107,13 +107,13 @@ func (s *blockServer) GetVg(ctx context.Context, in *protobuff.VgFields) (*proto
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	vg, err := getVg(id)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	metadata := &protobuff.VgMetadata{
@@ -135,13 +135,13 @@ func (s *blockServer) NewVg(ctx context.Context, in *protobuff.NewVgFields) (*pr
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	vg, err := newVg(in.Device, id)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	metadata := &protobuff.VgMetadata{
@@ -163,13 +163,13 @@ func (s *blockServer) RemoveVg(ctx context.Context, in *protobuff.VgFields) (*pr
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	rmErr := removeVg(id)
 
 	if rmErr != nil {
-		return nil, services.HandleProtoError(rmErr)
+		return nil, service.HandleProtoError(rmErr)
 	}
 
 	status := &protobuff.RemoveStatus{Success: true}

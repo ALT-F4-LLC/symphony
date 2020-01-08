@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/erkrnt/symphony/protobuff"
-	"github.com/erkrnt/symphony/schemas"
-	"github.com/erkrnt/symphony/services"
+	"github.com/erkrnt/symphony/schema"
+	"github.com/erkrnt/symphony/service"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -14,96 +14,96 @@ import (
 	"github.com/golang/protobuf/ptypes"
 )
 
-func (s *managerServer) GetServiceByHostname(ctx context.Context, in *protobuff.GetServiceByHostnameFields) (*protobuff.Service, error) {
-	service, err := getServiceByHostname(s.db, in.Hostname)
+func (server *managerServer) GetServiceByHostname(ctx context.Context, in *protobuff.GetServiceByHostnameFields) (*protobuff.Service, error) {
+	svc, err := getServiceByHostname(server.db, in.Hostname)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	if service == nil {
+	if svc == nil {
 		err := status.Error(codes.NotFound, "invalid_service")
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	createdAt, err := ptypes.TimestampProto(service.CreatedAt)
+	createdAt, err := ptypes.TimestampProto(svc.CreatedAt)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	updatedAt, err := ptypes.TimestampProto(service.UpdatedAt)
+	updatedAt, err := ptypes.TimestampProto(svc.UpdatedAt)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	srvc := &protobuff.Service{
+	s := &protobuff.Service{
 		CreatedAt:     createdAt,
 		UpdatedAt:     updatedAt,
-		ID:            service.ID.String(),
-		Hostname:      service.Hostname,
-		ServiceTypeID: service.ServiceTypeID.String(),
+		ID:            svc.ID.String(),
+		Hostname:      svc.Hostname,
+		ServiceTypeID: svc.ServiceTypeID.String(),
 	}
 
-	logrus.WithFields(logrus.Fields{"Hostname": srvc.Hostname}).Info("GetServiceByHostname")
+	logrus.WithFields(logrus.Fields{"Hostname": s.Hostname}).Info("GetServiceByHostname")
 
-	return srvc, nil
+	return s, nil
 }
 
-func (s *managerServer) GetServiceByID(ctx context.Context, in *protobuff.GetServiceByIDFields) (*protobuff.Service, error) {
+func (server *managerServer) GetServiceByID(ctx context.Context, in *protobuff.GetServiceByIDFields) (*protobuff.Service, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	service, err := getServiceByID(s.db, id)
+	svc, err := getServiceByID(server.db, id)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	if service == nil {
+	if svc == nil {
 		err := status.Error(codes.NotFound, "invalid_service")
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	createdAt, err := ptypes.TimestampProto(service.CreatedAt)
+	createdAt, err := ptypes.TimestampProto(svc.CreatedAt)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	updatedAt, err := ptypes.TimestampProto(service.UpdatedAt)
+	updatedAt, err := ptypes.TimestampProto(svc.UpdatedAt)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	srvc := &protobuff.Service{
+	s := &protobuff.Service{
 		CreatedAt:     createdAt,
 		UpdatedAt:     updatedAt,
-		ID:            service.ID.String(),
-		Hostname:      service.Hostname,
-		ServiceTypeID: service.ServiceTypeID.String(),
+		ID:            svc.ID.String(),
+		Hostname:      svc.Hostname,
+		ServiceTypeID: svc.ServiceTypeID.String(),
 	}
 
-	logrus.WithFields(logrus.Fields{"ID": srvc.ID}).Info("GetServiceByID")
+	logrus.WithFields(logrus.Fields{"ID": s.ID}).Info("GetServiceByID")
 
-	return srvc, nil
+	return s, nil
 }
 
-func (s *managerServer) GetServiceTypeByName(ctx context.Context, in *protobuff.GetServiceTypeByNameFields) (*protobuff.ServiceType, error) {
-	servicetype, err := getServiceTypeByName(s.db, in.Name)
+func (server *managerServer) GetServiceTypeByName(ctx context.Context, in *protobuff.GetServiceTypeByNameFields) (*protobuff.ServiceType, error) {
+	servicetype, err := getServiceTypeByName(server.db, in.Name)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	if servicetype == nil {
 		err := status.Error(codes.NotFound, "invalid_service_type")
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	st := &protobuff.ServiceType{
@@ -116,53 +116,53 @@ func (s *managerServer) GetServiceTypeByName(ctx context.Context, in *protobuff.
 	return st, nil
 }
 
-func (s *managerServer) NewService(ctx context.Context, in *protobuff.NewServiceFields) (*protobuff.Service, error) {
+func (server *managerServer) NewService(ctx context.Context, in *protobuff.NewServiceFields) (*protobuff.Service, error) {
 	serviceTypeID, err := uuid.Parse(in.ServiceTypeID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	serviceType, err := getServiceTypeByID(s.db, serviceTypeID)
+	serviceType, err := getServiceTypeByID(server.db, serviceTypeID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	if serviceType == nil {
 		err := status.Error(codes.NotFound, "invalid_service_type")
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	service := schemas.Service{Hostname: in.Hostname, ServiceTypeID: serviceType.ID}
+	svc := schema.Service{Hostname: in.Hostname, ServiceTypeID: serviceType.ID}
 
-	if err := s.db.Create(&service).Error; err != nil {
-		return nil, services.HandleProtoError(err)
+	if err := server.db.Create(&svc).Error; err != nil {
+		return nil, service.HandleProtoError(err)
 	}
 
-	createdAt, err := ptypes.TimestampProto(service.CreatedAt)
+	createdAt, err := ptypes.TimestampProto(svc.CreatedAt)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	updatedAt, err := ptypes.TimestampProto(service.UpdatedAt)
+	updatedAt, err := ptypes.TimestampProto(svc.UpdatedAt)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
-	svc := &protobuff.Service{
+	s := &protobuff.Service{
 		CreatedAt:     createdAt,
 		UpdatedAt:     updatedAt,
-		ID:            service.ID.String(),
-		Hostname:      service.Hostname,
-		ServiceTypeID: service.ServiceTypeID.String(),
+		ID:            svc.ID.String(),
+		Hostname:      svc.Hostname,
+		ServiceTypeID: svc.ServiceTypeID.String(),
 	}
 
-	logFields := logrus.Fields{"Hostname": svc.Hostname, "ServiceTypeID": svc.ServiceTypeID}
+	logFields := logrus.Fields{"Hostname": s.Hostname, "ServiceTypeID": s.ServiceTypeID}
 
 	logrus.WithFields(logFields).Info("NewService")
 
-	return svc, nil
+	return s, nil
 }

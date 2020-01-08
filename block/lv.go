@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/erkrnt/symphony/protobuff"
-	"github.com/erkrnt/symphony/schemas"
-	"github.com/erkrnt/symphony/services"
+	"github.com/erkrnt/symphony/schema"
+	"github.com/erkrnt/symphony/service"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -20,11 +20,11 @@ import (
 // LogicalVolumeReport : struct for LVDisplay output
 type LogicalVolumeReport struct {
 	Report []struct {
-		Lv []schemas.LogicalVolumeMetadata `json:"lv"`
+		Lv []schema.LogicalVolumeMetadata `json:"lv"`
 	} `json:"report"`
 }
 
-func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*schemas.LogicalVolumeMetadata, error) {
+func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*schema.LogicalVolumeMetadata, error) {
 	path := fmt.Sprintf("/dev/%s/%s", volumeGroupID.String(), id.String())
 
 	cmd := exec.Command("lvdisplay", "--columns", "--reportformat", "json", path)
@@ -49,7 +49,7 @@ func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*schemas.LogicalVolumeMetadat
 		return nil, err
 	}
 
-	var metadata schemas.LogicalVolumeMetadata
+	var metadata schema.LogicalVolumeMetadata
 
 	if len(res.Report) == 1 && len(res.Report[0].Lv) == 1 {
 		lv := res.Report[0].Lv[0]
@@ -69,7 +69,7 @@ func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*schemas.LogicalVolumeMetadat
 	return &metadata, nil
 }
 
-func newLv(volumeGroupID uuid.UUID, id uuid.UUID, size string) (*schemas.LogicalVolumeMetadata, error) {
+func newLv(volumeGroupID uuid.UUID, id uuid.UUID, size string) (*schema.LogicalVolumeMetadata, error) {
 	exists, _ := getLv(volumeGroupID, id)
 
 	if exists != nil {
@@ -129,24 +129,24 @@ func (s *blockServer) GetLv(ctx context.Context, in *protobuff.LvFields) (*proto
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	lv, lvErr := getLv(volumeGroupID, id)
 
 	if lvErr != nil {
-		return nil, services.HandleProtoError(lvErr)
+		return nil, service.HandleProtoError(lvErr)
 	}
 
 	if lv == nil {
 		err := status.Error(codes.NotFound, "invalid_physical_volume")
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	metadata := &protobuff.LvMetadata{
@@ -178,13 +178,13 @@ func (s *blockServer) NewLv(ctx context.Context, in *protobuff.NewLvFields) (*pr
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	lv, err := newLv(volumeGroupID, id, in.Size)
@@ -223,19 +223,19 @@ func (s *blockServer) RemoveLv(ctx context.Context, in *protobuff.LvFields) (*pr
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	rmErr := removeLv(volumeGroupID, id)
 
 	if rmErr != nil {
-		return nil, services.HandleProtoError(rmErr)
+		return nil, service.HandleProtoError(rmErr)
 	}
 
 	status := &protobuff.RemoveStatus{Success: true}

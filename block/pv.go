@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/erkrnt/symphony/protobuff"
-	"github.com/erkrnt/symphony/schemas"
-	"github.com/erkrnt/symphony/services"
+	"github.com/erkrnt/symphony/schema"
+	"github.com/erkrnt/symphony/service"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,11 +18,11 @@ import (
 // PhysicalVolumeReport : describes a series of physical volumes in LVM
 type PhysicalVolumeReport struct {
 	Report []struct {
-		Pv []schemas.PhysicalVolumeMetadata `json:"pv"`
+		Pv []schema.PhysicalVolumeMetadata `json:"pv"`
 	} `json:"report"`
 }
 
-func getPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
+func getPv(device string) (*schema.PhysicalVolumeMetadata, error) {
 	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device)
 
 	pvd, pvdErr := cmd.CombinedOutput()
@@ -43,7 +43,7 @@ func getPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
 		return nil, err
 	}
 
-	var metadata schemas.PhysicalVolumeMetadata
+	var metadata schema.PhysicalVolumeMetadata
 
 	if len(res.Report) == 1 && len(res.Report[0].Pv) == 1 {
 		pv := res.Report[0].Pv[0]
@@ -58,7 +58,7 @@ func getPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
 	return &metadata, nil
 }
 
-func newPv(device string) (*schemas.PhysicalVolumeMetadata, error) {
+func newPv(device string) (*schema.PhysicalVolumeMetadata, error) {
 	exists, _ := getPv(device)
 
 	if exists != nil {
@@ -109,12 +109,12 @@ func (s *blockServer) GetPv(ctx context.Context, in *protobuff.PvFields) (*proto
 	pv, pvErr := getPv(in.Device)
 
 	if pvErr != nil {
-		return nil, services.HandleProtoError(pvErr)
+		return nil, service.HandleProtoError(pvErr)
 	}
 
 	if pv == nil {
 		err := status.Error(codes.NotFound, "invalid_physical_volume")
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	metadata := &protobuff.PvMetadata{
@@ -135,7 +135,7 @@ func (s *blockServer) NewPv(ctx context.Context, in *protobuff.PvFields) (*proto
 	pv, err := newPv(in.Device)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	metadata := &protobuff.PvMetadata{
@@ -156,7 +156,7 @@ func (s *blockServer) RemovePv(ctx context.Context, in *protobuff.PvFields) (*pr
 	err := removePv(in.Device)
 
 	if err != nil {
-		return nil, services.HandleProtoError(err)
+		return nil, service.HandleProtoError(err)
 	}
 
 	status := &protobuff.RemoveStatus{Success: true}
