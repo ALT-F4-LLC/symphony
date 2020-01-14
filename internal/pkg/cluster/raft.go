@@ -531,8 +531,8 @@ func (m *Member) StopHTTP() {
 	<-m.HTTPDoneC
 }
 
-// NewRaftNode : creates a new raft node
-func NewRaftNode(confChangeC <-chan raftpb.ConfChange, configDir string, kvs *KvStore, proposeC <-chan string) (<-chan *string, <-chan error, *Member) {
+// NewRaftMember : creates a new raft member
+func NewRaftMember(confChangeC <-chan raftpb.ConfChange, configDir string, kvs *KvStore, proposeC <-chan string) (<-chan *string, <-chan error, *Member) {
 	commitC := make(chan *string)
 
 	errorC := make(chan error)

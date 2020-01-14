@@ -4,37 +4,37 @@ import (
 	"net"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/cluster"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
 // RaftMembershipServer : struct used for grpc service
 type RaftMembershipServer struct {
-	Member *cluster.Member
+	Manager *Manager
 }
 
 // StartRaftMembershipServer : starts Raft memebership server
-func StartRaftMembershipServer(addr *net.TCPAddr, node *cluster.Member) {
-	lis, err := net.Listen("tcp", addr.String())
+func StartRaftMembershipServer(m *Manager) {
+	lis, err := net.Listen("tcp", m.Flags.ListenRemoteAPI.String())
 
 	if err != nil {
-		logrus.Fatalf("Failed to listen: %v", err)
+		m.Logger.Fatal("Failed to listen", zap.Error(err))
 	}
 
 	s := grpc.NewServer()
 
 	server := &RaftMembershipServer{
-		Member: node,
+		Manager: m,
 	}
 
 	api.RegisterRaftMembershipServer(s, server)
 
-	logFields := logrus.Fields{"listen-remote-api": addr.String()}
-
-	logrus.WithFields(logFields).Info("Started manager gRPC endpoints.")
+	m.Logger.Info(
+		"Started manager gRPC endpoints.",
+		zap.String("listen-remote-api", m.Flags.ListenRemoteAPI.String()),
+	)
 
 	if err := s.Serve(lis); err != nil {
-		logrus.Fatalf("Failed to serve: %v", err)
+		m.Logger.Fatal("Failed to serve", zap.Error(err))
 	}
 }

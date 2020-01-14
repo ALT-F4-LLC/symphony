@@ -4,25 +4,15 @@ import (
 	"context"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/sirupsen/logrus"
 )
 
 // NodeIsMember : checks if a specific node is a peer in raft
 func NodeIsMember(addr string, peers []string) bool {
-	fields := logrus.Fields{"addr": addr}
-
-	logger := logrus.WithFields(fields)
-
 	for _, a := range peers {
 		if a == addr {
-
-			logger.Debug("RAFT: node is a raft member.")
-
 			return true
 		}
 	}
-
-	logger.Debug("RAFT: node is not a raft member.")
 
 	return false
 }

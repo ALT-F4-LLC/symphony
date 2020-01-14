@@ -1,26 +1,17 @@
 package main
 
 import (
-	"log"
-	"time"
-
-	logger "github.com/erkrnt/symphony/internal/pkg/logs"
+	"github.com/erkrnt/symphony/internal/manager"
 	"go.etcd.io/etcd/raft/raftpb"
-
-	"github.com/erkrnt/symphony/internal/pkg/flags"
 
 	"github.com/erkrnt/symphony/internal/pkg/cluster"
 )
 
 func main() {
-	l := logger.NewLogger()
-
-	defer l.Sync()
-
-	f, err := flags.GetManagerFlags(l)
+	m, err := manager.NewManager()
 
 	if err != nil {
-		log.Panic(err)
+		m.Logger.Fatal(err.Error())
 	}
 
 	proposeC := make(chan string)
@@ -33,9 +24,13 @@ func main() {
 
 	var kvs *cluster.KvStore
 
-	commitC, errorC, node := cluster.NewRaftNode(confChangeC, f.ConfigDir, kvs, proposeC)
+	commitC, errorC, member := cluster.NewRaftMember(confChangeC, m.Flags.ConfigDir, kvs, proposeC)
 
-	kvs = cluster.NewStore(commitC, errorC, node, <-node.SnapshotterReady)
+	kvs = cluster.NewStore(commitC, errorC, member, <-member.SnapshotterReady)
 
-	time.Sleep(30 * time.Second)
+	m.Member = member
+
+	m.Store = kvs
+
+	manager.StartRaftMembershipServer(m)
 }
