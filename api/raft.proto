@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package api;
+
+service RaftMembership {
+  rpc Join(JoinRequest) returns (JoinResponse) {}
+  rpc Leave(LeaveRequest) returns (LeaveResponse) {}
+}
+
+message JoinRequest { string addr = 1; }
+
+message JoinResponse {
+  uint64 raft_id = 1;
+  repeated string peers = 2;
+}
+
+message LeaveRequest { uint64 raft_id = 1; }
+
+message LeaveResponse {}
+
+message RaftMember {
+  uint64 raft_id = 1;
+
+  string addr = 2;
+}

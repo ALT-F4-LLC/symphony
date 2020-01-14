@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package protobuff;
+package api;
 
 service Block {
   rpc GetLv(LvFields) returns (LvMetadata) {}

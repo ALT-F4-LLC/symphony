@@ -6,17 +6,22 @@ import (
 
 // Flags : command line flags for service
 type Flags struct {
-	Preseed bool
-	Verbose bool
+	Join    *string
+	Verbose *bool
 }
 
 func getFlags() Flags {
 	var (
-		preseed = kingpin.Flag("preseed", "Enables preseeding of database.").Short('p').Bool()
+		join    = kingpin.Flag("join", "Join existing Raft via node address.").String()
 		verbose = kingpin.Flag("verbose", "Enables verbose output.").Short('v').Bool()
 	)
 
 	kingpin.Parse()
 
-	return Flags{Preseed: *preseed, Verbose: *verbose}
+	flags := Flags{
+		Join:    join,
+		Verbose: verbose,
+	}
+
+	return flags
 }
