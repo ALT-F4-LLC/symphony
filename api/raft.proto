@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package api;
 
-service RaftMembership {
+service Manager {
   rpc Join(JoinRequest) returns (JoinResponse) {}
   rpc Leave(LeaveRequest) returns (LeaveResponse) {}
 }
@@ -17,9 +17,3 @@ message JoinResponse {
 message LeaveRequest { uint64 raft_id = 1; }
 
 message LeaveResponse {}
-
-message RaftMember {
-  uint64 raft_id = 1;
-
-  string addr = 2;
-}

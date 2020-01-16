@@ -10,8 +10,8 @@ import (
 	"go.etcd.io/etcd/etcdserver/api/snap"
 )
 
-// KvStore : cluster store struct
-type KvStore struct {
+// RaftState : raft cluster state
+type RaftState struct {
 	Mutex       sync.RWMutex
 	ProposeC    chan<- string // channel for proposing updates
 	Snapshotter *snap.Snapshotter
@@ -29,7 +29,7 @@ const joinTokenManagerKey = "jointoken:manager"
 const joinTokenWorkerKey = "jointoken:worker"
 
 // Lookup : lookup key-value in store
-func (s *KvStore) Lookup(key string) (string, bool) {
+func (s *RaftState) Lookup(key string) (string, bool) {
 	s.Mutex.RLock()
 
 	defer s.Mutex.RUnlock()
@@ -40,7 +40,7 @@ func (s *KvStore) Lookup(key string) (string, bool) {
 }
 
 // FindOrCreateJoinTokens : looks up join tokens in the raft
-func (s *KvStore) FindOrCreateJoinTokens() (*JoinTokens, error) {
+func (s *RaftState) FindOrCreateJoinTokens() (*JoinTokens, error) {
 	var jtm string
 	var jtw string
 
@@ -73,7 +73,7 @@ func (s *KvStore) FindOrCreateJoinTokens() (*JoinTokens, error) {
 }
 
 // GetSnapshot : gets the snapshot of a store
-func (s *KvStore) GetSnapshot() ([]byte, error) {
+func (s *RaftState) GetSnapshot() ([]byte, error) {
 	s.Mutex.RLock()
 
 	defer s.Mutex.RUnlock()
@@ -81,25 +81,8 @@ func (s *KvStore) GetSnapshot() ([]byte, error) {
 	return json.Marshal(s.Store)
 }
 
-// NewStore : creates a new store for the raft
-func NewStore(commitC <-chan *string, errorC <-chan error, node *Member, proposeC chan<- string, snapshotter *snap.Snapshotter) *KvStore {
-	store := &KvStore{
-		Snapshotter: snapshotter,
-		Store:       make(map[string]string),
-		ProposeC:    proposeC,
-	}
-
-	// replay log into store
-	store.ReadCommits(commitC, errorC)
-
-	// read commits from raft into KvStore map until error
-	go store.ReadCommits(commitC, errorC)
-
-	return store
-}
-
 // Propose : proposes changes to the state
-func (s *KvStore) Propose(k string, v string) {
+func (s *RaftState) Propose(k string, v string) {
 	var buf bytes.Buffer
 
 	if err := gob.NewEncoder(&buf).Encode(&KeyVal{k, v}); err != nil {
@@ -110,7 +93,7 @@ func (s *KvStore) Propose(k string, v string) {
 }
 
 // RecoverFromSnapshot : unmarshals data from snapshot
-func (s *KvStore) RecoverFromSnapshot(snapshot []byte) error {
+func (s *RaftState) RecoverFromSnapshot(snapshot []byte) error {
 	var store map[string]string
 
 	if err := json.Unmarshal(snapshot, &store); err != nil {
@@ -127,7 +110,7 @@ func (s *KvStore) RecoverFromSnapshot(snapshot []byte) error {
 }
 
 // ReadCommits : read commits in the commit channel
-func (s *KvStore) ReadCommits(commitC <-chan *string, errorC <-chan error) {
+func (s *RaftState) ReadCommits(commitC <-chan *string, errorC <-chan error) {
 	for data := range commitC {
 
 		if data == nil {

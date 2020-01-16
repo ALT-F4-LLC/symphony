@@ -4,41 +4,28 @@ import (
 	"log"
 
 	"github.com/erkrnt/symphony/internal/manager"
-	"go.etcd.io/etcd/raft/raftpb"
-
-	"github.com/erkrnt/symphony/internal/pkg/cluster"
+	"github.com/erkrnt/symphony/internal/pkg/config"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	m, err := manager.NewManager()
+	flags, err := config.GetFlags()
 
 	if err != nil {
-		m.Logger.Fatal(err.Error())
+		logrus.Fatal(err)
 	}
 
-	proposeC := make(chan string)
+	node, err := manager.NewNode(flags)
 
-	defer close(proposeC)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	confChangeC := make(chan raftpb.ConfChange)
-
-	defer close(confChangeC)
-
-	var kvs *cluster.KvStore
-
-	commitC, errorC, member := cluster.NewRaftMember(confChangeC, m.Flags.ConfigDir, kvs, proposeC)
-
-	kvs = cluster.NewStore(commitC, errorC, member, proposeC, <-member.SnapshotterReady)
-
-	m.Member = member
-
-	m.Store = kvs
-
-	_, jtsErr := m.Store.FindOrCreateJoinTokens()
+	_, jtsErr := node.State.FindOrCreateJoinTokens()
 
 	if jtsErr != nil {
 		log.Fatal(err)
 	}
 
-	manager.StartRaftMembershipServer(m)
+	manager.Start(flags, node)
 }
