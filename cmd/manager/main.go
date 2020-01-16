@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"github.com/erkrnt/symphony/internal/manager"
 	"go.etcd.io/etcd/raft/raftpb"
 
@@ -26,11 +28,17 @@ func main() {
 
 	commitC, errorC, member := cluster.NewRaftMember(confChangeC, m.Flags.ConfigDir, kvs, proposeC)
 
-	kvs = cluster.NewStore(commitC, errorC, member, <-member.SnapshotterReady)
+	kvs = cluster.NewStore(commitC, errorC, member, proposeC, <-member.SnapshotterReady)
 
 	m.Member = member
 
 	m.Store = kvs
+
+	_, jtsErr := m.Store.FindOrCreateJoinTokens()
+
+	if jtsErr != nil {
+		log.Fatal(err)
+	}
 
 	manager.StartRaftMembershipServer(m)
 }

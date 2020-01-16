@@ -61,6 +61,7 @@ var defaultSnapshotCount uint64 = 10000
 
 var snapshotCatchUpEntriesN uint64 = 10000
 
+// Accept : accepts connections via stoppableListener
 func (ln StoppableListener) Accept() (c net.Conn, err error) {
 	connC := make(chan *net.TCPConn, 1)
 
@@ -178,7 +179,6 @@ func (m *Member) OpenWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 	walSnap := walpb.Snapshot{}
 
 	if snapshot != nil {
-		log.Print(snapshot)
 		walSnap.Index, walSnap.Term = snapshot.Metadata.Index, snapshot.Metadata.Term
 	}
 

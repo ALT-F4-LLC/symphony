@@ -1,42 +1,5 @@
 package manager
 
-import (
-	"context"
-
-	"github.com/erkrnt/symphony/api"
-)
-
-// NodeIsMember : checks if a specific node is a peer in raft
-func NodeIsMember(addr string, peers []string) bool {
-	for _, a := range peers {
-		if a == addr {
-			return true
-		}
-	}
-
-	return false
-}
-
-// Join : handles joining servers to raft members
-func (s *RaftMembershipServer) Join(ctx context.Context, in *api.JoinRequest) (*api.JoinResponse, error) {
-	// TODO: Take in the server address and lookup in kv
-
-	// isMember := NodeIsMember(in.Addr, s.Member.Raft.)
-
-	// logrus.Debug(isMember)
-
-	// if !ok {
-	// 	return nil, errors.New("store lookup failure")
-	// }
-
-	return &api.JoinResponse{}, nil
-}
-
-// Leave : handles removing servers from raft members
-func (s *RaftMembershipServer) Leave(ctx context.Context, in *api.LeaveRequest) (*api.LeaveResponse, error) {
-	return &api.LeaveResponse{}, nil
-}
-
 // func (server *managerServer) GetServiceByHostname(ctx context.Context, in *protobuff.GetServiceByHostnameFields) (*protobuff.Service, error) {
 // 	svc, err := getServiceByHostname(server.db, in.Hostname)
 
