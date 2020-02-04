@@ -24,9 +24,14 @@ type KeyVal struct {
 	Val string
 }
 
-const joinTokenManagerKey = "jointoken:manager"
+// GetSnapshot : gets the snapshot of a store
+func (s *RaftState) GetSnapshot() ([]byte, error) {
+	s.Mutex.RLock()
 
-const joinTokenWorkerKey = "jointoken:worker"
+	defer s.Mutex.RUnlock()
+
+	return json.Marshal(s.Store)
+}
 
 // Lookup : lookup key-value in store
 func (s *RaftState) Lookup(key string) (string, bool) {
@@ -39,48 +44,6 @@ func (s *RaftState) Lookup(key string) (string, bool) {
 	return v, ok
 }
 
-// FindOrCreateJoinTokens : looks up join tokens in the raft
-func (s *RaftState) FindOrCreateJoinTokens() (*JoinTokens, error) {
-	var jtm string
-	var jtw string
-
-	jtm, jtmOk := s.Lookup(joinTokenManagerKey)
-
-	if !jtmOk {
-		jtm = GenerateToken()
-
-		s.Propose("jointoken:manager", jtm)
-
-		log.Printf("Generated new manager join token: %s", jtm)
-	}
-
-	jtw, jtwOk := s.Lookup(joinTokenWorkerKey)
-
-	if !jtwOk {
-		jtw = GenerateToken()
-
-		s.Propose("jointoken:worker", jtw)
-
-		log.Printf("Generated new worker join token: %s", jtw)
-	}
-
-	jt := &JoinTokens{
-		Manager: jtm,
-		Worker:  jtw,
-	}
-
-	return jt, nil
-}
-
-// GetSnapshot : gets the snapshot of a store
-func (s *RaftState) GetSnapshot() ([]byte, error) {
-	s.Mutex.RLock()
-
-	defer s.Mutex.RUnlock()
-
-	return json.Marshal(s.Store)
-}
-
 // Propose : proposes changes to the state
 func (s *RaftState) Propose(k string, v string) {
 	var buf bytes.Buffer
@@ -90,23 +53,6 @@ func (s *RaftState) Propose(k string, v string) {
 	}
 
 	s.ProposeC <- buf.String()
-}
-
-// RecoverFromSnapshot : unmarshals data from snapshot
-func (s *RaftState) RecoverFromSnapshot(snapshot []byte) error {
-	var store map[string]string
-
-	if err := json.Unmarshal(snapshot, &store); err != nil {
-		return err
-	}
-
-	s.Mutex.Lock()
-
-	defer s.Mutex.Unlock()
-
-	s.Store = store
-
-	return nil
 }
 
 // ReadCommits : read commits in the commit channel
@@ -145,12 +91,50 @@ func (s *RaftState) ReadCommits(commitC <-chan *string, errorC <-chan error) {
 
 		s.Mutex.Lock()
 
+		log.Printf("Locking state %s", dataKv.Val)
+
 		s.Store[dataKv.Key] = dataKv.Val
 
 		s.Mutex.Unlock()
+
+		log.Printf("Unlocking state %s", dataKv.Val)
 	}
 
 	if err, ok := <-errorC; ok {
 		log.Fatal(err)
 	}
+}
+
+// RecoverFromSnapshot : unmarshals data from snapshot
+func (s *RaftState) RecoverFromSnapshot(snapshot []byte) error {
+	var store map[string]string
+
+	if err := json.Unmarshal(snapshot, &store); err != nil {
+		return err
+	}
+
+	s.Mutex.Lock()
+
+	defer s.Mutex.Unlock()
+
+	s.Store = store
+
+	return nil
+}
+
+// NewRaftState : creates a new store for the raft
+func NewRaftState(commitC <-chan *string, errorC <-chan error, node *RaftNode, proposeC chan<- string, snapshotter *snap.Snapshotter) *RaftState {
+	store := &RaftState{
+		Snapshotter: snapshotter,
+		Store:       make(map[string]string),
+		ProposeC:    proposeC,
+	}
+
+	// replay log into store
+	store.ReadCommits(commitC, errorC)
+
+	// read commits from raft into KvStore map until error
+	go store.ReadCommits(commitC, errorC)
+
+	return store
 }

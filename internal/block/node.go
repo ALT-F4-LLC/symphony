@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 
+	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/cluster"
 	"github.com/erkrnt/symphony/internal/pkg/config"
 	"google.golang.org/grpc"
@@ -17,31 +18,39 @@ type Node struct {
 }
 
 // NewNode : creates a new manager struct
-func NewNode(f *config.Flags) (*Node, error) {
-	k, err := config.GetKey(f.ConfigDir)
+func NewNode(flags *config.Flags) (*Node, error) {
+	key, err := config.GetKey(flags.ConfigDir)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if f.JoinAddr != nil {
-		log.Print("hello")
+	var peers []string
+
+	if flags.JoinAddr != nil {
+		p, err := cluster.JoinRaft(flags, key)
+
+		if err != nil {
+			return nil, err
+		}
+
+		peers = p
 	}
 
-	// node, store := cluster.NewRaft(configDir)
+	node, store := cluster.NewRaft(flags, key, peers)
 
 	m := &Node{
-		Key: k,
-		// Raft:  node,
-		// State: store,
+		Key:   key,
+		Raft:  node,
+		State: store,
 	}
 
 	return m, nil
 }
 
 // Start : starts Raft memebership server
-func Start(f *config.Flags, n *Node) {
-	lis, err := net.Listen("tcp", f.ListenRemoteAPI.String())
+func Start(flags *config.Flags, node *Node) {
+	lis, err := net.Listen("tcp", flags.ListenRemoteAddr.String())
 
 	if err != nil {
 		log.Fatal("Failed to listen")
@@ -49,11 +58,11 @@ func Start(f *config.Flags, n *Node) {
 
 	s := grpc.NewServer()
 
-	// server := &blockServer{
-	// 	Node: n,
-	// }
+	server := &blockServer{
+		Node: node,
+	}
 
-	// api.RegisterBlockServer(s, server)
+	api.RegisterBlockServer(s, server)
 
 	log.Print("Started block gRPC endpoints.")
 

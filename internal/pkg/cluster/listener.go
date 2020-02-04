@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"errors"
+	"log"
 	"net"
 	"time"
 )
@@ -14,10 +15,14 @@ type stoppableListener struct {
 }
 
 func newStoppableListener(addr string, stopc <-chan struct{}) (*stoppableListener, error) {
+	log.Printf("Raft listener started on addr %s", addr)
+
 	ln, err := net.Listen("tcp", addr)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &stoppableListener{ln.(*net.TCPListener), stopc}, nil
 }
 

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package api;
+
+service ManagerControl {
+  rpc ManagerControlInitialize(ManagerControlInitializeRequest)
+      returns (ManagerControlInitializeResponse) {}
+  rpc ManagerControlJoin(ManagerControlJoinRequest)
+      returns (ManagerControlJoinResponse) {}
+  rpc ManagerControlPeers(ManagerControlPeersRequest)
+      returns (ManagerControlPeersResponse) {}
+}
+
+message ManagerControlInitializeRequest {
+  string join_addr = 1;
+  repeated string peers = 2;
+}
+message ManagerControlInitializeResponse {}
+
+message ManagerControlJoinRequest { string join_addr = 1; }
+message ManagerControlJoinResponse {}
+
+message ManagerControlPeersRequest {}
+message ManagerControlPeersResponse { repeated string peers = 1; }

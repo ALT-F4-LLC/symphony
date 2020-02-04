@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package api;
+
+service ManagerRemote {
+  rpc ManagerRemoteInit(ManagerRemoteInitRequest)
+      returns (ManagerRemoteInitResponse) {}
+  rpc ManagerRemoteJoin(ManagerRemoteJoinRequest)
+      returns (ManagerRemoteJoinResponse) {}
+}
+
+message ManagerRemoteInitRequest { string addr = 1; }
+message ManagerRemoteInitResponse {
+  uint64 node_id = 1;
+  repeated string peers = 2;
+}
+
+message ManagerRemoteJoinRequest { string addr = 1; }
+message ManagerRemoteJoinResponse {
+  uint64 node_id = 1;
+  repeated string peers = 2;
+}

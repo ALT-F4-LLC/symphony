@@ -9,17 +9,17 @@ import (
 )
 
 func main() {
-	f, err := config.GetFlags()
+	flags, err := config.GetFlags()
 
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
-	_, nodeErr := block.NewNode(f)
+	node, nodeErr := block.NewNode(flags)
 
 	if nodeErr != nil {
-		log.Fatal(err)
+		log.Fatal(nodeErr)
 	}
 
-	// block.Start(f, m)
+	block.Start(flags, node)
 }
