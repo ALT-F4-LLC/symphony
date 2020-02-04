@@ -225,13 +225,9 @@ func (rn *RaftNode) PublishEntries(ents []raftpb.Entry) bool {
 
 			rn.ConfState = *rn.Node.ApplyConfChange(cc)
 
-			log.Print(rn.ConfState)
-
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
 				if len(cc.Context) > 0 {
-					log.Printf("ConfChangeAddNode %s", string(cc.Context))
-
 					rn.Transport.AddPeer(types.ID(cc.NodeID), []string{string(cc.Context)})
 				}
 			case raftpb.ConfChangeRemoveNode:
@@ -381,8 +377,6 @@ func (rn *RaftNode) ServeChannels() {
 
 					cc.ID = confChangeCount
 
-					log.Print("<-rn.ConfChangeC fired")
-
 					if err := rn.Node.ProposeConfChange(context.TODO(), cc); err != nil {
 						log.Fatal(err)
 					}
@@ -516,8 +510,6 @@ func (rn *RaftNode) StartRaft() {
 	for i := range rn.Peers {
 		if i+1 != int(rn.ID) {
 			rn.Transport.AddPeer(types.ID(i+1), []string{rn.Peers[i]})
-
-			log.Printf("Peer added at start: %s", []string{rn.Peers[i]})
 		}
 	}
 
@@ -625,10 +617,6 @@ func NewRaftNode(commitC chan<- *string, confChangeC chan raftpb.ConfChange, err
 		ProposeC:         proposeC,
 		WalDir:           fmt.Sprintf("%s/node-%d", flags.ConfigDir, nodeID),
 	}
-
-	log.Print(member.ID)
-
-	log.Print(member.Peers)
 
 	go member.StartRaft()
 
