@@ -227,7 +227,7 @@ func (rn *RaftNode) PublishEntries(ents []raftpb.Entry) bool {
 
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
-				if len(cc.Context) > 0 {
+				if cc.NodeID != uint64(rn.ID) && len(cc.Context) > 0 {
 					rn.Transport.AddPeer(types.ID(cc.NodeID), []string{string(cc.Context)})
 				}
 			case raftpb.ConfChangeRemoveNode:
@@ -477,7 +477,7 @@ func (rn *RaftNode) StartRaft() {
 	rpeers := make([]raft.Peer, len(rn.Peers))
 
 	for i := range rpeers {
-		rpeers[i] = raft.Peer{ID: uint64(i + 1)}
+		rpeers[i] = raft.Peer{ID: uint64(i + 1), Context: []byte(rn.Peers[i])}
 	}
 
 	c := &raft.Config{
@@ -573,7 +573,7 @@ func GetMemberIndex(addr string, peers []string) (*int, error) {
 }
 
 // NewRaft : returns a new key-value store and raft node
-func NewRaft(flags *config.Flags, join bool, key *config.Key, nodeID uint64, peers []string) (*RaftNode, *RaftState, error) {
+func NewRaft(flags *config.Flags, join bool, nodeID uint64, peers []string) (*RaftNode, *RaftState, error) {
 	commitC := make(chan *string)
 
 	confChangeC := make(chan raftpb.ConfChange)
@@ -584,7 +584,7 @@ func NewRaft(flags *config.Flags, join bool, key *config.Key, nodeID uint64, pee
 
 	var state *RaftState
 
-	node, err := NewRaftNode(commitC, confChangeC, errorC, flags, join, key, nodeID, peers, proposeC, state)
+	node, err := NewRaftNode(commitC, confChangeC, errorC, flags, join, nodeID, peers, proposeC, state)
 
 	if err != nil {
 		return nil, nil, err
@@ -596,7 +596,7 @@ func NewRaft(flags *config.Flags, join bool, key *config.Key, nodeID uint64, pee
 }
 
 // NewRaftNode : creates a new raft member
-func NewRaftNode(commitC chan<- *string, confChangeC chan raftpb.ConfChange, errorC chan error, flags *config.Flags, join bool, key *config.Key, nodeID uint64, peers []string, proposeC <-chan string, state *RaftState) (*RaftNode, error) {
+func NewRaftNode(commitC chan<- *string, confChangeC chan raftpb.ConfChange, errorC chan error, flags *config.Flags, join bool, nodeID uint64, peers []string, proposeC <-chan string, state *RaftState) (*RaftNode, error) {
 	getSnapshot := func() ([]byte, error) { return state.GetSnapshot() }
 
 	member := &RaftNode{

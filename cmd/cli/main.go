@@ -14,13 +14,19 @@ import (
 )
 
 var (
+	getCommand          = kingpin.Command("get", "Get a value from the raft state.")
+	getCommandKey       = getCommand.Arg("key", "Specific key to retrieve for value.").Required().String()
+	initCommand         = kingpin.Command("init", "Initializes a new cluster with optional peers list (minimum of 3)")
+	initCommandJoinAddr = initCommand.Flag("join-addr", "Sets value to use for state.").String()
+	initCommandPeers    = initCommand.Flag("peers", "Sets value to use for state.").String()
+	joinCommand         = kingpin.Command("join", "Joins an existing initialized cluster.")
+	joinCommandAddr     = joinCommand.Arg("addr", "Manager address of existing initialized cluster.").Required().String()
+	setCommand          = kingpin.Command("set", "Sets a value into the raft state.")
+	setCommandKey       = setCommand.Arg("key", "Specific key to set for value.").Required().String()
+	setCommandValue     = setCommand.Arg("value", "Specific value to set for key.").Required().String()
+	removeCommand       = kingpin.Command("remove", "Removes a node from the cluster.")
+	removeCommandAddr   = removeCommand.Arg("addr", "Raft address of node to be removed from the cluster.").Required().String()
 	socket              = kingpin.Flag("socket", "Sets the socket connection for the client.").String()
-	clusterInitCommand  = kingpin.Command("init", "Initializes a new cluster with optional peers list (minimum of 3)")
-	clusterJoinCommand  = kingpin.Command("join", "Joins an existing initialized cluster.")
-	clusterPeersCommand = kingpin.Command("peers", "Returns a list of all active peers in state.")
-	clusterInitJoinAddr = clusterInitCommand.Flag("join-addr", "Sets value to use for state.").String()
-	clusterInitPeers    = clusterInitCommand.Flag("peers", "Sets value to use for state.").String()
-	clusterJoinAddr     = clusterJoinCommand.Arg("addr", "Manager address of existing initialized cluster.").Required().String()
 )
 
 func newConnection() *grpc.ClientConn {
@@ -51,8 +57,36 @@ func newConnection() *grpc.ClientConn {
 	return conn
 }
 
-func clusterInitCommandHandler() {
-	if *clusterInitJoinAddr != "" && *clusterInitPeers != "" {
+func getCommandHandler() {
+	if *getCommandKey == "" {
+		log.Fatal("Invalid parameters")
+	}
+
+	conn := newConnection()
+
+	defer conn.Close()
+
+	c := api.NewManagerControlClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerControlGetValueRequest{
+		Key: *getCommandKey,
+	}
+
+	res, err := c.ManagerControlGetValue(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(res.Value)
+}
+
+func initCommandHandler() {
+	if *initCommandJoinAddr != "" && *initCommandPeers != "" {
 		log.Fatal("Cannot use --join-addr and --peers flags together.")
 	}
 
@@ -68,12 +102,12 @@ func clusterInitCommandHandler() {
 
 	opts := &api.ManagerControlInitializeRequest{}
 
-	if *clusterInitJoinAddr != "" {
-		opts.JoinAddr = *clusterInitJoinAddr
+	if *initCommandJoinAddr != "" {
+		opts.JoinAddr = *initCommandJoinAddr
 	}
 
-	if *clusterInitPeers != "" {
-		opts.Peers = strings.Split(*clusterInitPeers, ",")
+	if *initCommandPeers != "" {
+		opts.Peers = strings.Split(*initCommandPeers, ",")
 	}
 
 	log.Print(opts)
@@ -85,7 +119,7 @@ func clusterInitCommandHandler() {
 	}
 }
 
-func clusterJoinCommandHandler() {
+func joinCommandHandler() {
 	conn := newConnection()
 
 	defer conn.Close()
@@ -96,7 +130,7 @@ func clusterJoinCommandHandler() {
 
 	defer cancel()
 
-	opts := &api.ManagerControlJoinRequest{JoinAddr: *clusterJoinAddr}
+	opts := &api.ManagerControlJoinRequest{JoinAddr: *joinCommandAddr}
 
 	_, joinErr := c.ManagerControlJoin(ctx, opts)
 
@@ -105,7 +139,11 @@ func clusterJoinCommandHandler() {
 	}
 }
 
-func clusterPeersCommandHandler() {
+func setCommandHandler() {
+	if *setCommandKey == "" || *setCommandValue == "" {
+		log.Fatal("Invalid parameters")
+	}
+
 	conn := newConnection()
 
 	defer conn.Close()
@@ -116,24 +154,31 @@ func clusterPeersCommandHandler() {
 
 	defer cancel()
 
-	opts := &api.ManagerControlPeersRequest{}
+	opts := &api.ManagerControlSetValueRequest{
+		Key:   *setCommandKey,
+		Value: *setCommandValue,
+	}
 
-	res, err := c.ManagerControlPeers(ctx, opts)
+	res, err := c.ManagerControlSetValue(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Print(res.Peers)
+	log.Print(res.Value)
 }
 
 func main() {
 	switch kingpin.Parse() {
-	case clusterInitCommand.FullCommand():
-		clusterInitCommandHandler()
-	case clusterJoinCommand.FullCommand():
-		clusterJoinCommandHandler()
-	case clusterPeersCommand.FullCommand():
-		clusterPeersCommandHandler()
+	case getCommand.FullCommand():
+		getCommandHandler()
+	case initCommand.FullCommand():
+		initCommandHandler()
+	case joinCommand.FullCommand():
+		joinCommandHandler()
+	case setCommand.FullCommand():
+		log.Print("Needs to be implemented")
+	case setCommand.FullCommand():
+		setCommandHandler()
 	}
 }

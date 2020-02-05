@@ -2,7 +2,6 @@ package manager
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -18,18 +17,50 @@ type ControlServer struct {
 	Node *Node
 }
 
-func startRaftAndReturnResponse(server *ControlServer, join bool, nodeID uint64, peers []string) (*api.ManagerControlInitializeResponse, error) {
-	raft, state, err := cluster.NewRaft(server.Node.Flags, join, server.Node.Key, nodeID, peers)
+// saveRaftNodeID : sets the RAFT_NODE_ID in key.json
+func (s *ControlServer) saveRaftNodeID(nodeID uint64) error {
+	s.Node.Key.RaftNodeID = nodeID
+
+	err := s.Node.SaveKey()
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *ControlServer) startRaftAndRespond(join bool, nodeID uint64, peers []string) (*api.ManagerControlInitializeResponse, error) {
+	raft, state, err := cluster.NewRaft(s.Node.Flags, join, nodeID, peers)
 
 	if err != nil {
 		return nil, err
 	}
 
-	server.Node.Raft = raft
+	s.Node.Raft = raft
 
-	server.Node.State = state
+	s.Node.State = state
 
 	res := &api.ManagerControlInitializeResponse{}
+
+	return res, nil
+}
+
+// ManagerControlGetValue : gets a specified key value in raft
+func (s *ControlServer) ManagerControlGetValue(ctx context.Context, in *api.ManagerControlGetValueRequest) (*api.ManagerControlGetValueResponse, error) {
+	if s.Node.State == nil {
+		return nil, errors.New("invalid_state_request")
+	}
+
+	p, ok := s.Node.State.Lookup(in.Key)
+
+	if !ok {
+		return nil, errors.New("invalid_key_lookup")
+	}
+
+	res := &api.ManagerControlGetValueResponse{
+		Value: p,
+	}
 
 	return res, nil
 }
@@ -67,13 +98,19 @@ func (s *ControlServer) ManagerControlInitialize(ctx context.Context, in *api.Ma
 
 		defer cancel()
 
-		join, joinErr := c.ManagerRemoteInit(ctx, &api.ManagerRemoteInitRequest{Addr: addr})
+		join, joinErr := c.ManagerRemoteInitialize(ctx, &api.ManagerRemoteInitializeRequest{Addr: addr})
 
 		if joinErr != nil {
 			return nil, joinErr
 		}
 
-		return startRaftAndReturnResponse(s, false, join.NodeId, join.Peers)
+		saveErr := s.saveRaftNodeID(join.NodeId)
+
+		if saveErr != nil {
+			return nil, saveErr
+		}
+
+		return s.startRaftAndRespond(false, join.NodeId, join.Peers)
 	}
 
 	var nodeID uint64
@@ -94,7 +131,13 @@ func (s *ControlServer) ManagerControlInitialize(ctx context.Context, in *api.Ma
 		peers = append(peers, in.Peers...)
 	}
 
-	return startRaftAndReturnResponse(s, false, nodeID, peers)
+	err := s.saveRaftNodeID(nodeID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return s.startRaftAndRespond(false, nodeID, peers)
 }
 
 // ManagerControlJoin : joins a manager to a existing cluster
@@ -127,7 +170,13 @@ func (s *ControlServer) ManagerControlJoin(ctx context.Context, in *api.ManagerC
 		return nil, joinErr
 	}
 
-	raft, state, err := cluster.NewRaft(s.Node.Flags, true, s.Node.Key, join.NodeId, join.Peers)
+	saveErr := s.saveRaftNodeID(join.NodeId)
+
+	if saveErr != nil {
+		return nil, saveErr
+	}
+
+	raft, state, err := cluster.NewRaft(s.Node.Flags, true, join.NodeId, join.Peers)
 
 	if err != nil {
 		return nil, err
@@ -142,27 +191,52 @@ func (s *ControlServer) ManagerControlJoin(ctx context.Context, in *api.ManagerC
 	return res, nil
 }
 
-// ManagerControlPeers : returns a list of manager peers
-func (s *ControlServer) ManagerControlPeers(ctx context.Context, in *api.ManagerControlPeersRequest) (*api.ManagerControlPeersResponse, error) {
+// ManagerControlSetValue : sets a specified key value in raft
+func (s *ControlServer) ManagerControlSetValue(ctx context.Context, in *api.ManagerControlSetValueRequest) (*api.ManagerControlSetValueResponse, error) {
 	if s.Node.State == nil {
 		return nil, errors.New("invalid_state_request")
 	}
 
-	p, ok := s.Node.State.Lookup("raft:peers")
+	s.Node.State.Propose(in.Key, in.Value)
 
-	if !ok {
-		return nil, errors.New("invalid_raft_peers")
+	res := &api.ManagerControlSetValueResponse{
+		Value: in.Value,
 	}
 
-	var peers []string
+	return res, nil
+}
 
-	if err := json.Unmarshal([]byte(p), &peers); err != nil {
+// ManagerControlRemove : Removes a manager to a existing cluster
+func (s *ControlServer) ManagerControlRemove(ctx context.Context, in *api.ManagerControlRemoveRequest) (*api.ManagerControlRemoveResponse, error) {
+	remoteAddr, err := net.ResolveTCPAddr("tcp", s.Node.Flags.ListenRemoteAddr.String())
+
+	if err != nil {
 		return nil, err
 	}
 
-	res := &api.ManagerControlPeersResponse{
-		Peers: peers,
+	conn, err := grpc.Dial(remoteAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
 	}
+
+	defer conn.Close()
+
+	c := api.NewManagerRemoteClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	addr := fmt.Sprintf("http://%s", in.Addr)
+
+	_, rmErr := c.ManagerRemoteRemove(ctx, &api.ManagerRemoteRemoveRequest{Addr: addr})
+
+	if rmErr != nil {
+		return nil, rmErr
+	}
+
+	res := &api.ManagerControlRemoveResponse{}
 
 	return res, nil
 }

@@ -3,9 +3,11 @@ package manager
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
+	"sync"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/cluster"
@@ -20,6 +22,8 @@ type Node struct {
 	Key   *config.Key
 	Raft  *cluster.RaftNode
 	State *cluster.RaftState
+
+	mu sync.Mutex
 }
 
 const joinTokenManagerKey = "jointoken:manager"
@@ -78,6 +82,31 @@ func (n *Node) FindOrCreatePeers() ([]string, error) {
 	}
 
 	return peers, nil
+}
+
+// SaveKey : Saves the key file current state
+func (n *Node) SaveKey() error {
+	n.mu.Lock()
+
+	keyJSON, _ := json.Marshal(n.Key)
+
+	path := fmt.Sprintf("%s/key.json", n.Flags.ConfigDir)
+
+	err := ioutil.WriteFile(path, keyJSON, 0644)
+
+	defer n.mu.Unlock()
+
+	if err != nil {
+		return err
+	}
+
+	fields := logrus.Fields{
+		"RAFT_NODE_ID": n.Key.RaftNodeID,
+	}
+
+	logrus.WithFields(fields).Info("Updated key.json file")
+
+	return nil
 }
 
 // StartControlServer : starts manager control server
@@ -149,6 +178,20 @@ func NewNode() (*Node, error) {
 	m := &Node{
 		Flags: flags,
 		Key:   key,
+	}
+
+	if key.RaftNodeID != 0 {
+		join := true
+
+		raft, state, err := cluster.NewRaft(m.Flags, join, key.RaftNodeID, nil)
+
+		if err != nil {
+			return nil, err
+		}
+
+		m.Raft = raft
+
+		m.State = state
 	}
 
 	return m, nil

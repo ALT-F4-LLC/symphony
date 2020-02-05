@@ -4,34 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
-
-	"github.com/sirupsen/logrus"
 )
 
 // Key : key used for initialization and authentication of nodes
 type Key struct {
 	RaftNodeID uint64 `json:"RAFT_NODE_ID"`
-}
-
-// SaveKey : Saves the key file current state
-func (k *Key) SaveKey(flags *Flags) {
-	keyJSON, _ := json.Marshal(k)
-
-	path := fmt.Sprintf("%s/key.json", flags.ConfigDir)
-
-	err := ioutil.WriteFile(path, keyJSON, 0644)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fields := logrus.Fields{
-		"RAFT_NODE_ID": k.RaftNodeID,
-	}
-
-	logrus.WithFields(fields).Info("Updated key.json file")
 }
 
 // GetKey : gets the node key.json file
