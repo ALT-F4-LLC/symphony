@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -30,8 +31,8 @@ func (s *ControlServer) saveRaftNodeID(nodeID uint64) error {
 	return nil
 }
 
-func (s *ControlServer) startRaftAndRespond(join bool, nodeID uint64, peers []string) (*api.ManagerControlInitializeResponse, error) {
-	raft, state, err := cluster.NewRaft(s.Node.Flags, join, nodeID, peers)
+func (s *ControlServer) startRaftAndRespond(join bool, members []*api.Member, nodeID uint64) (*api.ManagerControlInitializeResponse, error) {
+	raft, state, err := cluster.NewRaft(s.Node.Flags, join, members, nodeID)
 
 	if err != nil {
 		return nil, err
@@ -67,7 +68,7 @@ func (s *ControlServer) ManagerControlGetValue(ctx context.Context, in *api.Mana
 
 // ManagerControlInitialize : initializes a manager for a cluster
 func (s *ControlServer) ManagerControlInitialize(ctx context.Context, in *api.ManagerControlInitializeRequest) (*api.ManagerControlInitializeResponse, error) {
-	if in.JoinAddr != "" && in.Peers != nil {
+	if in.JoinAddr != "" && in.Members != nil {
 		return nil, errors.New("invalid_init_request")
 	}
 
@@ -104,31 +105,27 @@ func (s *ControlServer) ManagerControlInitialize(ctx context.Context, in *api.Ma
 			return nil, joinErr
 		}
 
-		saveErr := s.saveRaftNodeID(join.NodeId)
+		saveErr := s.saveRaftNodeID(join.MemberId)
 
 		if saveErr != nil {
 			return nil, saveErr
 		}
 
-		return s.startRaftAndRespond(false, join.NodeId, join.Peers)
+		return s.startRaftAndRespond(false, join.Members, join.MemberId)
 	}
 
-	var nodeID uint64
+	nodeID := uint64(1)
 
-	var peers []string
+	members := []*api.Member{&api.Member{ID: nodeID, Addr: addr}}
 
-	nodeID = 1
-
-	peers = []string{addr}
-
-	if len(in.Peers) > 1 {
-		_, err := cluster.GetMemberIndex(addr, in.Peers)
+	if len(in.Members) > 1 {
+		_, _, err := cluster.GetMemberByAddr(addr, in.Members)
 
 		if err == nil {
 			return nil, errors.New("invalid_peer_list")
 		}
 
-		peers = append(peers, in.Peers...)
+		members = append(members, in.Members...)
 	}
 
 	err := s.saveRaftNodeID(nodeID)
@@ -137,7 +134,7 @@ func (s *ControlServer) ManagerControlInitialize(ctx context.Context, in *api.Ma
 		return nil, err
 	}
 
-	return s.startRaftAndRespond(false, nodeID, peers)
+	return s.startRaftAndRespond(false, members, nodeID)
 }
 
 // ManagerControlJoin : joins a manager to a existing cluster
@@ -170,13 +167,15 @@ func (s *ControlServer) ManagerControlJoin(ctx context.Context, in *api.ManagerC
 		return nil, joinErr
 	}
 
-	saveErr := s.saveRaftNodeID(join.NodeId)
+	saveErr := s.saveRaftNodeID(join.MemberId)
 
 	if saveErr != nil {
 		return nil, saveErr
 	}
 
-	raft, state, err := cluster.NewRaft(s.Node.Flags, true, join.NodeId, join.Peers)
+	log.Print(join.Members)
+
+	raft, state, err := cluster.NewRaft(s.Node.Flags, true, join.Members, join.MemberId)
 
 	if err != nil {
 		return nil, err
@@ -228,7 +227,7 @@ func (s *ControlServer) ManagerControlRemove(ctx context.Context, in *api.Manage
 
 	defer cancel()
 
-	_, rmErr := c.ManagerRemoteRemove(ctx, &api.ManagerRemoteRemoveRequest{NodeId: in.NodeId})
+	_, rmErr := c.ManagerRemoteRemove(ctx, &api.ManagerRemoteRemoveRequest{MemberId: in.MemberId})
 
 	if rmErr != nil {
 		return nil, rmErr

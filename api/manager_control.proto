@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package api;
 
+import "api/raft.proto";
+
 service ManagerControl {
   rpc ManagerControlGetValue(ManagerControlGetValueRequest)
       returns (ManagerControlGetValueResponse) {}
@@ -20,14 +22,14 @@ message ManagerControlGetValueResponse { string value = 1; }
 
 message ManagerControlInitializeRequest {
   string join_addr = 1;
-  repeated string peers = 2;
+  repeated Member members = 2;
 }
 message ManagerControlInitializeResponse {}
 
 message ManagerControlJoinRequest { string join_addr = 1; }
 message ManagerControlJoinResponse {}
 
-message ManagerControlRemoveRequest { uint64 node_id = 1; }
+message ManagerControlRemoveRequest { uint64 member_id = 1; }
 message ManagerControlRemoveResponse {}
 
 message ManagerControlSetValueRequest {

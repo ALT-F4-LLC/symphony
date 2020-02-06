@@ -9,9 +9,9 @@ import (
 )
 
 // RemoveHandler : handle the "remove" command
-func RemoveHandler(nodeID *uint64, socket *string) {
-	if *nodeID == 0 {
-		log.Fatal("invalid_node_id")
+func RemoveHandler(memberID *uint64, socket *string) {
+	if *memberID == 0 {
+		log.Fatal("invalid_member_id")
 	}
 
 	conn := NewConnection(socket)
@@ -25,7 +25,7 @@ func RemoveHandler(nodeID *uint64, socket *string) {
 	defer cancel()
 
 	opts := &api.ManagerControlRemoveRequest{
-		NodeId: *nodeID,
+		MemberId: *memberID,
 	}
 
 	_, err := c.ManagerControlRemove(ctx, opts)

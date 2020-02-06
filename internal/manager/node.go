@@ -63,25 +63,25 @@ func (n *Node) FindOrCreateJoinTokens() (*JoinTokens, error) {
 	return jt, nil
 }
 
-// FindOrCreatePeers : finds or creates peers into state
-func (n *Node) FindOrCreatePeers() ([]string, error) {
-	p, ok := n.State.Lookup("raft:peers")
+// FindOrCreateMembers : finds or creates peers into state
+func (n *Node) FindOrCreateMembers() ([]*api.Member, error) {
+	m, ok := n.State.Lookup("members")
 
 	if !ok {
-		peersJSON, _ := json.Marshal(n.Raft.Peers)
+		peersJSON, _ := json.Marshal(n.Raft.Members)
 
-		n.State.Propose("raft:peers", string(peersJSON))
+		n.State.Propose("members", string(peersJSON))
 
-		return n.Raft.Peers, nil
+		return n.Raft.Members, nil
 	}
 
-	var peers []string
+	var members []*api.Member
 
-	if err := json.Unmarshal([]byte(p), &peers); err != nil {
+	if err := json.Unmarshal([]byte(m), &members); err != nil {
 		return nil, err
 	}
 
-	return peers, nil
+	return members, nil
 }
 
 // SaveKey : Saves the key file current state
@@ -183,7 +183,7 @@ func NewNode() (*Node, error) {
 	if key.RaftNodeID != 0 {
 		join := true
 
-		raft, state, err := cluster.NewRaft(m.Flags, join, key.RaftNodeID, nil)
+		raft, state, err := cluster.NewRaft(m.Flags, join, nil, key.RaftNodeID)
 
 		if err != nil {
 			return nil, err

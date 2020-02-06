@@ -32,7 +32,16 @@ func InitHandler(joinAddr *string, peers *string, socket *string) {
 	}
 
 	if *peers != "" {
-		opts.Peers = strings.Split(*peers, ",")
+		peersList := strings.Split(*peers, ",")
+
+		members := make([]*api.Member, len(peersList))
+
+		for i := range peersList {
+			base := i + 1
+			members[i] = &api.Member{ID: uint64(base + 1), Addr: peersList[i]}
+		}
+
+		opts.Members = members
 	}
 
 	_, initErr := c.ManagerControlInitialize(ctx, opts)

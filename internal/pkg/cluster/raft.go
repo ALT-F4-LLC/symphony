@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/config"
 	"go.etcd.io/etcd/etcdserver/api/rafthttp"
 	"go.etcd.io/etcd/etcdserver/api/snap"
@@ -36,7 +37,7 @@ type RaftNode struct {
 	Join             bool
 	ListenAddr       *net.TCPAddr
 	Node             raft.Node
-	Peers            []string
+	Members          []*api.Member
 	Transport        *rafthttp.Transport
 	HTTPStopC        chan struct{} // signals http server to shutdown
 	HTTPDoneC        chan struct{} // signals http server shutdown complete
@@ -472,11 +473,9 @@ func (rn *RaftNode) ServeRaft() {
 // StartRaft : starts the raft
 func (rn *RaftNode) StartRaft() {
 	if !fileutil.Exist(rn.SnapshotterDir) {
-
 		if err := os.Mkdir(rn.SnapshotterDir, 0750); err != nil {
 			log.Fatalf("Cannot create dir for snapshot (%v)", err)
 		}
-
 	}
 
 	rn.Snapshotter = snap.New(zap.NewExample(), rn.SnapshotterDir)
@@ -487,10 +486,10 @@ func (rn *RaftNode) StartRaft() {
 
 	rn.Wal = rn.ReplayWAL()
 
-	rpeers := make([]raft.Peer, len(rn.Peers))
+	rpeers := make([]raft.Peer, len(rn.Members))
 
 	for i := range rpeers {
-		rpeers[i] = raft.Peer{ID: uint64(i + 1), Context: []byte(rn.Peers[i])}
+		rpeers[i] = raft.Peer{ID: rn.Members[i].ID, Context: []byte(rn.Members[i].Addr)}
 	}
 
 	c := &raft.Config{
@@ -520,9 +519,9 @@ func (rn *RaftNode) StartRaft() {
 
 	rn.Transport.Start()
 
-	for i := range rn.Peers {
-		if i+1 != int(rn.ID) {
-			rn.Transport.AddPeer(types.ID(i+1), []string{rn.Peers[i]})
+	for i, m := range rn.Members {
+		if rn.ID != m.ID {
+			rn.Transport.AddPeer(types.ID(m.ID), []string{rn.Members[i].Addr})
 		}
 	}
 
@@ -575,18 +574,8 @@ func (rn *RaftNode) WriteError(err error) {
 	rn.Node.Stop()
 }
 
-// GetMemberIndex : gets the index of a member in a set of peers
-func GetMemberIndex(addr string, peers []string) (*int, error) {
-	for i, a := range peers {
-		if a == addr {
-			return &i, nil
-		}
-	}
-	return nil, errors.New("invalid_member")
-}
-
 // NewRaft : returns a new key-value store and raft node
-func NewRaft(flags *config.Flags, join bool, nodeID uint64, peers []string) (*RaftNode, *RaftState, error) {
+func NewRaft(flags *config.Flags, join bool, members []*api.Member, nodeID uint64) (*RaftNode, *RaftState, error) {
 	commitC := make(chan *string)
 
 	confChangeC := make(chan raftpb.ConfChange)
@@ -597,7 +586,7 @@ func NewRaft(flags *config.Flags, join bool, nodeID uint64, peers []string) (*Ra
 
 	var state *RaftState
 
-	node, err := NewRaftNode(commitC, confChangeC, errorC, flags, join, nodeID, peers, proposeC, state)
+	node, err := NewRaftNode(commitC, confChangeC, errorC, flags, join, members, nodeID, proposeC, state)
 
 	if err != nil {
 		return nil, nil, err
@@ -609,8 +598,12 @@ func NewRaft(flags *config.Flags, join bool, nodeID uint64, peers []string) (*Ra
 }
 
 // NewRaftNode : creates a new raft member
-func NewRaftNode(commitC chan<- *string, confChangeC chan raftpb.ConfChange, errorC chan error, flags *config.Flags, join bool, nodeID uint64, peers []string, proposeC <-chan string, state *RaftState) (*RaftNode, error) {
+func NewRaftNode(commitC chan<- *string, confChangeC chan raftpb.ConfChange, errorC chan error, flags *config.Flags, join bool, members []*api.Member, nodeID uint64, proposeC <-chan string, state *RaftState) (*RaftNode, error) {
 	getSnapshot := func() ([]byte, error) { return state.GetSnapshot() }
+
+	log.Print(nodeID)
+
+	log.Print(members)
 
 	member := &RaftNode{
 		CommitC:          commitC,
@@ -619,7 +612,7 @@ func NewRaftNode(commitC chan<- *string, confChangeC chan raftpb.ConfChange, err
 		ID:               nodeID,
 		Join:             join,
 		ListenAddr:       flags.ListenRaftAddr,
-		Peers:            peers,
+		Members:          members,
 		GetSnapshot:      getSnapshot,
 		HTTPDoneC:        make(chan struct{}),
 		HTTPStopC:        make(chan struct{}),
