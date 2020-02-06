@@ -1,11 +1,9 @@
-### symphony/block ###
-block/block
-
-### symphony/image ###
-image/data
-
-### symphony/proto ###
-proto/*.pb.go
+### symphony ###
+.raft
+*.db
+*.pb.go
+*.tmp
+*.wal
 
 # Created by https://www.gitignore.io/api/go,osx,linux,windows
 # Edit at https://www.gitignore.io/?templates=go,osx,linux,windows
