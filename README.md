@@ -4,6 +4,21 @@ An open-source cloud platform written in Go, heavily inspired from Docker Swarm 
 
 > NOTE: All documentation below is a WIP (work-in-progress) which is subject to change at any time and is mostly conceptual for development purposes.
 
+## Development
+
+Currently, we are not using `go mod` yet for package management and it does require manual package `go get` to setup.
+
+The biggest requirement for development is when using `go get` to grab `go.etcd.io/etcd` - the vendor folder in that module contains a specific `go.uber.org/zap` module version to work properly.
+
+In order to solve this problem, you must move the `go.etcd.io/etcd` module from `go get` and place it in a `vendor` folder at the root of this repository. You must also move the `go.uber.org/zap` in the `go.etcd.io/etcd` module's `vendor` folder to the `vender` folder you just created. An example final folder structure is shown below:
+
+```
+symphony
+└── vendor
+    ├── go.etcd.io
+    └── go.uber.org
+```
+
 ## Concepts
 
 Below describes basic concepts of a Symphony cluster.
@@ -60,4 +75,11 @@ rm -rf .raft/manager-04 && go run ./cmd/manager --config-dir .raft/manager-04 \
 --listen-remote-addr 127.0.0.1:27245
 
 go run ./cmd/cli --socket ".raft/manager-04/control.sock" join 127.0.0.1:27242
+```
+
+# Remove a node from the cluster
+
+```
+go run ./cmd/cli --socket ".raft/manager-01/control.sock" get members
+go run ./cmd/cli --socket ".raft/manager-01/control.sock" remove <member-id>
 ```
