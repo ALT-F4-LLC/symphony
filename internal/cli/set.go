@@ -29,7 +29,7 @@ func SetHandler(key *string, socket *string, value *string) {
 		Value: *value,
 	}
 
-	res, err := c.ManagerControlSetValue(ctx, opts)
+	_, err := c.ManagerControlSetValue(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
