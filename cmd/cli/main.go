@@ -1,15 +1,7 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"log"
-	"path/filepath"
-	"strings"
-	"time"
-
-	"github.com/erkrnt/symphony/api"
-	"google.golang.org/grpc"
+	"github.com/erkrnt/symphony/internal/cli"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -25,160 +17,21 @@ var (
 	setCommandKey       = setCommand.Arg("key", "Specific key to set for value.").Required().String()
 	setCommandValue     = setCommand.Arg("value", "Specific value to set for key.").Required().String()
 	removeCommand       = kingpin.Command("remove", "Removes a node from the cluster.")
-	removeCommandAddr   = removeCommand.Arg("addr", "Raft address of node to be removed from the cluster.").Required().String()
+	removeCommandNodeID = removeCommand.Arg("node-id", "Raft node id to be removed from the cluster.").Required().Uint64()
 	socket              = kingpin.Flag("socket", "Sets the socket connection for the client.").String()
 )
-
-func newConnection() *grpc.ClientConn {
-	abs, err := filepath.Abs(".")
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	s := fmt.Sprintf("%s/control.sock", abs)
-
-	if *socket != "" {
-		abs, err := filepath.Abs(*socket)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		s = abs
-	}
-
-	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", s), grpc.WithInsecure())
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return conn
-}
-
-func getCommandHandler() {
-	if *getCommandKey == "" {
-		log.Fatal("Invalid parameters")
-	}
-
-	conn := newConnection()
-
-	defer conn.Close()
-
-	c := api.NewManagerControlClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-	defer cancel()
-
-	opts := &api.ManagerControlGetValueRequest{
-		Key: *getCommandKey,
-	}
-
-	res, err := c.ManagerControlGetValue(ctx, opts)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Print(res.Value)
-}
-
-func initCommandHandler() {
-	if *initCommandJoinAddr != "" && *initCommandPeers != "" {
-		log.Fatal("Cannot use --join-addr and --peers flags together.")
-	}
-
-	conn := newConnection()
-
-	defer conn.Close()
-
-	c := api.NewManagerControlClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-	defer cancel()
-
-	opts := &api.ManagerControlInitializeRequest{}
-
-	if *initCommandJoinAddr != "" {
-		opts.JoinAddr = *initCommandJoinAddr
-	}
-
-	if *initCommandPeers != "" {
-		opts.Peers = strings.Split(*initCommandPeers, ",")
-	}
-
-	log.Print(opts)
-
-	_, initErr := c.ManagerControlInitialize(ctx, opts)
-
-	if initErr != nil {
-		log.Fatal(initErr)
-	}
-}
-
-func joinCommandHandler() {
-	conn := newConnection()
-
-	defer conn.Close()
-
-	c := api.NewManagerControlClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-	defer cancel()
-
-	opts := &api.ManagerControlJoinRequest{JoinAddr: *joinCommandAddr}
-
-	_, joinErr := c.ManagerControlJoin(ctx, opts)
-
-	if joinErr != nil {
-		log.Fatal(joinErr)
-	}
-}
-
-func setCommandHandler() {
-	if *setCommandKey == "" || *setCommandValue == "" {
-		log.Fatal("Invalid parameters")
-	}
-
-	conn := newConnection()
-
-	defer conn.Close()
-
-	c := api.NewManagerControlClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-	defer cancel()
-
-	opts := &api.ManagerControlSetValueRequest{
-		Key:   *setCommandKey,
-		Value: *setCommandValue,
-	}
-
-	res, err := c.ManagerControlSetValue(ctx, opts)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Print(res.Value)
-}
 
 func main() {
 	switch kingpin.Parse() {
 	case getCommand.FullCommand():
-		getCommandHandler()
+		cli.GetHandler(getCommandKey, socket)
 	case initCommand.FullCommand():
-		initCommandHandler()
+		cli.InitHandler(initCommandJoinAddr, initCommandPeers, socket)
 	case joinCommand.FullCommand():
-		joinCommandHandler()
+		cli.JoinHandler(joinCommandAddr, socket)
+	case removeCommand.FullCommand():
+		cli.RemoveHandler(removeCommandNodeID, socket)
 	case setCommand.FullCommand():
-		log.Print("Needs to be implemented")
-	case setCommand.FullCommand():
-		setCommandHandler()
+		cli.SetHandler(setCommandKey, socket, setCommandValue)
 	}
 }

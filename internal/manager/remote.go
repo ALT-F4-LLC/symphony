@@ -66,60 +66,40 @@ func (s *RemoteServer) ManagerRemoteJoin(ctx context.Context, in *api.ManagerRem
 		}
 	}
 
-	memberIndex, err := cluster.GetMemberIndex(in.Addr, peers)
+	_, err := cluster.GetMemberIndex(in.Addr, peers)
 
-	if err != nil {
-		nodeID := uint64(len(peers) + 1)
-
-		cc := raftpb.ConfChange{
-			Type:    raftpb.ConfChangeAddNode,
-			NodeID:  nodeID,
-			Context: []byte(in.Addr),
-		}
-
-		s.Node.Raft.ConfChangeC <- cc
-
-		log.Printf("New member proposed to cluster %d", nodeID)
-
-		res := &api.ManagerRemoteJoinResponse{
-			NodeId: nodeID,
-			Peers:  peers,
-		}
-
-		peers = append(peers, in.Addr)
-
-		json, err := json.Marshal(peers)
-
-		if err != nil {
-			return nil, err
-		}
-
-		s.Node.State.Propose("raft:peers", string(json))
-
-		return res, nil
+	if err == nil {
+		return nil, errors.New("invalid_raft_member")
 	}
 
-	log.Printf("Existing member proposed to cluster %d", *memberIndex)
+	nodeID := uint64(len(peers) + 1)
 
-	nodeID := uint64(*memberIndex + 1)
+	cc := raftpb.ConfChange{
+		Type:    raftpb.ConfChangeAddNode,
+		NodeID:  nodeID,
+		Context: []byte(in.Addr),
+	}
+
+	s.Node.Raft.ConfChangeC <- cc
+
+	log.Printf("New member proposed to cluster %d", nodeID)
 
 	res := &api.ManagerRemoteJoinResponse{
 		NodeId: nodeID,
-		Peers:  s.Node.Raft.Peers,
+		Peers:  peers,
 	}
 
-	s.Node.Raft.Peers = append(s.Node.Raft.Peers, in.Addr)
+	peers = append(peers, in.Addr)
+
+	json, err := json.Marshal(peers)
+
+	if err != nil {
+		return nil, err
+	}
+
+	s.Node.State.Propose("raft:peers", string(json))
 
 	return res, nil
-}
-
-func removeFromPeers(s []string, r string) []string {
-	for i, v := range s {
-		if v == r {
-			return append(s[:i], s[i+1:]...)
-		}
-	}
-	return s
 }
 
 // ManagerRemoteRemove : adds nodes to the raft
@@ -128,26 +108,50 @@ func (s *RemoteServer) ManagerRemoteRemove(ctx context.Context, in *api.ManagerR
 		return nil, errors.New("invalid_raft_state")
 	}
 
-	memberIndex, err := cluster.GetMemberIndex(in.Addr, s.Node.Raft.Peers)
+	var peers []string
+
+	p, ok := s.Node.State.Lookup("raft:peers")
+
+	if !ok {
+		return nil, errors.New("invalid_raft_peers_state")
+	}
+
+	err := json.Unmarshal([]byte(p), &peers)
 
 	if err != nil {
 		return nil, err
 	}
 
-	nodeID := uint64(*memberIndex + 1)
+	if in.NodeId == 0 || int(in.NodeId) > len(peers) {
+		return nil, errors.New("invalid_node_id")
+	}
 
 	cc := raftpb.ConfChange{
 		Type:   raftpb.ConfChangeRemoveNode,
-		NodeID: nodeID,
+		NodeID: in.NodeId,
 	}
 
 	s.Node.Raft.ConfChangeC <- cc
 
+	memberIndex := int(in.NodeId) - 1
+
+	copy(peers[memberIndex:], peers[memberIndex+1:])
+
+	peers[len(peers)-1] = ""
+
+	peers = peers[:len(peers)-1]
+
+	json, err := json.Marshal(peers)
+
+	if err != nil {
+		return nil, err
+	}
+
+	s.Node.State.Propose("raft:peers", string(json))
+
 	res := &api.ManagerRemoteRemoveResponse{}
 
-	s.Node.Raft.Peers = removeFromPeers(s.Node.Raft.Peers, in.Addr)
-
-	log.Printf("Removed member from cluster %d", *memberIndex)
+	log.Printf("Removed member from cluster %d", in.NodeId)
 
 	return res, nil
 }

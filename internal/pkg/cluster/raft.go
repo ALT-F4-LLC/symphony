@@ -233,6 +233,19 @@ func (rn *RaftNode) PublishEntries(ents []raftpb.Entry) bool {
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == uint64(rn.ID) {
 					log.Println("I've been removed from the cluster! Shutting down.")
+
+					rmSnap := os.RemoveAll(rn.SnapshotterDir)
+
+					if rmSnap != nil {
+						log.Fatal(rmSnap)
+					}
+
+					rmWal := os.RemoveAll(rn.WalDir)
+
+					if rmWal != nil {
+						log.Fatal(rmWal)
+					}
+
 					return false
 				}
 

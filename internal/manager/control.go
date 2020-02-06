@@ -228,9 +228,7 @@ func (s *ControlServer) ManagerControlRemove(ctx context.Context, in *api.Manage
 
 	defer cancel()
 
-	addr := fmt.Sprintf("http://%s", in.Addr)
-
-	_, rmErr := c.ManagerRemoteRemove(ctx, &api.ManagerRemoteRemoveRequest{Addr: addr})
+	_, rmErr := c.ManagerRemoteRemove(ctx, &api.ManagerRemoteRemoveRequest{NodeId: in.NodeId})
 
 	if rmErr != nil {
 		return nil, rmErr

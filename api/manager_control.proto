@@ -27,7 +27,7 @@ message ManagerControlInitializeResponse {}
 message ManagerControlJoinRequest { string join_addr = 1; }
 message ManagerControlJoinResponse {}
 
-message ManagerControlRemoveRequest { string addr = 1; }
+message ManagerControlRemoveRequest { uint64 node_id = 1; }
 message ManagerControlRemoveResponse {}
 
 message ManagerControlSetValueRequest {

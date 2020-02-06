@@ -23,5 +23,5 @@ message ManagerRemoteJoinResponse {
   repeated string peers = 2;
 }
 
-message ManagerRemoteRemoveRequest { string addr = 1; }
+message ManagerRemoteRemoveRequest { uint64 node_id = 1; }
 message ManagerRemoteRemoveResponse {}
