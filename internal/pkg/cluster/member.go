@@ -25,14 +25,3 @@ func GetMemberByID(id uint64, members []*api.Member) (*api.Member, *int, error) 
 	}
 	return nil, nil, errors.New("invalid_member")
 }
-
-// NewMembersFromPeers : creates a new member list from peers
-func NewMembersFromPeers(peers []string) []*api.Member {
-	var members []*api.Member
-
-	for i, p := range peers {
-		members = append(members, &api.Member{Addr: p, ID: uint64(i + 1)})
-	}
-
-	return members
-}
