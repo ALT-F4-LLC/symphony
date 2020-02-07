@@ -2,6 +2,22 @@ syntax = "proto3";
 
 package api;
 
+service BlockControl {
+  rpc Join(BlockControlJoinReq) returns (BlockControlJoinRes) {}
+}
+
+service BlockRemote {
+  // rpc GetLv(LvFields) returns (LvMetadata) {}
+  // rpc NewLv(NewLvFields) returns (LvMetadata) {}
+  // rpc RemoveLv(LvFields) returns (RemoveStatus) {}
+  // rpc GetPv(PvFields) returns (PvMetadata) {}
+  // rpc NewPv(PvFields) returns (PvMetadata) {}
+  // rpc RemovePv(PvFields) returns (RemoveStatus) {}
+  // rpc GetVg(VgFields) returns (VgMetadata) {}
+  // rpc NewVg(NewVgFields) returns (VgMetadata) {}
+  // rpc RemoveVg(VgFields) returns (RemoveStatus) {}
+}
+
 message BlockControlJoinReq { string join_addr = 1; }
 message BlockControlJoinRes {}
 
