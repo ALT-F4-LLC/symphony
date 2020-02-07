@@ -7,41 +7,41 @@ service BlockControl {
 }
 
 service BlockRemote {
-  // rpc GetLv(LvFields) returns (LvMetadata) {}
-  // rpc NewLv(NewLvFields) returns (LvMetadata) {}
-  // rpc RemoveLv(LvFields) returns (RemoveStatus) {}
-  // rpc GetPv(PvFields) returns (PvMetadata) {}
-  // rpc NewPv(PvFields) returns (PvMetadata) {}
-  // rpc RemovePv(PvFields) returns (RemoveStatus) {}
-  // rpc GetVg(VgFields) returns (VgMetadata) {}
-  // rpc NewVg(NewVgFields) returns (VgMetadata) {}
-  // rpc RemoveVg(VgFields) returns (RemoveStatus) {}
+  rpc GetLv(BlockLvFields) returns (BlockLvMetadata) {}
+  rpc NewLv(BlockNewLvFields) returns (BlockLvMetadata) {}
+  rpc RemoveLv(BlockLvFields) returns (RemoveStatus) {}
+  rpc GetPv(BlockPvFields) returns (BlockPvMetadata) {}
+  rpc NewPv(BlockPvFields) returns (BlockPvMetadata) {}
+  rpc RemovePv(BlockPvFields) returns (RemoveStatus) {}
+  rpc GetVg(BlockVgFields) returns (BlockVgMetadata) {}
+  rpc NewVg(BlockNewVgFields) returns (BlockVgMetadata) {}
+  rpc RemoveVg(BlockVgFields) returns (RemoveStatus) {}
 }
 
 message BlockControlJoinReq { string join_addr = 1; }
 message BlockControlJoinRes {}
 
-message LvFields {
+message BlockLvFields {
   string ID = 1;
   string VolumeGroupID = 2;
 }
 
-message PvFields { string Device = 1; }
+message BlockPvFields { string Device = 1; }
 
-message VgFields { string ID = 1; }
+message BlockVgFields { string ID = 1; }
 
-message NewLvFields {
+message BlockNewLvFields {
   string ID = 1;
   string VolumeGroupID = 2;
   string Size = 3;
 }
 
-message NewVgFields {
+message BlockNewVgFields {
   string Device = 1;
   string ID = 2;
 }
 
-message LvMetadata {
+message BlockLvMetadata {
   string LvName = 1;
   string VgName = 2;
   string LvAttr = 3;
@@ -56,7 +56,7 @@ message LvMetadata {
   string ConvertLv = 12;
 }
 
-message PvMetadata {
+message BlockPvMetadata {
   string PvName = 1;
   string VgName = 2;
   string PvFmt = 3;
@@ -65,7 +65,7 @@ message PvMetadata {
   string PvFree = 6;
 }
 
-message VgMetadata {
+message BlockVgMetadata {
   string VgName = 1;
   string PvCount = 2;
   string LvCount = 3;
