@@ -9,8 +9,8 @@ import (
 	"github.com/erkrnt/symphony/api"
 )
 
-// InitHandler : handle the "init" command
-func InitHandler(joinAddr *string, peers *string, socket *string) {
+// ManagerInitHandler : handle the "init" command
+func ManagerInitHandler(joinAddr *string, peers *string, socket *string) {
 	if *joinAddr != "" && *peers != "" {
 		log.Fatal("Cannot use --join-addr and --peers flags together.")
 	}
@@ -25,7 +25,7 @@ func InitHandler(joinAddr *string, peers *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerControlInitializeRequest{}
+	opts := &api.ManagerControlInitReq{}
 
 	if *joinAddr != "" {
 		opts.JoinAddr = *joinAddr
@@ -44,7 +44,7 @@ func InitHandler(joinAddr *string, peers *string, socket *string) {
 		opts.Members = members
 	}
 
-	_, initErr := c.ManagerControlInitialize(ctx, opts)
+	_, initErr := c.Init(ctx, opts)
 
 	if initErr != nil {
 		log.Fatal(initErr)

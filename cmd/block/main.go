@@ -4,22 +4,17 @@ import (
 	"log"
 
 	"github.com/erkrnt/symphony/internal/block"
-	"github.com/erkrnt/symphony/internal/pkg/config"
-	"github.com/sirupsen/logrus"
+	"github.com/erkrnt/symphony/internal/pkg/cluster"
 )
 
 func main() {
-	flags, err := config.GetFlags()
+	node, err := cluster.NewNode()
 
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 
-	node, nodeErr := block.NewNode(flags)
+	go block.StartRemoteServer(node)
 
-	if nodeErr != nil {
-		log.Fatal(nodeErr)
-	}
-
-	block.Start(flags, node)
+	block.StartControlServer(node)
 }

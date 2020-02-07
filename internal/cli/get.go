@@ -24,11 +24,11 @@ func GetHandler(key *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerControlGetValueRequest{
+	opts := &api.ManagerControlGetReq{
 		Key: *key,
 	}
 
-	res, err := c.ManagerControlGetValue(ctx, opts)
+	res, err := c.Get(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)

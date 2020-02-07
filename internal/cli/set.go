@@ -24,12 +24,12 @@ func SetHandler(key *string, socket *string, value *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerControlSetValueRequest{
+	opts := &api.ManagerControlSetReq{
 		Key:   *key,
 		Value: *value,
 	}
 
-	_, err := c.ManagerControlSetValue(ctx, opts)
+	_, err := c.Set(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)

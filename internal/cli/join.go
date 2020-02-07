@@ -8,8 +8,29 @@ import (
 	"github.com/erkrnt/symphony/api"
 )
 
-// JoinHandler : handle the "join" command
-func JoinHandler(joinAddr *string, socket *string) {
+// BlockJoinHandler : handle the "join" command
+func BlockJoinHandler(joinAddr *string, socket *string) {
+	conn := NewConnection(socket)
+
+	defer conn.Close()
+
+	c := api.NewBlockControlClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.BlockControlJoinReq{JoinAddr: *joinAddr}
+
+	_, joinErr := c.Join(ctx, opts)
+
+	if joinErr != nil {
+		log.Fatal(joinErr)
+	}
+}
+
+// ManagerJoinHandler : handle the "join" command
+func ManagerJoinHandler(joinAddr *string, socket *string) {
 	conn := NewConnection(socket)
 
 	defer conn.Close()
@@ -20,9 +41,9 @@ func JoinHandler(joinAddr *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerControlJoinRequest{JoinAddr: *joinAddr}
+	opts := &api.ManagerControlJoinReq{JoinAddr: *joinAddr}
 
-	_, joinErr := c.ManagerControlJoin(ctx, opts)
+	_, joinErr := c.Join(ctx, opts)
 
 	if joinErr != nil {
 		log.Fatal(joinErr)

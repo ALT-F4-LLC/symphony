@@ -5,59 +5,62 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/cluster"
+	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft/raftpb"
+	"google.golang.org/grpc"
 )
 
 // RemoteServer : manager remote requests
 type RemoteServer struct {
-	Node *Node
+	Node *cluster.Node
 }
 
-// ManagerRemoteInitialize : adds nodes to the raft
-func (s *RemoteServer) ManagerRemoteInitialize(ctx context.Context, in *api.ManagerRemoteInitializeRequest) (*api.ManagerRemoteInitializeResponse, error) {
+// Init : adds nodes to the raft
+func (s *RemoteServer) Init(ctx context.Context, in *api.ManagerRemoteInitReq) (*api.ManagerRemoteInitRes, error) {
 	if in.Addr == "" {
 		return nil, errors.New("invalid_raft_addr")
 	}
 
-	if s.Node.Raft == nil {
+	if s.Node.RaftNode == nil {
 		return nil, errors.New("invalid_raft_state")
 	}
 
-	_, ok := s.Node.State.Lookup("members")
+	_, ok := s.Node.RaftState.Lookup("members")
 
 	if ok {
 		return nil, errors.New("invalid_raft_members_state")
 	}
 
-	member, _, err := cluster.GetMemberByAddr(in.Addr, s.Node.Raft.Members)
+	member, _, err := cluster.GetMemberByAddr(in.Addr, s.Node.RaftNode.Members)
 
 	if err != nil {
-		return nil, errors.New("invalid_raft_member") // does not exist in initialized cluster peers
+		return nil, errors.New("invalid_raft_member") // does not exist in initd cluster peers
 	}
 
-	res := &api.ManagerRemoteInitializeResponse{
+	res := &api.ManagerRemoteInitRes{
 		MemberId: member.ID,
-		Members:  s.Node.Raft.Members,
+		Members:  s.Node.RaftNode.Members,
 	}
 
 	return res, nil
 }
 
-// ManagerRemoteJoin : adds nodes to the raft
-func (s *RemoteServer) ManagerRemoteJoin(ctx context.Context, in *api.ManagerRemoteJoinRequest) (*api.ManagerRemoteJoinResponse, error) {
-	if s.Node.Raft == nil {
+// Join : adds nodes to the raft
+func (s *RemoteServer) Join(ctx context.Context, in *api.ManagerRemoteJoinReq) (*api.ManagerRemoteJoinRes, error) {
+	if s.Node.RaftNode == nil {
 		return nil, errors.New("invalid_raft_state")
 	}
 
 	var members []*api.Member
 
-	m, ok := s.Node.State.Lookup("members")
+	m, ok := s.Node.RaftState.Lookup("members")
 
 	if !ok {
-		members = s.Node.Raft.Members
+		members = s.Node.RaftNode.Members
 	} else {
 		err := json.Unmarshal([]byte(m), &members)
 
@@ -74,7 +77,7 @@ func (s *RemoteServer) ManagerRemoteJoin(ctx context.Context, in *api.ManagerRem
 
 	// need a uniq ident for node ids so we will use the
 	// raft commit index as it is also uniq and an index
-	commitIndex := s.Node.Raft.Node.Status().Commit
+	commitIndex := s.Node.RaftNode.Node.Status().Commit
 
 	memberID := uint64(commitIndex)
 
@@ -84,11 +87,11 @@ func (s *RemoteServer) ManagerRemoteJoin(ctx context.Context, in *api.ManagerRem
 		Context: []byte(in.Addr),
 	}
 
-	s.Node.Raft.ConfChangeC <- cc
+	s.Node.RaftNode.ConfChangeC <- cc
 
 	log.Printf("New member proposed to cluster %d", memberID)
 
-	res := &api.ManagerRemoteJoinResponse{
+	res := &api.ManagerRemoteJoinRes{
 		MemberId: memberID,
 		Members:  members,
 	}
@@ -101,23 +104,23 @@ func (s *RemoteServer) ManagerRemoteJoin(ctx context.Context, in *api.ManagerRem
 		return nil, err
 	}
 
-	s.Node.State.Propose("members", string(json))
+	s.Node.RaftState.Propose("members", string(json))
 
 	return res, nil
 }
 
-// ManagerRemoteRemove : adds nodes to the raft
-func (s *RemoteServer) ManagerRemoteRemove(ctx context.Context, in *api.ManagerRemoteRemoveRequest) (*api.ManagerRemoteRemoveResponse, error) {
-	if s.Node.Raft == nil {
+// Remove : adds nodes to the raft
+func (s *RemoteServer) Remove(ctx context.Context, in *api.ManagerRemoteRemoveReq) (*api.ManagerRemoteRemoveRes, error) {
+	if s.Node.RaftNode == nil {
 		return nil, errors.New("invalid_raft_state")
 	}
 
 	var members []*api.Member
 
-	m, ok := s.Node.State.Lookup("members")
+	m, ok := s.Node.RaftState.Lookup("members")
 
 	if !ok {
-		members = s.Node.Raft.Members
+		members = s.Node.RaftNode.Members
 	} else {
 		err := json.Unmarshal([]byte(m), &members)
 
@@ -137,7 +140,7 @@ func (s *RemoteServer) ManagerRemoteRemove(ctx context.Context, in *api.ManagerR
 		NodeID: member.ID,
 	}
 
-	s.Node.Raft.ConfChangeC <- cc
+	s.Node.RaftNode.ConfChangeC <- cc
 
 	members = append(members[:*memberIndex], members[*memberIndex+1:]...)
 
@@ -147,11 +150,34 @@ func (s *RemoteServer) ManagerRemoteRemove(ctx context.Context, in *api.ManagerR
 		return nil, err
 	}
 
-	s.Node.State.Propose("members", string(json))
+	s.Node.RaftState.Propose("members", string(json))
 
-	res := &api.ManagerRemoteRemoveResponse{}
+	res := &api.ManagerRemoteRemoveRes{}
 
 	log.Printf("Removed member from cluster %d", in.MemberId)
 
 	return res, nil
+}
+
+// StartRemoteServer : starts Raft memebership server
+func StartRemoteServer(node *cluster.Node) {
+	lis, err := net.Listen("tcp", node.Flags.ListenRemoteAddr.String())
+
+	if err != nil {
+		log.Fatal("Failed to listen")
+	}
+
+	s := grpc.NewServer()
+
+	server := &RemoteServer{
+		Node: node,
+	}
+
+	logrus.Info("Started manager remote gRPC tcp server.")
+
+	api.RegisterManagerRemoteServer(s, server)
+
+	if err := s.Serve(lis); err != nil {
+		log.Fatal("Failed to serve")
+	}
 }

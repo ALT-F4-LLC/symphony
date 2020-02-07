@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package api;
+
+import "api/raft.proto";
+
+service ManagerControl {
+  rpc Get(ManagerControlGetReq) returns (ManagerControlGetRes) {}
+  rpc Init(ManagerControlInitReq) returns (ManagerControlInitRes) {}
+  rpc Join(ManagerControlJoinReq) returns (ManagerControlJoinRes) {}
+  rpc Remove(ManagerControlRemoveReq) returns (ManagerControlRemoveRes) {}
+  rpc Set(ManagerControlSetReq) returns (ManagerControlSetRes) {}
+}
+
+message ManagerControlGetReq { string key = 1; }
+message ManagerControlGetRes { string value = 1; }
+
+message ManagerControlInitReq {
+  string join_addr = 1;
+  repeated Member members = 2;
+}
+message ManagerControlInitRes {}
+
+message ManagerControlJoinReq { string join_addr = 1; }
+message ManagerControlJoinRes {}
+
+message ManagerControlRemoveReq { uint64 member_id = 1; }
+message ManagerControlRemoveRes {}
+
+message ManagerControlSetReq {
+  string key = 1;
+  string value = 2;
+}
+message ManagerControlSetRes { string value = 1; }

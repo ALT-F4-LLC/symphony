@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package api;
+
+import "api/raft.proto";
+
+service ManagerRemote {
+  rpc Init(ManagerRemoteInitReq) returns (ManagerRemoteInitRes) {}
+  rpc Join(ManagerRemoteJoinReq) returns (ManagerRemoteJoinRes) {}
+  rpc Remove(ManagerRemoteRemoveReq) returns (ManagerRemoteRemoveRes) {}
+}
+
+message ManagerRemoteInitReq { string addr = 1; }
+message ManagerRemoteInitRes {
+  uint64 member_id = 1;
+  repeated Member members = 2;
+}
+
+message ManagerRemoteJoinReq { string addr = 1; }
+message ManagerRemoteJoinRes {
+  uint64 member_id = 1;
+  repeated Member members = 2;
+}
+
+message ManagerRemoteRemoveReq { uint64 member_id = 1; }
+message ManagerRemoteRemoveRes {}

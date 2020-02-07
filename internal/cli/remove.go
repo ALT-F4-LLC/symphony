@@ -8,8 +8,8 @@ import (
 	"github.com/erkrnt/symphony/api"
 )
 
-// RemoveHandler : handle the "remove" command
-func RemoveHandler(memberID *uint64, socket *string) {
+// ManagerRemoveHandler : handle the "remove" command
+func ManagerRemoveHandler(memberID *uint64, socket *string) {
 	if *memberID == 0 {
 		log.Fatal("invalid_member_id")
 	}
@@ -24,11 +24,11 @@ func RemoveHandler(memberID *uint64, socket *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerControlRemoveRequest{
+	opts := &api.ManagerControlRemoveReq{
 		MemberId: *memberID,
 	}
 
-	_, err := c.ManagerControlRemove(ctx, opts)
+	_, err := c.Remove(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
