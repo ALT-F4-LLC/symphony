@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package api;
 
+import "api/manager.proto";
+
 service BlockRemote {
   // rpc GetLv(LvFields) returns (LvMetadata) {}
   // rpc NewLv(NewLvFields) returns (LvMetadata) {}
@@ -12,6 +14,12 @@ service BlockRemote {
   // rpc GetVg(VgFields) returns (VgMetadata) {}
   // rpc NewVg(NewVgFields) returns (VgMetadata) {}
   // rpc RemoveVg(VgFields) returns (RemoveStatus) {}
+}
+
+service ManagerRemote {
+  rpc Init(ManagerRemoteInitReq) returns (ManagerRemoteInitRes) {}
+  rpc Join(ManagerRemoteJoinReq) returns (ManagerRemoteJoinRes) {}
+  rpc Remove(ManagerRemoteRemoveReq) returns (ManagerRemoteRemoveRes) {}
 }
 
 message LvFields {

@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package api;
+
+import "api/block.proto";
+import "api/manager.proto";
+
+service BlockControl {
+  rpc Join(BlockControlJoinReq) returns (BlockControlJoinRes) {}
+}
+
+service ManagerControl {
+  rpc Get(ManagerControlGetReq) returns (ManagerControlGetRes) {}
+  rpc Init(ManagerControlInitReq) returns (ManagerControlInitRes) {}
+  rpc Join(ManagerControlJoinReq) returns (ManagerControlJoinRes) {}
+  rpc Remove(ManagerControlRemoveReq) returns (ManagerControlRemoveRes) {}
+  rpc Set(ManagerControlSetReq) returns (ManagerControlSetRes) {}
+}

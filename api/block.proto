@@ -2,9 +2,5 @@ syntax = "proto3";
 
 package api;
 
-service BlockControl {
-  rpc Join(BlockControlJoinReq) returns (BlockControlJoinRes) {}
-}
-
 message BlockControlJoinReq { string join_addr = 1; }
 message BlockControlJoinRes {}
