@@ -1,15 +1,12 @@
-package main
+package block
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"os/exec"
 	"strings"
 
-	"github.com/erkrnt/symphony/protobuff"
-	"github.com/erkrnt/symphony/schema"
-	"github.com/erkrnt/symphony/service"
+	"github.com/erkrnt/symphony/internal/pkg/schema"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -101,80 +98,4 @@ func removeVg(id uuid.UUID) error {
 	logrus.WithFields(logrus.Fields{"ID": id.String()}).Debug("Volume group successfully removed.")
 
 	return nil
-}
-
-func (s *blockServer) GetVg(ctx context.Context, in *protobuff.VgFields) (*protobuff.VgMetadata, error) {
-	id, err := uuid.Parse(in.ID)
-
-	if err != nil {
-		return nil, service.HandleProtoError(err)
-	}
-
-	vg, err := getVg(id)
-
-	if err != nil {
-		return nil, service.HandleProtoError(err)
-	}
-
-	metadata := &protobuff.VgMetadata{
-		VgName:    vg.VgName,
-		PvCount:   vg.PvCount,
-		LvCount:   vg.LvCount,
-		SnapCount: vg.SnapCount,
-		VgAttr:    vg.VgAttr,
-		VgSize:    vg.VgSize,
-		VgFree:    vg.VgFree,
-	}
-
-	logrus.WithFields(logrus.Fields{"ID": id.String()}).Info("GetVg")
-
-	return metadata, nil
-}
-
-func (s *blockServer) NewVg(ctx context.Context, in *protobuff.NewVgFields) (*protobuff.VgMetadata, error) {
-	id, err := uuid.Parse(in.ID)
-
-	if err != nil {
-		return nil, service.HandleProtoError(err)
-	}
-
-	vg, err := newVg(in.Device, id)
-
-	if err != nil {
-		return nil, service.HandleProtoError(err)
-	}
-
-	metadata := &protobuff.VgMetadata{
-		VgName:    vg.VgName,
-		PvCount:   vg.PvCount,
-		LvCount:   vg.LvCount,
-		SnapCount: vg.SnapCount,
-		VgAttr:    vg.VgAttr,
-		VgSize:    vg.VgSize,
-		VgFree:    vg.VgFree,
-	}
-
-	logrus.WithFields(logrus.Fields{"ID": id.String()}).Info("NewVg")
-
-	return metadata, nil
-}
-
-func (s *blockServer) RemoveVg(ctx context.Context, in *protobuff.VgFields) (*protobuff.RemoveStatus, error) {
-	id, err := uuid.Parse(in.ID)
-
-	if err != nil {
-		return nil, service.HandleProtoError(err)
-	}
-
-	rmErr := removeVg(id)
-
-	if rmErr != nil {
-		return nil, service.HandleProtoError(rmErr)
-	}
-
-	status := &protobuff.RemoveStatus{Success: true}
-
-	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveVg")
-
-	return status, nil
 }

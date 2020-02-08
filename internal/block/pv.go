@@ -1,18 +1,13 @@
-package main
+package block
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"os/exec"
 	"strings"
 
-	"github.com/erkrnt/symphony/protobuff"
-	"github.com/erkrnt/symphony/schema"
-	"github.com/erkrnt/symphony/service"
+	"github.com/erkrnt/symphony/internal/pkg/schema"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // PhysicalVolumeReport : describes a series of physical volumes in LVM
@@ -103,65 +98,4 @@ func removePv(device string) error {
 	logrus.WithFields(logrus.Fields{"Device": device}).Debug("Physical volume successfully removed.")
 
 	return nil
-}
-
-func (s *blockServer) GetPv(ctx context.Context, in *protobuff.PvFields) (*protobuff.PvMetadata, error) {
-	pv, pvErr := getPv(in.Device)
-
-	if pvErr != nil {
-		return nil, service.HandleProtoError(pvErr)
-	}
-
-	if pv == nil {
-		err := status.Error(codes.NotFound, "invalid_physical_volume")
-		return nil, service.HandleProtoError(err)
-	}
-
-	metadata := &protobuff.PvMetadata{
-		PvName: pv.PvName,
-		VgName: pv.VgName,
-		PvFmt:  pv.PvFmt,
-		PvAttr: pv.PvAttr,
-		PvSize: pv.PvSize,
-		PvFree: pv.PvFree,
-	}
-
-	logrus.WithFields(logrus.Fields{"Device": in.Device}).Info("GetPv")
-
-	return metadata, nil
-}
-
-func (s *blockServer) NewPv(ctx context.Context, in *protobuff.PvFields) (*protobuff.PvMetadata, error) {
-	pv, err := newPv(in.Device)
-
-	if err != nil {
-		return nil, service.HandleProtoError(err)
-	}
-
-	metadata := &protobuff.PvMetadata{
-		PvName: pv.PvName,
-		VgName: pv.VgName,
-		PvFmt:  pv.PvFmt,
-		PvAttr: pv.PvAttr,
-		PvSize: pv.PvSize,
-		PvFree: pv.PvFree,
-	}
-
-	logrus.WithFields(logrus.Fields{"Device": in.Device}).Info("NewPv")
-
-	return metadata, nil
-}
-
-func (s *blockServer) RemovePv(ctx context.Context, in *protobuff.PvFields) (*protobuff.RemoveStatus, error) {
-	err := removePv(in.Device)
-
-	if err != nil {
-		return nil, service.HandleProtoError(err)
-	}
-
-	status := &protobuff.RemoveStatus{Success: true}
-
-	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemovePv")
-
-	return status, nil
 }

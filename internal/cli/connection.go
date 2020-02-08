@@ -2,36 +2,24 @@ package cli
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
-// NewConnection : creates a new grpc connection
-func NewConnection(socket *string) *grpc.ClientConn {
-	abs, err := filepath.Abs(".")
+// NewConnSocket : creates a new grpc connection
+func NewConnSocket(socketPath *string) *grpc.ClientConn {
+	socket, err := filepath.Abs(*socketPath)
 
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 
-	s := fmt.Sprintf("%s/control.sock", abs)
-
-	if *socket != "" {
-		abs, err := filepath.Abs(*socket)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		s = abs
-	}
-
-	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", s), grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", socket), grpc.WithInsecure())
 
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 
 	return conn

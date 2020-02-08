@@ -1,12 +1,12 @@
-package service
+package api
 
 import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// HandleProtoError : Handles the return of a protobuff error.
-func HandleProtoError(err error) error {
+// ProtoError : handles the return of a protobuff error.
+func ProtoError(err error) error {
 	st, ok := status.FromError(err)
 
 	if !ok {
