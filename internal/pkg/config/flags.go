@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -24,9 +26,22 @@ var (
 	configDir        = kingpin.Flag("config-dir", "Sets configuration directory for manager.").Default(".").String()
 	joinAddr         = kingpin.Flag("join-addr", "Sets existing Raft remote manager address to join.").String()
 	peersList        = kingpin.Flag("peers", "Sets the initial custer size (minimum of 2 other nodes required).").String()
-	listenRaftAddr   = kingpin.Flag("listen-raft-addr", "Sets the raft address.").Default("127.0.0.1:15760").String()
-	listenRemoteAddr = kingpin.Flag("listen-remote-addr", "Sets the remote API address.").Default("127.0.0.1:27242").String()
+	listenRaftAddr   = kingpin.Flag("listen-raft-addr", "Sets the raft address.").String()
+	listenRemoteAddr = kingpin.Flag("listen-remote-addr", "Sets the remote API address.").String()
 )
+
+// GetOutboundIP : get preferred outbound ip of this machine
+func GetOutboundIP() net.IP {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP
+}
 
 // GetPeersFromString : parses a peers list to generate an array
 func GetPeersFromString(list *string) ([]string, error) {
@@ -79,10 +94,34 @@ func GetFlags() (*Flags, error) {
 		}
 
 		nodeFlags.ListenRaftAddr = addr
+	} else {
+		ip := GetOutboundIP()
+
+		tcpAddr := fmt.Sprintf("%s:15760", ip.String())
+
+		addr, err := net.ResolveTCPAddr("tcp", tcpAddr)
+
+		if err != nil {
+			return nil, err
+		}
+
+		nodeFlags.ListenRaftAddr = addr
 	}
 
 	if *listenRemoteAddr != "" {
 		addr, err := net.ResolveTCPAddr("tcp", *listenRemoteAddr)
+
+		if err != nil {
+			return nil, err
+		}
+
+		nodeFlags.ListenRemoteAddr = addr
+	} else {
+		ip := GetOutboundIP()
+
+		tcpAddr := fmt.Sprintf("%s:27242", ip.String())
+
+		addr, err := net.ResolveTCPAddr("tcp", tcpAddr)
 
 		if err != nil {
 			return nil, err

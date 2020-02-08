@@ -69,7 +69,64 @@ func (s *RemoteServer) GetLv(ctx context.Context, in *api.BlockLvFields) (*api.B
 	return metadata, nil
 }
 
-// NewLv : creates new logical volume on block host
+// GetPv : gets physical volume
+func (s *RemoteServer) GetPv(ctx context.Context, in *api.BlockPvFields) (*api.BlockPvMetadata, error) {
+	pv, pvErr := getPv(in.Device)
+
+	if pvErr != nil {
+		return nil, api.ProtoError(pvErr)
+	}
+
+	if pv == nil {
+		err := status.Error(codes.NotFound, "invalid_physical_volume")
+
+		return nil, api.ProtoError(err)
+	}
+
+	metadata := &api.BlockPvMetadata{
+		PvName: pv.PvName,
+		VgName: pv.VgName,
+		PvFmt:  pv.PvFmt,
+		PvAttr: pv.PvAttr,
+		PvSize: pv.PvSize,
+		PvFree: pv.PvFree,
+	}
+
+	logrus.WithFields(logrus.Fields{"Device": in.Device}).Info("GetPv")
+
+	return metadata, nil
+}
+
+// GetVg : gets volume group
+func (s *RemoteServer) GetVg(ctx context.Context, in *api.BlockVgFields) (*api.BlockVgMetadata, error) {
+	id, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	vg, err := getVg(id)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	metadata := &api.BlockVgMetadata{
+		VgName:    vg.VgName,
+		PvCount:   vg.PvCount,
+		LvCount:   vg.LvCount,
+		SnapCount: vg.SnapCount,
+		VgAttr:    vg.VgAttr,
+		VgSize:    vg.VgSize,
+		VgFree:    vg.VgFree,
+	}
+
+	logrus.WithFields(logrus.Fields{"ID": id.String()}).Info("GetVg")
+
+	return metadata, nil
+}
+
+// NewLv : creates logical volume
 func (s *RemoteServer) NewLv(ctx context.Context, in *api.BlockNewLvFields) (*api.BlockLvMetadata, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
@@ -110,67 +167,12 @@ func (s *RemoteServer) NewLv(ctx context.Context, in *api.BlockNewLvFields) (*ap
 		"VolumeGroupID": volumeGroupID.String(),
 	}
 
-	logrus.WithFields(logFields).Debug("NewLv")
+	logrus.WithFields(logFields).Info("NewLv")
 
 	return metadata, nil
 }
 
-// RemoveLv : removes logical volume from a block host
-func (s *RemoteServer) RemoveLv(ctx context.Context, in *api.BlockLvFields) (*api.RemoveStatus, error) {
-	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
-
-	if err != nil {
-		return nil, api.ProtoError(err)
-	}
-
-	id, err := uuid.Parse(in.ID)
-
-	if err != nil {
-		return nil, api.ProtoError(err)
-	}
-
-	rmErr := removeLv(volumeGroupID, id)
-
-	if rmErr != nil {
-		return nil, api.ProtoError(rmErr)
-	}
-
-	status := &api.RemoveStatus{Success: true}
-
-	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveLv")
-
-	return status, nil
-}
-
-// GetPv : gets physical volume metadata from block host
-func (s *RemoteServer) GetPv(ctx context.Context, in *api.BlockPvFields) (*api.BlockPvMetadata, error) {
-	pv, pvErr := getPv(in.Device)
-
-	if pvErr != nil {
-		return nil, api.ProtoError(pvErr)
-	}
-
-	if pv == nil {
-		err := status.Error(codes.NotFound, "invalid_physical_volume")
-
-		return nil, api.ProtoError(err)
-	}
-
-	metadata := &api.BlockPvMetadata{
-		PvName: pv.PvName,
-		VgName: pv.VgName,
-		PvFmt:  pv.PvFmt,
-		PvAttr: pv.PvAttr,
-		PvSize: pv.PvSize,
-		PvFree: pv.PvFree,
-	}
-
-	logrus.WithFields(logrus.Fields{"Device": in.Device}).Info("GetPv")
-
-	return metadata, nil
-}
-
-// NewPv : creates new physical volume on block host
+// NewPv : creates physical volume
 func (s *RemoteServer) NewPv(ctx context.Context, in *api.BlockPvFields) (*api.BlockPvMetadata, error) {
 	pv, err := newPv(in.Device)
 
@@ -192,51 +194,7 @@ func (s *RemoteServer) NewPv(ctx context.Context, in *api.BlockPvFields) (*api.B
 	return metadata, nil
 }
 
-// RemovePv : removes physical volume from block host
-func (s *RemoteServer) RemovePv(ctx context.Context, in *api.BlockPvFields) (*api.RemoveStatus, error) {
-	err := removePv(in.Device)
-
-	if err != nil {
-		return nil, api.ProtoError(err)
-	}
-
-	status := &api.RemoveStatus{Success: true}
-
-	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemovePv")
-
-	return status, nil
-}
-
-// GetVg : gets volume group metadata from block host
-func (s *RemoteServer) GetVg(ctx context.Context, in *api.BlockVgFields) (*api.BlockVgMetadata, error) {
-	id, err := uuid.Parse(in.ID)
-
-	if err != nil {
-		return nil, api.ProtoError(err)
-	}
-
-	vg, err := getVg(id)
-
-	if err != nil {
-		return nil, api.ProtoError(err)
-	}
-
-	metadata := &api.BlockVgMetadata{
-		VgName:    vg.VgName,
-		PvCount:   vg.PvCount,
-		LvCount:   vg.LvCount,
-		SnapCount: vg.SnapCount,
-		VgAttr:    vg.VgAttr,
-		VgSize:    vg.VgSize,
-		VgFree:    vg.VgFree,
-	}
-
-	logrus.WithFields(logrus.Fields{"ID": id.String()}).Info("GetVg")
-
-	return metadata, nil
-}
-
-// NewVg : creates new volume group on block host
+// NewVg : creates volume group
 func (s *RemoteServer) NewVg(ctx context.Context, in *api.BlockNewVgFields) (*api.BlockVgMetadata, error) {
 	id, err := uuid.Parse(in.ID)
 
@@ -265,7 +223,49 @@ func (s *RemoteServer) NewVg(ctx context.Context, in *api.BlockNewVgFields) (*ap
 	return metadata, nil
 }
 
-// RemoveVg : removes volume group from block host
+// RemoveLv : removes logical volume
+func (s *RemoteServer) RemoveLv(ctx context.Context, in *api.BlockLvFields) (*api.RemoveStatus, error) {
+	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	id, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	rmErr := removeLv(volumeGroupID, id)
+
+	if rmErr != nil {
+		return nil, api.ProtoError(rmErr)
+	}
+
+	status := &api.RemoveStatus{Success: true}
+
+	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveLv")
+
+	return status, nil
+}
+
+// RemovePv : removes physical volume
+func (s *RemoteServer) RemovePv(ctx context.Context, in *api.BlockPvFields) (*api.RemoveStatus, error) {
+	err := removePv(in.Device)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	status := &api.RemoveStatus{Success: true}
+
+	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemovePv")
+
+	return status, nil
+}
+
+// RemoveVg : removes volume group
 func (s *RemoteServer) RemoveVg(ctx context.Context, in *api.BlockVgFields) (*api.RemoveStatus, error) {
 	id, err := uuid.Parse(in.ID)
 

@@ -8,13 +8,13 @@ service BlockControl {
 
 service BlockRemote {
   rpc GetLv(BlockLvFields) returns (BlockLvMetadata) {}
-  rpc NewLv(BlockNewLvFields) returns (BlockLvMetadata) {}
-  rpc RemoveLv(BlockLvFields) returns (RemoveStatus) {}
   rpc GetPv(BlockPvFields) returns (BlockPvMetadata) {}
-  rpc NewPv(BlockPvFields) returns (BlockPvMetadata) {}
-  rpc RemovePv(BlockPvFields) returns (RemoveStatus) {}
   rpc GetVg(BlockVgFields) returns (BlockVgMetadata) {}
+  rpc NewLv(BlockNewLvFields) returns (BlockLvMetadata) {}
+  rpc NewPv(BlockPvFields) returns (BlockPvMetadata) {}
   rpc NewVg(BlockNewVgFields) returns (BlockVgMetadata) {}
+  rpc RemoveLv(BlockLvFields) returns (RemoveStatus) {}
+  rpc RemovePv(BlockPvFields) returns (RemoveStatus) {}
   rpc RemoveVg(BlockVgFields) returns (RemoveStatus) {}
 }
 
