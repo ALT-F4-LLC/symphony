@@ -13,4 +13,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Block Service: block services are able to provision logical volumes using LVM for hosts they run on. Block services are currently able to join the cluster and create physical resources.
 
-- Initial release of prototype.
+- Initial release.
