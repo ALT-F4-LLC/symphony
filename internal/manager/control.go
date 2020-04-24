@@ -25,10 +25,6 @@ type controlServer struct {
 	Node *cluster.Node
 }
 
-type gossipMetadata struct {
-	RaftID uint64
-}
-
 func createRaftMembers(listenRaftAddr *net.TCPAddr) []*api.RaftMember {
 	addr := fmt.Sprintf("http://%s", listenRaftAddr.String())
 
@@ -59,7 +55,7 @@ func getTCPAddr(addr string) (*net.TCPAddr, error) {
 }
 
 func newMemberList(flags *config.Flags, gossipID uuid.UUID, raftID uint64) (*memberlist.Memberlist, error) {
-	data := gossipMetadata{
+	data := cluster.GossipMetadata{
 		RaftID: raftID,
 	}
 
@@ -115,6 +111,9 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO : Potentially remove on init and have gossip be created when
+	// -----> workers join the cluster
 
 	raftLeaderGossipID := uuid.New()
 
