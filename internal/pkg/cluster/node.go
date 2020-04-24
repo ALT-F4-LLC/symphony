@@ -24,23 +24,6 @@ type Node struct {
 	mu sync.Mutex
 }
 
-// GetGossipMembers : retrieves raft member list from gossip protocol
-/* func (n *Node) GetGossipMembers(list []*memberlist.Node) ([]*api.RaftMember, error) { */
-// var members []*api.RaftMember
-
-// for _, m := range list {
-// var member *api.RaftMember
-
-// if err := json.Unmarshal(m.Meta, &member); err != nil {
-// return nil, err
-// }
-
-// members = append(members, member)
-// }
-
-// return members, nil
-// }
-
 // GetRaftMembers : retrieves raft member list from gossip protocol
 func (n *Node) GetRaftMembers() ([]*api.RaftMember, error) {
 	var members []*api.RaftMember
@@ -119,7 +102,7 @@ func NewNode() (*Node, error) {
 
 		var members []api.RaftMember
 
-		m, ok := state.Lookup("/raft/members")
+		m, ok := state.Lookup("members")
 
 		if !ok {
 			log.Print("we are not okay")

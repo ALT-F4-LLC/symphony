@@ -2,18 +2,7 @@ package cluster
 
 import (
 	"github.com/erkrnt/symphony/api"
-	"github.com/google/uuid"
 )
-
-// GetNodeByID : gets the index of a member in a set of peers
-func GetNodeByID(nodes []*api.Node, id uuid.UUID) *api.Node {
-	for _, n := range nodes {
-		if n.Id == id.String() {
-			return n
-		}
-	}
-	return nil
-}
 
 // GetRaftMemberByAddr : gets the index of a member in a set of peers
 func GetRaftMemberByAddr(members []*api.RaftMember, addr string) (*int, *api.RaftMember) {
