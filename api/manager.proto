@@ -3,11 +3,13 @@ syntax = "proto3";
 package api;
 
 import "api/cluster.proto";
+import "api/gossip.proto";
 import "api/raft.proto";
 
 service ManagerControl {
   rpc Init(ManagerControlInitRequest) returns (ManagerControlInitResponse) {}
   rpc Join(ManagerControlJoinRequest) returns (ManagerControlJoinResponse) {}
+  rpc Members(ManagerControlMembersRequest) returns (ManagerControlMembersResponse) {}
   rpc Remove(ManagerControlRemoveRequest)
       returns (ManagerControlRemoveResponse) {}
 }
@@ -22,6 +24,15 @@ message ManagerControlInitResponse {}
 message ManagerControlJoinRequest { string join_addr = 1; }
 message ManagerControlJoinResponse {}
 
+message ManagerControlMembersRequest {}
+message ManagerControlMembersResponse {
+  repeated GossipMember gossip = 1;
+  repeated RaftMember raft = 2;
+}
+
+message ManagerControlRemoveRequest { uint64 raft_id = 1; }
+message ManagerControlRemoveResponse {}
+
 message ManagerRemoteJoinRequest {
   string addr = 1;
   Role role = 2;
@@ -32,6 +43,3 @@ message ManagerRemoteJoinResponse {
   uint64 raft_id = 3;
   repeated RaftMember raft_members = 4;
 }
-
-message ManagerControlRemoveRequest { uint64 raft_id = 1; }
-message ManagerControlRemoveResponse {}

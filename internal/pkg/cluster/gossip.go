@@ -12,11 +12,6 @@ type GossipDelegate struct {
 	state       []byte
 }
 
-// GossipMetadata : defines metadata for a gossip node
-type GossipMetadata struct {
-	RaftID uint64
-}
-
 // GetBroadcasts : gets broadcasts from gossip protocol
 func (d *GossipDelegate) GetBroadcasts(overhead, limit int) [][]byte {
 	d.mu.Lock()

@@ -55,8 +55,8 @@ func getTCPAddr(addr string) (*net.TCPAddr, error) {
 }
 
 func newMemberList(flags *config.Flags, gossipID uuid.UUID, raftID uint64) (*memberlist.Memberlist, error) {
-	data := cluster.GossipMetadata{
-		RaftID: raftID,
+	data := api.GossipMember{
+		RaftId: raftID,
 	}
 
 	meta, err := json.Marshal(data)
@@ -229,6 +229,31 @@ func (s *controlServer) Join(ctx context.Context, in *api.ManagerControlJoinRequ
 	res := &api.ManagerControlJoinResponse{}
 
 	go raft.HTTPStopCHandler(s.Node.Flags.ConfigDir, httpStopC, list)
+
+	return res, nil
+}
+
+func (s *controlServer) Members(ctx context.Context, in *api.ManagerControlMembersRequest) (*api.ManagerControlMembersResponse, error) {
+	if s.Node.Raft == nil {
+		return nil, errors.New("invalid_raft_state")
+	}
+
+	gossip, err := s.Node.GetGossipMembers()
+
+	if err != nil {
+		return nil, err
+	}
+
+	raft, err := s.Node.GetRaftMembers()
+
+	if err != nil {
+		return nil, err
+	}
+
+	res := &api.ManagerControlMembersResponse{
+		Gossip: gossip,
+		Raft:   raft,
+	}
 
 	return res, nil
 }

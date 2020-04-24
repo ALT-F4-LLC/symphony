@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package api;
+
+message GossipMember {
+  uint64 raft_id = 1;
+}

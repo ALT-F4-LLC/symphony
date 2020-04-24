@@ -52,6 +52,29 @@ func ManagerJoin(joinAddr *string, socket *string) {
 	}
 }
 
+// ManagerMembers : handle the "members" command
+func ManagerMembers(socket *string) {
+	conn := NewConnSocket(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerControlClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerControlMembersRequest{}
+
+	members, err := c.Members(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(members)
+}
+
 // ManagerRemove : handle the "remove" command
 func ManagerRemove(raftID *uint64, socket *string) {
 	if *raftID == 0 {
