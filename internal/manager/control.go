@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -11,123 +12,138 @@ import (
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/cluster"
+	"github.com/erkrnt/symphony/internal/pkg/config"
+	"github.com/google/uuid"
+	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
+	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
 )
 
-// ControlServer : manager remote requests
-type ControlServer struct {
+// controlServer : manager remote requests
+type controlServer struct {
 	Node *cluster.Node
 }
 
-func (s *ControlServer) startRaftAndRespond(join bool, members []*api.Member, nodeID uint64) (*api.ManagerControlInitRes, error) {
-	raft, state, err := cluster.NewRaft(s.Node.Flags, join, members, nodeID)
-
-	if err != nil {
-		return nil, err
-	}
-
-	s.Node.RaftNode = raft
-
-	s.Node.RaftState = state
-
-	res := &api.ManagerControlInitRes{}
-
-	return res, nil
+type gossipMetadata struct {
+	RaftID uint64
 }
 
-// Get : gets a specified key value in raft
-func (s *ControlServer) Get(ctx context.Context, in *api.ManagerControlGetReq) (*api.ManagerControlGetRes, error) {
-	if s.Node.RaftState == nil {
-		return nil, errors.New("invalid_state_request")
+func createRaftMembers(listenRaftAddr *net.TCPAddr) []*api.RaftMember {
+	addr := fmt.Sprintf("http://%s", listenRaftAddr.String())
+
+	leader := &api.RaftMember{
+		Addr: addr,
+		Id:   uint64(1),
 	}
 
-	p, ok := s.Node.RaftState.Lookup(in.Key)
+	members := []*api.RaftMember{leader}
 
-	if !ok {
-		return nil, errors.New("invalid_key_lookup")
-	}
-
-	res := &api.ManagerControlGetRes{
-		Value: p,
-	}
-
-	return res, nil
+	return members
 }
 
-// Init : initializes a manager for a cluster
-func (s *ControlServer) Init(ctx context.Context, in *api.ManagerControlInitReq) (*api.ManagerControlInitRes, error) {
-	if in.JoinAddr != "" && in.Members != nil {
-		return nil, errors.New("invalid_init_request")
-	}
+func getTCPAddr(addr string) (*net.TCPAddr, error) {
+	var joinGossipAddr *net.TCPAddr
 
-	if s.Node.RaftNode != nil {
-		return nil, errors.New("invalid_raft_status")
-	}
-
-	addr := fmt.Sprintf("http://%s", s.Node.Flags.ListenRaftAddr.String())
-
-	if in.JoinAddr != "" {
-		joinAddr, err := net.ResolveTCPAddr("tcp", in.JoinAddr)
+	if addr != "" {
+		addr, err := net.ResolveTCPAddr("tcp", addr)
 
 		if err != nil {
 			return nil, err
 		}
 
-		conn, err := grpc.Dial(joinAddr.String(), grpc.WithInsecure())
-
-		if err != nil {
-			return nil, err
-		}
-
-		defer conn.Close()
-
-		c := api.NewManagerRemoteClient(conn)
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-		defer cancel()
-
-		join, joinErr := c.Init(ctx, &api.ManagerRemoteInitReq{Addr: addr})
-
-		if joinErr != nil {
-			return nil, joinErr
-		}
-
-		saveErr := s.Node.SaveRaftNodeID(join.MemberId)
-
-		if saveErr != nil {
-			return nil, saveErr
-		}
-
-		return s.startRaftAndRespond(false, join.Members, join.MemberId)
+		joinGossipAddr = addr
 	}
 
-	nodeID := uint64(1)
+	return joinGossipAddr, nil
+}
 
-	members := []*api.Member{&api.Member{ID: nodeID, Addr: addr}}
-
-	if len(in.Members) > 1 {
-		_, _, err := cluster.GetMemberByAddr(addr, in.Members)
-
-		if err == nil {
-			return nil, errors.New("invalid_peer_list")
-		}
-
-		members = append(members, in.Members...)
+func newMemberList(flags *config.Flags, gossipID uuid.UUID, raftID uint64) (*memberlist.Memberlist, error) {
+	data := gossipMetadata{
+		RaftID: raftID,
 	}
 
-	err := s.Node.SaveRaftNodeID(nodeID)
+	meta, err := json.Marshal(data)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return s.startRaftAndRespond(false, members, nodeID)
+	config := memberlist.DefaultLocalConfig()
+
+	config.AdvertisePort = flags.ListenGossipAddr.Port
+
+	config.Delegate = &cluster.GossipDelegate{Meta: meta}
+
+	config.BindPort = flags.ListenGossipAddr.Port
+
+	config.Name = gossipID.String()
+
+	list, err := memberlist.Create(config)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, member := range list.Members() {
+		fmt.Printf("Member: %s %s\n", member.Name, member.Addr)
+	}
+
+	return list, nil
 }
 
-// Join : joins a manager to a existing cluster
-func (s *ControlServer) Join(ctx context.Context, in *api.ManagerControlJoinReq) (*api.ManagerControlJoinRes, error) {
+func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequest) (*api.ManagerControlInitResponse, error) {
+	if s.Node.Raft != nil {
+		return nil, errors.New("invalid_raft_state")
+	}
+
+	httpStopC := make(chan struct{})
+
+	raftAddr := fmt.Sprintf("http://%s", s.Node.Flags.ListenRaftAddr.String())
+
+	raftID := uint64(1)
+
+	raftLeader := &api.RaftMember{
+		Addr: raftAddr,
+		Id:   raftID,
+	}
+
+	raftMembers := []*api.RaftMember{raftLeader}
+
+	raft, state, err := cluster.NewRaft(s.Node.Flags, httpStopC, false, raftMembers, raftID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	raftLeaderGossipID := uuid.New()
+
+	list, err := newMemberList(s.Node.Flags, raftLeaderGossipID, raftLeader.Id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	s.Node.Memberlist = list
+
+	s.Node.Raft = raft
+
+	s.Node.State = state
+
+	saveErr := s.Node.SaveRaftNodeID(raftID)
+
+	if saveErr != nil {
+		return nil, err
+	}
+
+	res := &api.ManagerControlInitResponse{}
+
+	go raft.HTTPStopCHandler(s.Node.Flags.ConfigDir, httpStopC, list)
+
+	return res, nil
+}
+
+func (s *controlServer) Join(ctx context.Context, in *api.ManagerControlJoinRequest) (*api.ManagerControlJoinResponse, error) {
 	joinAddr, err := net.ResolveTCPAddr("tcp", in.JoinAddr)
 
 	if err != nil {
@@ -150,77 +166,111 @@ func (s *ControlServer) Join(ctx context.Context, in *api.ManagerControlJoinReq)
 
 	addr := fmt.Sprintf("http://%s", s.Node.Flags.ListenRaftAddr.String())
 
-	join, joinErr := c.Join(ctx, &api.ManagerRemoteJoinReq{Addr: addr})
-
-	if joinErr != nil {
-		return nil, joinErr
+	opts := &api.ManagerRemoteJoinRequest{
+		Addr: addr,
+		Role: api.Role_MANAGER,
 	}
 
-	saveErr := s.Node.SaveRaftNodeID(join.MemberId)
+	join, err := c.Join(ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	saveErr := s.Node.SaveRaftNodeID(join.RaftId)
 
 	if saveErr != nil {
 		return nil, saveErr
 	}
 
-	raft, state, err := cluster.NewRaft(s.Node.Flags, true, join.Members, join.MemberId)
+	httpStopC := make(chan struct{})
+
+	raft, state, err := cluster.NewRaft(s.Node.Flags, httpStopC, true, join.RaftMembers, join.RaftId)
 
 	if err != nil {
 		return nil, err
 	}
 
-	s.Node.RaftNode = raft
+	gossipAddr, err := getTCPAddr(join.GossipAddr)
 
-	s.Node.RaftState = state
+	if err != nil {
+		return nil, err
+	}
 
-	res := &api.ManagerControlJoinRes{}
+	gossipID, err := uuid.Parse(join.GossipId)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	_, raftMember := cluster.GetRaftMemberByID(join.RaftMembers, join.RaftId)
+
+	if raftMember == nil {
+		return nil, api.ProtoError(errors.New("invalid_raft_member"))
+	}
+
+	list, err := newMemberList(s.Node.Flags, gossipID, raftMember.Id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, joinErr := list.Join([]string{gossipAddr.String()})
+
+	if joinErr != nil {
+		return nil, joinErr
+	}
+
+	s.Node.Raft = raft
+
+	s.Node.State = state
+
+	s.Node.Memberlist = list
+
+	res := &api.ManagerControlJoinResponse{}
+
+	go raft.HTTPStopCHandler(s.Node.Flags.ConfigDir, httpStopC, list)
 
 	return res, nil
 }
 
-// Set : sets a specified key value in raft
-func (s *ControlServer) Set(ctx context.Context, in *api.ManagerControlSetReq) (*api.ManagerControlSetRes, error) {
-	if s.Node.RaftState == nil {
-		return nil, errors.New("invalid_state_request")
+func (s *controlServer) Remove(ctx context.Context, in *api.ManagerControlRemoveRequest) (*api.ManagerControlRemoveResponse, error) {
+	if s.Node.Raft == nil {
+		return nil, errors.New("invalid_raft_state")
 	}
 
-	s.Node.RaftState.Propose(in.Key, in.Value)
-
-	res := &api.ManagerControlSetRes{
-		Value: in.Value,
-	}
-
-	return res, nil
-}
-
-// Remove : Removes a manager to a existing cluster
-func (s *ControlServer) Remove(ctx context.Context, in *api.ManagerControlRemoveReq) (*api.ManagerControlRemoveRes, error) {
-	remoteAddr, err := net.ResolveTCPAddr("tcp", s.Node.Flags.ListenRemoteAddr.String())
+	members, err := s.Node.GetRaftMembers()
 
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := grpc.Dial(remoteAddr.String(), grpc.WithInsecure())
+	memberIndex, member := cluster.GetRaftMemberByID(members, in.RaftId)
+
+	if member == nil {
+		return nil, errors.New("invalid_member_id")
+	}
+
+	cc := raftpb.ConfChange{
+		Type:   raftpb.ConfChangeRemoveNode,
+		NodeID: member.Id,
+	}
+
+	s.Node.Raft.ConfChangeC <- cc
+
+	members = append(members[:*memberIndex], members[*memberIndex+1:]...)
+
+	json, err := json.Marshal(members)
 
 	if err != nil {
 		return nil, err
 	}
 
-	defer conn.Close()
+	s.Node.State.Propose("members", string(json))
 
-	c := api.NewManagerRemoteClient(conn)
+	res := &api.ManagerControlRemoveResponse{}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-	defer cancel()
-
-	_, rmErr := c.Remove(ctx, &api.ManagerRemoteRemoveReq{MemberId: in.MemberId})
-
-	if rmErr != nil {
-		return nil, rmErr
-	}
-
-	res := &api.ManagerControlRemoveRes{}
+	log.Printf("Removed member from cluster %d", in.RaftId)
 
 	return res, nil
 }
@@ -239,17 +289,17 @@ func StartControlServer(node *cluster.Node) {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	s := grpc.NewServer()
+	server := grpc.NewServer()
 
-	cs := &ControlServer{
+	control := &controlServer{
 		Node: node,
 	}
 
 	logrus.Info("Started manager control gRPC socket server.")
 
-	api.RegisterManagerControlServer(s, cs)
+	api.RegisterManagerControlServer(server, control)
 
-	if err := s.Serve(lis); err != nil {
+	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
 }

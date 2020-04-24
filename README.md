@@ -54,19 +54,19 @@ $ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager init
 # Three node cluster
 
 ```
-$ rm -rf .raft/manager-01 && go run ./cmd/manager --config-dir .raft/manager-01 \
---listen-raft-addr 127.0.0.1:15760 \
---listen-remote-addr 127.0.0.1:27242
+$ rm -rf .raft/manager-01 && go run ./cmd/manager --config-dir .raft/manager-01
 $ rm -rf .raft/manager-02 && go run ./cmd/manager --config-dir .raft/manager-02 \
---listen-raft-addr 127.0.0.1:15761 \
---listen-remote-addr 127.0.0.1:27243
+--listen-gossip-port 7947 \
+--listen-raft-port 15761 \
+--listen-remote-port 27243
 $ rm -rf .raft/manager-03 && go run ./cmd/manager --config-dir .raft/manager-03 \
---listen-raft-addr 127.0.0.1:15762 \
---listen-remote-addr 127.0.0.1:27244
+--listen-gossip-port 7948 \
+--listen-raft-port 15762 \
+--listen-remote-port 27244
 ```
 
 ```
-$ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager init --peers "http://127.0.0.1:15761,http://127.0.0.1:15762"
+$ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager init --peers "http://192.168.88.21:15761,http://192.168.88.21:15762"
 $ go run ./cmd/cli --socket ".raft/manager-02/control.sock" manager init --join-addr 127.0.0.1:27242
 $ go run ./cmd/cli --socket ".raft/manager-03/control.sock" manager init --join-addr 127.0.0.1:27242
 ```
@@ -75,10 +75,16 @@ $ go run ./cmd/cli --socket ".raft/manager-03/control.sock" manager init --join-
 
 ```
 $ rm -rf .raft/manager-04 && go run ./cmd/manager --config-dir .raft/manager-04 \
---listen-raft-addr 127.0.0.1:15763 \
---listen-remote-addr 127.0.0.1:27245
+--listen-gossip-port 7949 \
+--listen-raft-port 15763 \
+--listen-remote-port 27245
+$ rm -rf .raft/manager-05 && go run ./cmd/manager --config-dir .raft/manager-05 \
+--listen-gossip-port 7950 \
+--listen-raft-port 15764 \
+--listen-remote-port 27246
 
-$ go run ./cmd/cli --socket ".raft/manager-04/control.sock" manager join 127.0.0.1:27242
+$ go run ./cmd/cli --socket ".raft/manager-04/control.sock" manager join 192.168.88.21:27242
+$ go run ./cmd/cli --socket ".raft/manager-05/control.sock" manager join 127.0.0.1:27242
 ```
 
 # Remove a node from the cluster

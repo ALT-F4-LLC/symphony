@@ -61,9 +61,9 @@ func (s *ControlServer) Join(ctx context.Context, in *api.BlockControlJoinReq) (
 		return nil, err
 	}
 
-	s.Node.RaftNode = raft
+	s.Node.Raft = raft
 
-	s.Node.RaftState = state
+	s.Node.State = state
 
 	res := &api.BlockControlJoinRes{}
 

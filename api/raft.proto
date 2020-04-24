@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package api;
 
-message Member {
-  uint64 ID = 1;
-  string Addr = 2;
+message RaftMember {
+  uint64 id = 1;
+  string addr = 2;
 }

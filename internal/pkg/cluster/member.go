@@ -1,27 +1,36 @@
 package cluster
 
 import (
-	"errors"
-
 	"github.com/erkrnt/symphony/api"
+	"github.com/google/uuid"
 )
 
-// GetMemberByAddr : gets the index of a member in a set of peers
-func GetMemberByAddr(addr string, members []*api.Member) (*api.Member, *int, error) {
-	for i, a := range members {
-		if a.Addr == addr {
-			return a, &i, nil
+// GetNodeByID : gets the index of a member in a set of peers
+func GetNodeByID(nodes []*api.Node, id uuid.UUID) *api.Node {
+	for _, n := range nodes {
+		if n.Id == id.String() {
+			return n
 		}
 	}
-	return nil, nil, errors.New("invalid_member")
+	return nil
 }
 
-// GetMemberByID : gets the index of a member in a set of peers
-func GetMemberByID(id uint64, members []*api.Member) (*api.Member, *int, error) {
+// GetRaftMemberByAddr : gets the index of a member in a set of peers
+func GetRaftMemberByAddr(members []*api.RaftMember, addr string) (*int, *api.RaftMember) {
 	for i, a := range members {
-		if a.ID == id {
-			return a, &i, nil
+		if a.Addr == addr {
+			return &i, a
 		}
 	}
-	return nil, nil, errors.New("invalid_member")
+	return nil, nil
+}
+
+// GetRaftMemberByID : gets the index of a member in a set of peers
+func GetRaftMemberByID(members []*api.RaftMember, raftID uint64) (*int, *api.RaftMember) {
+	for i, a := range members {
+		if a.Id == raftID {
+			return &i, a
+		}
+	}
+	return nil, nil
 }

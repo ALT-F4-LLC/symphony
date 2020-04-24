@@ -36,18 +36,11 @@ var (
 	blockVgRemove              = blockVg.Command("remove", "Removes a volume group.")
 	blockVgRemoveID            = blockVgRemove.Arg("id", "Sets volume group id.").Required().String()
 	manager                    = kingpin.Command("manager", "Manager service commands.")
-	managerGet                 = manager.Command("get", "Get a value from the raft state.")
-	managerGetKey              = managerGet.Arg("key", "Specific key to retrieve for value.").Required().String()
-	managerInit                = manager.Command("init", "Initializes a new cluster with optional peers list (minimum of 3)")
-	managerInitJoinAddr        = managerInit.Flag("join-addr", "Sets address of node in existing cluster.").String()
-	managerInitPeers           = managerInit.Flag("peers", "Sets peers of nodes in existing cluster. (eg. http://<host>:<port>,http://<host>:<port>)").String()
+	managerInit                = manager.Command("init", "Initializes a new cluster.")
 	managerJoin                = manager.Command("join", "Joins an existing initialized cluster.")
 	managerJoinAddr            = managerJoin.Arg("addr", "Manager address of existing initialized cluster.").Required().String()
 	managerRemove              = manager.Command("remove", "Removes a node from the cluster.")
 	managerRemoveMemberID      = managerRemove.Arg("member-id", "Raft member ID to be removed from the cluster.").Required().Uint64()
-	managerSet                 = manager.Command("set", "Sets a value into the raft state.")
-	managerSetKey              = managerSet.Arg("key", "Specific key to set for value.").Required().String()
-	managerSetValue            = managerSet.Arg("value", "Specific value to set for key.").Required().String()
 	remoteAddr                 = kingpin.Flag("remote-addr", "Block service commands.").Default("127.0.0.1:27242").String()
 	socket                     = kingpin.Flag("socket", "Sets the socket connection for the client.").Default("./control.sock").String()
 )
@@ -74,15 +67,11 @@ func main() {
 		cli.BlockVgGet(blockVgGetID, remoteAddr)
 	case blockVgRemove.FullCommand():
 		cli.BlockVgRemove(blockVgRemoveID, remoteAddr)
-	case managerGet.FullCommand():
-		cli.ManagerGet(managerGetKey, socket)
 	case managerInit.FullCommand():
-		cli.ManagerInit(managerInitJoinAddr, managerInitPeers, socket)
+		cli.ManagerInit(socket)
 	case managerJoin.FullCommand():
 		cli.ManagerJoin(managerJoinAddr, socket)
 	case managerRemove.FullCommand():
 		cli.ManagerRemove(managerRemoveMemberID, socket)
-	case managerSet.FullCommand():
-		cli.ManagerSet(managerSetKey, socket, managerSetValue)
 	}
 }

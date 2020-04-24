@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/config"
+	"github.com/hashicorp/memberlist"
 	"go.etcd.io/etcd/etcdserver/api/rafthttp"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
@@ -25,8 +25,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// RaftNode : a member of the cluster
-type RaftNode struct {
+// Raft : creates a new raft struct
+type Raft struct {
 	AppliedIndex     uint64
 	CommitC          chan<- *string         // entries committed to log (k,v)
 	ConfChangeC      chan raftpb.ConfChange // proposed cluster config changes
@@ -37,7 +37,7 @@ type RaftNode struct {
 	Join             bool
 	ListenAddr       *net.TCPAddr
 	Node             raft.Node
-	Members          []*api.Member
+	Members          []*api.RaftMember
 	Transport        *rafthttp.Transport
 	HTTPStopC        chan struct{} // signals http server to shutdown
 	HTTPDoneC        chan struct{} // signals http server shutdown complete
@@ -54,70 +54,35 @@ type RaftNode struct {
 	WalDir           string
 }
 
-// StoppableListener : creates a stoppable listener
-type StoppableListener struct {
-	*net.TCPListener
-	StopC <-chan struct{}
-}
-
 var defaultSnapshotCount uint64 = 10000
 
 var snapshotCatchUpEntriesN uint64 = 10000
 
-// Accept : accepts connections via stoppableListener
-func (ln StoppableListener) Accept() (c net.Conn, err error) {
-	connC := make(chan *net.TCPConn, 1)
-
-	errC := make(chan error, 1)
-
-	go func() {
-		tc, err := ln.AcceptTCP()
-
-		if err != nil {
-			errC <- err
-			return
-		}
-
-		connC <- tc
-	}()
-
-	select {
-	case <-ln.StopC:
-		return nil, errors.New("server stopped")
-	case err := <-errC:
-		return nil, err
-	case tc := <-connC:
-		tc.SetKeepAlive(true)
-		tc.SetKeepAlivePeriod(3 * time.Minute)
-		return tc, nil
-	}
-}
-
 // EntriesToApply : compiles entires to apply to raft
-func (rn *RaftNode) EntriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
+func (r *Raft) EntriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	if len(ents) == 0 {
 		return ents
 	}
 
 	firstIdx := ents[0].Index
 
-	if firstIdx > rn.AppliedIndex+1 {
-		log.Fatalf("First index of committed entry[%d] should <= progress.AppliedIndex[%d]+1", firstIdx, rn.AppliedIndex)
+	if firstIdx > r.AppliedIndex+1 {
+		log.Fatalf("First index of committed entry[%d] should <= progress.AppliedIndex[%d]+1", firstIdx, r.AppliedIndex)
 	}
 
-	if rn.AppliedIndex-firstIdx+1 < uint64(len(ents)) {
-		nents = ents[rn.AppliedIndex-firstIdx+1:]
+	if r.AppliedIndex-firstIdx+1 < uint64(len(ents)) {
+		nents = ents[r.AppliedIndex-firstIdx+1:]
 	}
 
 	return nents
 }
 
 // IsIDRemoved : determines if the members ID has been removed
-func (rn *RaftNode) IsIDRemoved(id uint64) bool { return false }
+func (r *Raft) IsIDRemoved(id uint64) bool { return false }
 
 // LoadSnapshot : loads snapshot from directory
-func (rn *RaftNode) LoadSnapshot() *raftpb.Snapshot {
-	snapshot, err := rn.Snapshotter.Load()
+func (r *Raft) LoadSnapshot() *raftpb.Snapshot {
+	snapshot, err := r.Snapshotter.Load()
 
 	if err != nil && err != snap.ErrNoSnapshot {
 		log.Fatalf("Error loading snapshot (%v)", err)
@@ -127,53 +92,53 @@ func (rn *RaftNode) LoadSnapshot() *raftpb.Snapshot {
 }
 
 // MaybeTriggerSnapshot : see if should trigger snapshot change
-func (rn *RaftNode) MaybeTriggerSnapshot() {
-	if rn.AppliedIndex-rn.SnapshotIndex <= rn.SnapCount {
+func (r *Raft) MaybeTriggerSnapshot() {
+	if r.AppliedIndex-r.SnapshotIndex <= r.SnapCount {
 		return
 	}
 
-	log.Printf("Start snapshot [applied index: %d | last snapshot index: %d]", rn.AppliedIndex, rn.SnapshotIndex)
+	log.Printf("Start snapshot [applied index: %d | last snapshot index: %d]", r.AppliedIndex, r.SnapshotIndex)
 
-	data, err := rn.GetSnapshot()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	snap, err := rn.RaftStorage.CreateSnapshot(rn.AppliedIndex, &rn.ConfState, data)
+	data, err := r.GetSnapshot()
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := rn.SaveSnap(snap); err != nil {
+	snap, err := r.RaftStorage.CreateSnapshot(r.AppliedIndex, &r.ConfState, data)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := r.SaveSnap(snap); err != nil {
 		log.Fatal(err)
 	}
 
 	compactIndex := uint64(1)
 
-	if rn.AppliedIndex > snapshotCatchUpEntriesN {
-		compactIndex = rn.AppliedIndex - snapshotCatchUpEntriesN
+	if r.AppliedIndex > snapshotCatchUpEntriesN {
+		compactIndex = r.AppliedIndex - snapshotCatchUpEntriesN
 	}
 
-	if err := rn.RaftStorage.Compact(compactIndex); err != nil {
+	if err := r.RaftStorage.Compact(compactIndex); err != nil {
 		log.Fatal(err)
 	}
 
 	log.Printf("Compacted log at index %d", compactIndex)
 
-	rn.SnapshotIndex = rn.AppliedIndex
+	r.SnapshotIndex = r.AppliedIndex
 }
 
 // OpenWAL : opens write access log
-func (rn *RaftNode) OpenWAL(snapshot *raftpb.Snapshot) *wal.WAL {
-	if !wal.Exist(rn.WalDir) {
+func (r *Raft) OpenWAL(snapshot *raftpb.Snapshot) *wal.WAL {
+	if !wal.Exist(r.WalDir) {
 
-		if err := os.Mkdir(rn.WalDir, 0750); err != nil {
+		if err := os.Mkdir(r.WalDir, 0750); err != nil {
 			log.Fatalf("Cannot create dir for wal (%v)", err)
 		}
 
-		w, err := wal.Create(zap.NewExample(), rn.WalDir, nil)
+		w, err := wal.Create(zap.NewExample(), r.WalDir, nil)
 
 		if err != nil {
 			log.Fatalf("Create wal error (%v)", err)
@@ -190,7 +155,7 @@ func (rn *RaftNode) OpenWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 
 	log.Printf("Loading WAL at term %d and index %d", walSnap.Term, walSnap.Index)
 
-	w, err := wal.Open(zap.NewExample(), rn.WalDir, walSnap)
+	w, err := wal.Open(zap.NewExample(), r.WalDir, walSnap)
 
 	if err != nil {
 		log.Fatalf("Error loading wal (%v)", err)
@@ -201,7 +166,7 @@ func (rn *RaftNode) OpenWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 
 // PublishEntries : writes committed log entries to commit channel and returns
 // whether all entries could be published.
-func (rn *RaftNode) PublishEntries(ents []raftpb.Entry) bool {
+func (r *Raft) PublishEntries(ents []raftpb.Entry) bool {
 	for i := range ents {
 		switch ents[i].Type {
 		case raftpb.EntryNormal:
@@ -213,8 +178,8 @@ func (rn *RaftNode) PublishEntries(ents []raftpb.Entry) bool {
 			s := string(ents[i].Data)
 
 			select {
-			case rn.CommitC <- &s:
-			case <-rn.StopC:
+			case r.CommitC <- &s:
+			case <-r.StopC:
 				return false
 			}
 		case raftpb.EntryConfChange:
@@ -224,44 +189,32 @@ func (rn *RaftNode) PublishEntries(ents []raftpb.Entry) bool {
 				log.Fatal(err)
 			}
 
-			rn.ConfState = *rn.Node.ApplyConfChange(cc)
+			r.ConfState = *r.Node.ApplyConfChange(cc)
 
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
-				if cc.NodeID != uint64(rn.ID) && len(cc.Context) > 0 {
-					rn.Transport.AddPeer(types.ID(cc.NodeID), []string{string(cc.Context)})
+				if cc.NodeID != uint64(r.ID) && len(cc.Context) > 0 {
+					r.Transport.AddPeer(types.ID(cc.NodeID), []string{string(cc.Context)})
 				}
 			case raftpb.ConfChangeRemoveNode:
-				if cc.NodeID == uint64(rn.ID) {
+				if cc.NodeID == uint64(r.ID) {
 					log.Println("I've been removed from the cluster! Shutting down.")
-
-					rmSnap := os.RemoveAll(rn.SnapshotterDir)
-
-					if rmSnap != nil {
-						log.Fatal(rmSnap)
-					}
-
-					rmWal := os.RemoveAll(rn.WalDir)
-
-					if rmWal != nil {
-						log.Fatal(rmWal)
-					}
 
 					return false
 				}
 
-				rn.Transport.RemovePeer(types.ID(cc.NodeID))
+				r.Transport.RemovePeer(types.ID(cc.NodeID))
 			}
 		}
 
 		// after commit, update appliedIndex
-		rn.AppliedIndex = ents[i].Index
+		r.AppliedIndex = ents[i].Index
 
 		// special nil commit to signal replay has finished
-		if ents[i].Index == rn.LastIndex {
+		if ents[i].Index == r.LastIndex {
 			select {
-			case rn.CommitC <- nil:
-			case <-rn.StopC:
+			case r.CommitC <- nil:
+			case <-r.StopC:
 				return false
 			}
 		}
@@ -271,35 +224,35 @@ func (rn *RaftNode) PublishEntries(ents []raftpb.Entry) bool {
 }
 
 // PublishSnapshot : handles publishing the snapshot to the KvStore
-func (rn *RaftNode) PublishSnapshot(snapshotToSave raftpb.Snapshot) {
+func (r *Raft) PublishSnapshot(snapshotToSave raftpb.Snapshot) {
 	if raft.IsEmptySnap(snapshotToSave) {
 		return
 	}
 
-	log.Printf("Publishing snapshot at index %d", rn.SnapshotIndex)
+	log.Printf("Publishing snapshot at index %d", r.SnapshotIndex)
 
-	defer log.Printf("Finished publishing snapshot at index %d", rn.SnapshotIndex)
+	defer log.Printf("Finished publishing snapshot at index %d", r.SnapshotIndex)
 
-	if snapshotToSave.Metadata.Index <= rn.AppliedIndex {
-		log.Fatalf("Snapshot index [%d] should > progress.AppliedIndex [%d]", snapshotToSave.Metadata.Index, rn.AppliedIndex)
+	if snapshotToSave.Metadata.Index <= r.AppliedIndex {
+		log.Fatalf("Snapshot index [%d] should > progress.AppliedIndex [%d]", snapshotToSave.Metadata.Index, r.AppliedIndex)
 	}
 
-	rn.CommitC <- nil
+	r.CommitC <- nil
 
-	rn.AppliedIndex = snapshotToSave.Metadata.Index
+	r.AppliedIndex = snapshotToSave.Metadata.Index
 
-	rn.ConfState = snapshotToSave.Metadata.ConfState
+	r.ConfState = snapshotToSave.Metadata.ConfState
 
-	rn.SnapshotIndex = snapshotToSave.Metadata.Index
+	r.SnapshotIndex = snapshotToSave.Metadata.Index
 }
 
 // ReplayWAL : replays the write access log
-func (rn *RaftNode) ReplayWAL() *wal.WAL {
-	log.Printf("Replaying WAL of member %d", rn.ID)
+func (r *Raft) ReplayWAL() *wal.WAL {
+	log.Printf("Replaying WAL of member %d", r.ID)
 
-	snapshot := rn.LoadSnapshot()
+	snapshot := r.LoadSnapshot()
 
-	w := rn.OpenWAL(snapshot)
+	w := r.OpenWAL(snapshot)
 
 	_, st, ents, err := w.ReadAll()
 
@@ -307,22 +260,22 @@ func (rn *RaftNode) ReplayWAL() *wal.WAL {
 		log.Fatalf("Failed to read WAL (%v)", err)
 	}
 
-	rn.RaftStorage = raft.NewMemoryStorage()
+	r.RaftStorage = raft.NewMemoryStorage()
 
 	if snapshot != nil {
-		rn.RaftStorage.ApplySnapshot(*snapshot)
+		r.RaftStorage.ApplySnapshot(*snapshot)
 	}
 
-	rn.RaftStorage.SetHardState(st)
+	r.RaftStorage.SetHardState(st)
 
 	// append to storage so raft starts at the right place in log
-	rn.RaftStorage.Append(ents)
+	r.RaftStorage.Append(ents)
 
 	// send nil once lastIndex is published so client knows commit channel is current
 	if len(ents) > 0 {
-		rn.LastIndex = ents[len(ents)-1].Index
+		r.LastIndex = ents[len(ents)-1].Index
 	} else {
-		rn.CommitC <- nil
+		r.CommitC <- nil
 	}
 
 	return w
@@ -331,38 +284,38 @@ func (rn *RaftNode) ReplayWAL() *wal.WAL {
 // SaveSnap : must save the snapshot index to the WAL before saving
 // the snapshot to maintain the invariant that we only open the WAL
 // at previously-saved snapshot indexes.
-func (rn *RaftNode) SaveSnap(snap raftpb.Snapshot) error {
+func (r *Raft) SaveSnap(snap raftpb.Snapshot) error {
 	walSnap := walpb.Snapshot{
 		Index: snap.Metadata.Index,
 		Term:  snap.Metadata.Term,
 	}
 
-	if err := rn.Wal.SaveSnapshot(walSnap); err != nil {
+	if err := r.Wal.SaveSnapshot(walSnap); err != nil {
 		return err
 	}
 
-	if err := rn.Snapshotter.SaveSnap(snap); err != nil {
+	if err := r.Snapshotter.SaveSnap(snap); err != nil {
 		return err
 	}
 
-	return rn.Wal.ReleaseLockTo(snap.Metadata.Index)
+	return r.Wal.ReleaseLockTo(snap.Metadata.Index)
 }
 
 // ServeChannels : serves raft channels for changes
-func (rn *RaftNode) ServeChannels() {
-	snap, err := rn.RaftStorage.Snapshot()
+func (r *Raft) ServeChannels() {
+	snap, err := r.RaftStorage.Snapshot()
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	rn.AppliedIndex = snap.Metadata.Index
+	r.AppliedIndex = snap.Metadata.Index
 
-	rn.ConfState = snap.Metadata.ConfState
+	r.ConfState = snap.Metadata.ConfState
 
-	rn.SnapshotIndex = snap.Metadata.Index
+	r.SnapshotIndex = snap.Metadata.Index
 
-	defer rn.Wal.Close()
+	defer r.Wal.Close()
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 
@@ -372,210 +325,260 @@ func (rn *RaftNode) ServeChannels() {
 	go func() {
 		confChangeCount := uint64(0)
 
-		for rn.ProposeC != nil && rn.ConfChangeC != nil {
+		for r.ProposeC != nil && r.ConfChangeC != nil {
 			select {
-			case prop, ok := <-rn.ProposeC:
+			case prop, ok := <-r.ProposeC:
 				if !ok {
-					rn.ProposeC = nil
+					r.ProposeC = nil
 				} else {
 					// blocks until accepted by raft state machine
-					if err := rn.Node.Propose(context.TODO(), []byte(prop)); err != nil {
+					if err := r.Node.Propose(context.TODO(), []byte(prop)); err != nil {
 						log.Fatal(err)
 					}
 				}
-			case cc, ok := <-rn.ConfChangeC:
+			case cc, ok := <-r.ConfChangeC:
 				if !ok {
-					rn.ConfChangeC = nil
+					r.ConfChangeC = nil
 				} else {
 					confChangeCount++
 
 					cc.ID = confChangeCount
 
-					if err := rn.Node.ProposeConfChange(context.TODO(), cc); err != nil {
+					if err := r.Node.ProposeConfChange(context.TODO(), cc); err != nil {
 						log.Fatal(err)
 					}
 				}
 			}
 		}
 
-		close(rn.StopC)
+		close(r.StopC)
 	}()
 
 	// event loop on raft state machine updates
 	for {
 		select {
 		case <-ticker.C:
-			rn.Node.Tick()
+			r.Node.Tick()
 
 		// store raft entries to wal, then publish over commit channel
-		case rd := <-rn.Node.Ready():
-			err := rn.Wal.Save(rd.HardState, rd.Entries)
+		case rd := <-r.Node.Ready():
+			err := r.Wal.Save(rd.HardState, rd.Entries)
 
 			if err != nil {
 				log.Fatal(err)
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				rn.SaveSnap(rd.Snapshot)
+				r.SaveSnap(rd.Snapshot)
 
-				rn.RaftStorage.ApplySnapshot(rd.Snapshot)
+				r.RaftStorage.ApplySnapshot(rd.Snapshot)
 
-				rn.PublishSnapshot(rd.Snapshot)
+				r.PublishSnapshot(rd.Snapshot)
 			}
 
-			rn.RaftStorage.Append(rd.Entries)
+			r.RaftStorage.Append(rd.Entries)
 
-			rn.Transport.Send(rd.Messages)
+			r.Transport.Send(rd.Messages)
 
-			if ok := rn.PublishEntries(rn.EntriesToApply(rd.CommittedEntries)); !ok {
-				rn.Stop()
+			if ok := r.PublishEntries(r.EntriesToApply(rd.CommittedEntries)); !ok {
+				r.Stop()
 				return
 			}
 
-			rn.MaybeTriggerSnapshot()
+			r.MaybeTriggerSnapshot()
 
-			rn.Node.Advance()
+			r.Node.Advance()
 
-		case err := <-rn.Transport.ErrorC:
-			rn.WriteError(err)
+		case err := <-r.Transport.ErrorC:
+			r.WriteError(err)
 			return
 
-		case <-rn.StopC:
-			rn.Stop()
+		case <-r.StopC:
+			r.Stop()
 			return
 		}
 	}
 }
 
 // ServeRaft : serves the raft
-func (rn *RaftNode) ServeRaft() {
-	ln, err := newStoppableListener(rn.ListenAddr.String(), rn.HTTPStopC)
+func (r *Raft) ServeRaft() {
+	ln, err := newStoppableListener(r.ListenAddr.String(), r.HTTPStopC)
 
 	if err != nil {
 		log.Fatalf("Failed to listen rafthttp (%v)", err)
 	}
 
-	err = (&http.Server{Handler: rn.Transport.Handler()}).Serve(ln)
+	server := &http.Server{Handler: r.Transport.Handler()}
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	server.Serve(ln)
+
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	select {
-	case <-rn.HTTPStopC:
+	case <-r.HTTPStopC:
 	default:
 		log.Fatalf("Failed to serve raft (%v)", err)
 	}
 
-	close(rn.HTTPDoneC)
+	close(r.HTTPDoneC)
 }
 
 // StartRaft : starts the raft
-func (rn *RaftNode) StartRaft() {
-	if !fileutil.Exist(rn.SnapshotterDir) {
-		if err := os.Mkdir(rn.SnapshotterDir, 0750); err != nil {
+func (r *Raft) StartRaft() {
+	if !fileutil.Exist(r.SnapshotterDir) {
+		if err := os.Mkdir(r.SnapshotterDir, 0750); err != nil {
 			log.Fatalf("Cannot create dir for snapshot (%v)", err)
 		}
 	}
 
-	rn.Snapshotter = snap.New(zap.NewExample(), rn.SnapshotterDir)
+	r.Snapshotter = snap.New(zap.NewExample(), r.SnapshotterDir)
 
-	rn.SnapshotterReady <- rn.Snapshotter
+	r.SnapshotterReady <- r.Snapshotter
 
-	oldwal := walExists(rn.WalDir)
+	oldwal := walExists(r.WalDir)
 
-	rn.Wal = rn.ReplayWAL()
+	r.Wal = r.ReplayWAL()
 
-	rpeers := make([]raft.Peer, len(rn.Members))
+	var peers []raft.Peer
 
-	for i := range rpeers {
-		rpeers[i] = raft.Peer{ID: rn.Members[i].ID, Context: []byte(rn.Members[i].Addr)}
+	membersLength := len(r.Members)
+
+	peers = make([]raft.Peer, membersLength)
+
+	for i := range peers {
+		peers[i] = raft.Peer{
+			ID:      r.Members[i].Id,
+			Context: []byte(r.Members[i].Addr),
+		}
 	}
 
 	c := &raft.Config{
-		ID:              rn.ID,
+		ID:              r.ID,
 		ElectionTick:    10,
 		HeartbeatTick:   1,
-		Storage:         rn.RaftStorage,
+		Storage:         r.RaftStorage,
 		MaxSizePerMsg:   4096,
 		MaxInflightMsgs: 256,
 	}
 
-	if oldwal || rn.Join {
-		rn.Node = raft.RestartNode(c)
+	if oldwal || r.Join {
+		r.Node = raft.RestartNode(c)
 	} else {
-		rn.Node = raft.StartNode(c, rpeers)
+		r.Node = raft.StartNode(c, peers)
 	}
 
-	rn.Transport = &rafthttp.Transport{
+	r.Transport = &rafthttp.Transport{
 		Logger:      zap.NewExample(),
-		ID:          types.ID(rn.ID),
+		ID:          types.ID(r.ID),
 		ClusterID:   0x1000,
-		Raft:        rn,
+		Raft:        r,
 		ServerStats: stats.NewServerStats("", ""),
-		LeaderStats: stats.NewLeaderStats(strconv.Itoa(int(rn.ID))),
+		LeaderStats: stats.NewLeaderStats(strconv.Itoa(int(r.ID))),
 		ErrorC:      make(chan error),
 	}
 
-	rn.Transport.Start()
+	r.Transport.Start()
 
-	for i, m := range rn.Members {
-		if rn.ID != m.ID {
-			rn.Transport.AddPeer(types.ID(m.ID), []string{rn.Members[i].Addr})
+	for i, m := range r.Members {
+		if r.ID != m.Id {
+			r.Transport.AddPeer(types.ID(m.Id), []string{r.Members[i].Addr})
 		}
 	}
 
-	go rn.ServeRaft()
+	go r.ServeRaft()
 
-	go rn.ServeChannels()
+	go r.ServeChannels()
 }
 
 // Stop : closes http, closes all channels, and stops raft.
-func (rn *RaftNode) Stop() {
-	rn.StopHTTP()
+func (r *Raft) Stop() {
+	r.StopHTTP()
 
-	close(rn.CommitC)
+	close(r.CommitC)
 
-	close(rn.ErrorC)
+	close(r.ErrorC)
 
-	rn.Node.Stop()
+	r.Node.Stop()
 }
 
 // StopHTTP : closes http
-func (rn *RaftNode) StopHTTP() {
-	rn.Transport.Stop()
+func (r *Raft) StopHTTP() {
+	r.Transport.Stop()
 
-	close(rn.HTTPStopC)
+	close(r.HTTPStopC)
 
-	<-rn.HTTPDoneC
+	<-r.HTTPDoneC
 }
 
 // Process : processes member messages
-func (rn *RaftNode) Process(ctx context.Context, message raftpb.Message) error {
-	return rn.Node.Step(ctx, message)
+func (r *Raft) Process(ctx context.Context, message raftpb.Message) error {
+	return r.Node.Step(ctx, message)
 }
 
 // ReportUnreachable : determines if the member is unreachable
-func (rn *RaftNode) ReportUnreachable(id uint64) {}
+func (r *Raft) ReportUnreachable(id uint64) {}
 
 // ReportSnapshot : reports snapshot status
-func (rn *RaftNode) ReportSnapshot(id uint64, status raft.SnapshotStatus) {}
+func (r *Raft) ReportSnapshot(id uint64, status raft.SnapshotStatus) {}
 
 // WriteError : writes error to all listeners
-func (rn *RaftNode) WriteError(err error) {
-	rn.StopHTTP()
+func (r *Raft) WriteError(err error) {
+	r.StopHTTP()
 
-	close(rn.CommitC)
+	close(r.CommitC)
 
-	rn.ErrorC <- err
+	r.ErrorC <- err
 
-	close(rn.ErrorC)
+	close(r.ErrorC)
 
-	rn.Node.Stop()
+	r.Node.Stop()
+}
+
+// HTTPStopCHandler : handles leaving gossip protocol on raft leave
+func (r *Raft) HTTPStopCHandler(configDir string, httpStopC chan struct{}, list *memberlist.Memberlist) {
+	<-httpStopC
+
+	// TODO : Need to properly close listener to prevent sigfault on restart of raft
+
+	leaveErr := list.Leave(time.Second)
+
+	if leaveErr != nil {
+		log.Print(leaveErr)
+	}
+
+	shutdownErr := list.Shutdown()
+
+	if shutdownErr != nil {
+		log.Print(shutdownErr)
+	}
+
+	rmWal := os.RemoveAll(r.WalDir)
+
+	if rmWal != nil {
+		log.Fatal(rmWal)
+	}
+
+	rmSnap := os.RemoveAll(r.SnapshotterDir)
+
+	if rmSnap != nil {
+		log.Fatal(rmSnap)
+	}
+
+	rmKeyPath := fmt.Sprintf("%s/key.json", configDir)
+
+	rmKey := os.RemoveAll(rmKeyPath)
+
+	if rmKey != nil {
+		log.Fatal(rmKey)
+	}
+
+	log.Print("Successfully left gossip and raft protocols")
 }
 
 // NewRaft : returns a new key-value store and raft node
-func NewRaft(flags *config.Flags, join bool, members []*api.Member, nodeID uint64) (*RaftNode, *RaftState, error) {
+func NewRaft(flags *config.Flags, httpStopC chan struct{}, join bool, members []*api.RaftMember, nodeID uint64) (*Raft, *State, error) {
 	commitC := make(chan *string)
 
 	confChangeC := make(chan raftpb.ConfChange)
@@ -584,28 +587,15 @@ func NewRaft(flags *config.Flags, join bool, members []*api.Member, nodeID uint6
 
 	proposeC := make(chan string)
 
-	var state *RaftState
+	var state *State
 
-	node, err := NewRaftNode(commitC, confChangeC, errorC, flags, join, members, nodeID, proposeC, state)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	state = NewRaftState(commitC, errorC, node, proposeC, <-node.SnapshotterReady)
-
-	return node, state, nil
-}
-
-// NewRaftNode : creates a new raft member
-func NewRaftNode(commitC chan<- *string, confChangeC chan raftpb.ConfChange, errorC chan error, flags *config.Flags, join bool, members []*api.Member, nodeID uint64, proposeC <-chan string, state *RaftState) (*RaftNode, error) {
 	getSnapshot := func() ([]byte, error) { return state.GetSnapshot() }
 
 	log.Print(nodeID)
 
 	log.Print(members)
 
-	member := &RaftNode{
+	node := &Raft{
 		CommitC:          commitC,
 		ConfChangeC:      confChangeC,
 		ErrorC:           errorC,
@@ -615,7 +605,7 @@ func NewRaftNode(commitC chan<- *string, confChangeC chan raftpb.ConfChange, err
 		Members:          members,
 		GetSnapshot:      getSnapshot,
 		HTTPDoneC:        make(chan struct{}),
-		HTTPStopC:        make(chan struct{}),
+		HTTPStopC:        httpStopC,
 		SnapshotterDir:   fmt.Sprintf("%s/node-%d-snapshot", flags.ConfigDir, nodeID),
 		SnapshotterReady: make(chan *snap.Snapshotter, 1),
 		SnapCount:        defaultSnapshotCount,
@@ -624,7 +614,9 @@ func NewRaftNode(commitC chan<- *string, confChangeC chan raftpb.ConfChange, err
 		WalDir:           fmt.Sprintf("%s/node-%d", flags.ConfigDir, nodeID),
 	}
 
-	go member.StartRaft()
+	go node.StartRaft()
 
-	return member, nil
+	state = NewState(commitC, errorC, proposeC, <-node.SnapshotterReady)
+
+	return node, state, nil
 }

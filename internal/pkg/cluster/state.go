@@ -10,8 +10,8 @@ import (
 	"go.etcd.io/etcd/etcdserver/api/snap"
 )
 
-// RaftState : raft cluster state
-type RaftState struct {
+// State : raft cluster state
+type State struct {
 	Mutex       sync.RWMutex
 	ProposeC    chan<- string // channel for proposing updates
 	Snapshotter *snap.Snapshotter
@@ -25,7 +25,7 @@ type KeyVal struct {
 }
 
 // GetSnapshot : gets the snapshot of a store
-func (s *RaftState) GetSnapshot() ([]byte, error) {
+func (s *State) GetSnapshot() ([]byte, error) {
 	s.Mutex.RLock()
 
 	defer s.Mutex.RUnlock()
@@ -34,7 +34,7 @@ func (s *RaftState) GetSnapshot() ([]byte, error) {
 }
 
 // Lookup : lookup key-value in store
-func (s *RaftState) Lookup(key string) (string, bool) {
+func (s *State) Lookup(key string) (string, bool) {
 	s.Mutex.RLock()
 
 	defer s.Mutex.RUnlock()
@@ -45,7 +45,7 @@ func (s *RaftState) Lookup(key string) (string, bool) {
 }
 
 // Propose : proposes changes to the state
-func (s *RaftState) Propose(k string, v string) {
+func (s *State) Propose(k string, v string) {
 	var buf bytes.Buffer
 
 	if err := gob.NewEncoder(&buf).Encode(&KeyVal{k, v}); err != nil {
@@ -56,7 +56,7 @@ func (s *RaftState) Propose(k string, v string) {
 }
 
 // ReadCommits : read commits in the commit channel
-func (s *RaftState) ReadCommits(commitC <-chan *string, errorC <-chan error) {
+func (s *State) ReadCommits(commitC <-chan *string, errorC <-chan error) {
 	for data := range commitC {
 
 		if data == nil {
@@ -106,7 +106,7 @@ func (s *RaftState) ReadCommits(commitC <-chan *string, errorC <-chan error) {
 }
 
 // RecoverFromSnapshot : unmarshals data from snapshot
-func (s *RaftState) RecoverFromSnapshot(snapshot []byte) error {
+func (s *State) RecoverFromSnapshot(snapshot []byte) error {
 	var store map[string]string
 
 	if err := json.Unmarshal(snapshot, &store); err != nil {
@@ -122,9 +122,9 @@ func (s *RaftState) RecoverFromSnapshot(snapshot []byte) error {
 	return nil
 }
 
-// NewRaftState : creates a new store for the raft
-func NewRaftState(commitC <-chan *string, errorC <-chan error, node *RaftNode, proposeC chan<- string, snapshotter *snap.Snapshotter) *RaftState {
-	store := &RaftState{
+// NewState : creates a new store for the raft
+func NewState(commitC <-chan *string, errorC <-chan error, proposeC chan<- string, snapshotter *snap.Snapshotter) *State {
+	store := &State{
 		Snapshotter: snapshotter,
 		Store:       make(map[string]string),
 		ProposeC:    proposeC,

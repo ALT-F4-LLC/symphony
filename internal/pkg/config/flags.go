@@ -16,26 +16,43 @@ import (
 // Flags : command line flags for service
 type Flags struct {
 	ConfigDir        string
-	JoinAddr         *net.TCPAddr
-	Peers            []string
+	ListenGossipAddr *net.TCPAddr
 	ListenRaftAddr   *net.TCPAddr
 	ListenRemoteAddr *net.TCPAddr
 }
 
 var (
 	configDir        = kingpin.Flag("config-dir", "Sets configuration directory for manager.").Default(".").String()
-	joinAddr         = kingpin.Flag("join-addr", "Sets existing Raft remote manager address to join.").String()
-	peersList        = kingpin.Flag("peers", "Sets the initial custer size (minimum of 2 other nodes required).").String()
-	listenRaftAddr   = kingpin.Flag("listen-raft-addr", "Sets the raft address.").String()
-	listenRemoteAddr = kingpin.Flag("listen-remote-addr", "Sets the remote API address.").String()
+	listenGossipPort = kingpin.Flag("listen-gossip-port", "Sets the gossip listener port.").Int()
+	listenRaftPort   = kingpin.Flag("listen-raft-port", "Sets the raft listener port.").Int()
+	listenRemotePort = kingpin.Flag("listen-remote-port", "Sets the remote gRPC listener port.").Int()
 )
+
+// GetListenAddr : returns the TCP listen addr
+func GetListenAddr(defaultPort int, ip net.IP, overridePort *int) (*net.TCPAddr, error) {
+	if *overridePort != 0 {
+		defaultPort = *overridePort
+	}
+
+	listenAddr := fmt.Sprintf("%s:%d", ip.String(), defaultPort)
+
+	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return listenTCPAddr, nil
+}
 
 // GetOutboundIP : get preferred outbound ip of this machine
 func GetOutboundIP() net.IP {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
+	conn, err := net.Dial("udp", "1.1.1.1:80")
+
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	defer conn.Close()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
@@ -76,74 +93,35 @@ func GetFlags() (*Flags, error) {
 		ConfigDir: configPath,
 	}
 
-	if *joinAddr != "" {
-		join, err := net.ResolveTCPAddr("tcp", *joinAddr)
+	ip := GetOutboundIP()
 
-		if err != nil {
-			return nil, err
-		}
+	listenGossipAddr, err := GetListenAddr(7946, ip, listenGossipPort)
 
-		nodeFlags.JoinAddr = join
+	if err != nil {
+		return nil, err
 	}
 
-	if *listenRaftAddr != "" {
-		addr, err := net.ResolveTCPAddr("tcp", *listenRaftAddr)
+	nodeFlags.ListenGossipAddr = listenGossipAddr
 
-		if err != nil {
-			return nil, err
-		}
+	listenRaftAddr, err := GetListenAddr(15760, ip, listenRaftPort)
 
-		nodeFlags.ListenRaftAddr = addr
-	} else {
-		ip := GetOutboundIP()
-
-		tcpAddr := fmt.Sprintf("%s:15760", ip.String())
-
-		addr, err := net.ResolveTCPAddr("tcp", tcpAddr)
-
-		if err != nil {
-			return nil, err
-		}
-
-		nodeFlags.ListenRaftAddr = addr
+	if err != nil {
+		return nil, err
 	}
 
-	if *listenRemoteAddr != "" {
-		addr, err := net.ResolveTCPAddr("tcp", *listenRemoteAddr)
+	nodeFlags.ListenRaftAddr = listenRaftAddr
 
-		if err != nil {
-			return nil, err
-		}
+	listenRemoteAddr, err := GetListenAddr(27242, ip, listenRemotePort)
 
-		nodeFlags.ListenRemoteAddr = addr
-	} else {
-		ip := GetOutboundIP()
-
-		tcpAddr := fmt.Sprintf("%s:27242", ip.String())
-
-		addr, err := net.ResolveTCPAddr("tcp", tcpAddr)
-
-		if err != nil {
-			return nil, err
-		}
-
-		nodeFlags.ListenRemoteAddr = addr
+	if err != nil {
+		return nil, err
 	}
 
-	if peersList != nil {
-		peers, err := GetPeersFromString(peersList)
-
-		if err != nil {
-			return nil, err
-		}
-
-		nodeFlags.Peers = peers
-	}
+	nodeFlags.ListenRemoteAddr = listenRemoteAddr
 
 	fields := logrus.Fields{
 		"ConfigDir":        nodeFlags.ConfigDir,
-		"JoinAddr":         nodeFlags.JoinAddr.String(),
-		"Peers":            nodeFlags.Peers,
+		"ListenGossipAddr": nodeFlags.ListenGossipAddr.String(),
 		"ListenRaftAddr":   nodeFlags.ListenRaftAddr.String(),
 		"ListenRemoteAddr": nodeFlags.ListenRemoteAddr.String(),
 	}

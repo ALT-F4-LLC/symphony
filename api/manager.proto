@@ -2,54 +2,36 @@ syntax = "proto3";
 
 package api;
 
+import "api/cluster.proto";
 import "api/raft.proto";
 
 service ManagerControl {
-  rpc Get(ManagerControlGetReq) returns (ManagerControlGetRes) {}
-  rpc Init(ManagerControlInitReq) returns (ManagerControlInitRes) {}
-  rpc Join(ManagerControlJoinReq) returns (ManagerControlJoinRes) {}
-  rpc Remove(ManagerControlRemoveReq) returns (ManagerControlRemoveRes) {}
-  rpc Set(ManagerControlSetReq) returns (ManagerControlSetRes) {}
+  rpc Init(ManagerControlInitRequest) returns (ManagerControlInitResponse) {}
+  rpc Join(ManagerControlJoinRequest) returns (ManagerControlJoinResponse) {}
+  rpc Remove(ManagerControlRemoveRequest)
+      returns (ManagerControlRemoveResponse) {}
 }
 
 service ManagerRemote {
-  rpc Init(ManagerRemoteInitReq) returns (ManagerRemoteInitRes) {}
-  rpc Join(ManagerRemoteJoinReq) returns (ManagerRemoteJoinRes) {}
-  rpc Remove(ManagerRemoteRemoveReq) returns (ManagerRemoteRemoveRes) {}
+  rpc Join(ManagerRemoteJoinRequest) returns (ManagerRemoteJoinResponse) {}
 }
 
-message ManagerControlGetReq { string key = 1; }
-message ManagerControlGetRes { string value = 1; }
+message ManagerControlInitRequest {}
+message ManagerControlInitResponse {}
 
-message ManagerControlInitReq {
-  string join_addr = 1;
-  repeated Member members = 2;
+message ManagerControlJoinRequest { string join_addr = 1; }
+message ManagerControlJoinResponse {}
+
+message ManagerRemoteJoinRequest {
+  string addr = 1;
+  Role role = 2;
 }
-message ManagerControlInitRes {}
-
-message ManagerControlJoinReq { string join_addr = 1; }
-message ManagerControlJoinRes {}
-
-message ManagerControlRemoveReq { uint64 member_id = 1; }
-message ManagerControlRemoveRes {}
-
-message ManagerControlSetReq {
-  string key = 1;
-  string value = 2;
-}
-message ManagerControlSetRes { string value = 1; }
-
-message ManagerRemoteInitReq { string addr = 1; }
-message ManagerRemoteInitRes {
-  uint64 member_id = 1;
-  repeated Member members = 2;
+message ManagerRemoteJoinResponse {
+  string gossip_addr = 1;
+  string gossip_id = 2;
+  uint64 raft_id = 3;
+  repeated RaftMember raft_members = 4;
 }
 
-message ManagerRemoteJoinReq { string addr = 1; }
-message ManagerRemoteJoinRes {
-  uint64 member_id = 1;
-  repeated Member members = 2;
-}
-
-message ManagerRemoteRemoveReq { uint64 member_id = 1; }
-message ManagerRemoteRemoveRes {}
+message ManagerControlRemoveRequest { uint64 raft_id = 1; }
+message ManagerControlRemoveResponse {}
