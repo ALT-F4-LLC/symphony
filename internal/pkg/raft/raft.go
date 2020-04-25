@@ -1,4 +1,4 @@
-package cluster
+package raft
 
 import (
 	"context"
@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/config"
-	"github.com/hashicorp/memberlist"
 	"go.etcd.io/etcd/etcdserver/api/rafthttp"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
@@ -24,6 +22,16 @@ import (
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
 )
+
+// Config : configuration for new raft
+type Config struct {
+	ConfigDir  string
+	HTTPStopC  chan struct{}
+	Join       bool
+	ListenAddr *net.TCPAddr
+	Members    []*api.RaftMember
+	NodeID     uint64
+}
 
 // Raft : creates a new raft struct
 type Raft struct {
@@ -537,22 +545,10 @@ func (r *Raft) WriteError(err error) {
 }
 
 // HTTPStopCHandler : handles leaving gossip protocol on raft leave
-func (r *Raft) HTTPStopCHandler(configDir string, httpStopC chan struct{}, list *memberlist.Memberlist) {
+func (r *Raft) HTTPStopCHandler(configDir string, httpStopC chan struct{}) {
 	<-httpStopC
 
 	// TODO : Need to properly close listener to prevent sigfault on restart of raft
-
-	leaveErr := list.Leave(time.Second)
-
-	if leaveErr != nil {
-		log.Print(leaveErr)
-	}
-
-	shutdownErr := list.Shutdown()
-
-	if shutdownErr != nil {
-		log.Print(shutdownErr)
-	}
 
 	rmWal := os.RemoveAll(r.WalDir)
 
@@ -577,8 +573,8 @@ func (r *Raft) HTTPStopCHandler(configDir string, httpStopC chan struct{}, list 
 	log.Print("Successfully left gossip and raft protocols")
 }
 
-// NewRaft : returns a new key-value store and raft node
-func NewRaft(flags *config.Flags, httpStopC chan struct{}, join bool, members []*api.RaftMember, nodeID uint64) (*Raft, *State, error) {
+// New : returns a new key-value store and raft node
+func New(config Config) (*Raft, *State, error) {
 	commitC := make(chan *string)
 
 	confChangeC := make(chan raftpb.ConfChange)
@@ -591,27 +587,27 @@ func NewRaft(flags *config.Flags, httpStopC chan struct{}, join bool, members []
 
 	getSnapshot := func() ([]byte, error) { return state.GetSnapshot() }
 
-	log.Print(nodeID)
+	log.Print(config.NodeID)
 
-	log.Print(members)
+	log.Print(config.Members)
 
 	node := &Raft{
 		CommitC:          commitC,
 		ConfChangeC:      confChangeC,
 		ErrorC:           errorC,
-		ID:               nodeID,
-		Join:             join,
-		ListenAddr:       flags.ListenRaftAddr,
-		Members:          members,
+		ID:               config.NodeID,
+		Join:             config.Join,
+		ListenAddr:       config.ListenAddr,
+		Members:          config.Members,
 		GetSnapshot:      getSnapshot,
 		HTTPDoneC:        make(chan struct{}),
-		HTTPStopC:        httpStopC,
-		SnapshotterDir:   fmt.Sprintf("%s/node-%d-snapshot", flags.ConfigDir, nodeID),
+		HTTPStopC:        config.HTTPStopC,
+		SnapshotterDir:   fmt.Sprintf("%s/node-%d-snapshot", config.ConfigDir, config.NodeID),
 		SnapshotterReady: make(chan *snap.Snapshotter, 1),
 		SnapCount:        defaultSnapshotCount,
 		StopC:            make(chan struct{}),
 		ProposeC:         proposeC,
-		WalDir:           fmt.Sprintf("%s/node-%d", flags.ConfigDir, nodeID),
+		WalDir:           fmt.Sprintf("%s/node-%d", config.ConfigDir, config.NodeID),
 	}
 
 	go node.StartRaft()

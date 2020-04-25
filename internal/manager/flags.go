@@ -1,13 +1,11 @@
-package config
+package manager
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -16,14 +14,12 @@ import (
 // Flags : command line flags for service
 type Flags struct {
 	ConfigDir        string
-	ListenGossipAddr *net.TCPAddr
 	ListenRaftAddr   *net.TCPAddr
 	ListenRemoteAddr *net.TCPAddr
 }
 
 var (
 	configDir        = kingpin.Flag("config-dir", "Sets configuration directory for manager.").Default(".").String()
-	listenGossipPort = kingpin.Flag("listen-gossip-port", "Sets the gossip listener port.").Int()
 	listenRaftPort   = kingpin.Flag("listen-raft-port", "Sets the raft listener port.").Int()
 	listenRemotePort = kingpin.Flag("listen-remote-port", "Sets the remote gRPC listener port.").Int()
 )
@@ -60,17 +56,6 @@ func GetOutboundIP() net.IP {
 	return localAddr.IP
 }
 
-// GetPeersFromString : parses a peers list to generate an array
-func GetPeersFromString(list *string) ([]string, error) {
-	peers := strings.Split(*list, ",")
-
-	if len(peers) < 1 {
-		return nil, errors.New("--peers list requires minimum 2 other peers")
-	}
-
-	return nil, nil
-}
-
 // GetFlags : gets struct of flags from command line
 func GetFlags() (*Flags, error) {
 	kingpin.Parse()
@@ -89,19 +74,11 @@ func GetFlags() (*Flags, error) {
 		}
 	}
 
-	nodeFlags := &Flags{
+	flags := &Flags{
 		ConfigDir: configPath,
 	}
 
 	ip := GetOutboundIP()
-
-	listenGossipAddr, err := GetListenAddr(7946, ip, listenGossipPort)
-
-	if err != nil {
-		return nil, err
-	}
-
-	nodeFlags.ListenGossipAddr = listenGossipAddr
 
 	listenRaftAddr, err := GetListenAddr(15760, ip, listenRaftPort)
 
@@ -109,7 +86,7 @@ func GetFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	nodeFlags.ListenRaftAddr = listenRaftAddr
+	flags.ListenRaftAddr = listenRaftAddr
 
 	listenRemoteAddr, err := GetListenAddr(27242, ip, listenRemotePort)
 
@@ -117,16 +94,15 @@ func GetFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	nodeFlags.ListenRemoteAddr = listenRemoteAddr
+	flags.ListenRemoteAddr = listenRemoteAddr
 
 	fields := logrus.Fields{
-		"ConfigDir":        nodeFlags.ConfigDir,
-		"ListenGossipAddr": nodeFlags.ListenGossipAddr.String(),
-		"ListenRaftAddr":   nodeFlags.ListenRaftAddr.String(),
-		"ListenRemoteAddr": nodeFlags.ListenRemoteAddr.String(),
+		"ConfigDir":        flags.ConfigDir,
+		"ListenRaftAddr":   flags.ListenRaftAddr.String(),
+		"ListenRemoteAddr": flags.ListenRemoteAddr.String(),
 	}
 
 	logrus.WithFields(fields).Info("Loaded command-line flags")
 
-	return nodeFlags, nil
+	return flags, nil
 }
