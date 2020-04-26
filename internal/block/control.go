@@ -6,73 +6,27 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/cluster"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
-// ControlServer : block socket requests
-type ControlServer struct {
-	Node *cluster.Node
+type controlServer struct {
+	block *Block
 }
 
-// Join : joins a manager to a existing cluster
-func (s *ControlServer) Join(ctx context.Context, in *api.BlockControlJoinReq) (*api.BlockControlJoinRes, error) {
-	joinAddr, err := net.ResolveTCPAddr("tcp", in.JoinAddr)
+func (s *controlServer) Join(ctx context.Context, in *api.BlockControlJoinRequest) (*api.BlockControlJoinResponse, error) {
+	// TODO : Register the block service with the manager
 
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := grpc.Dial(joinAddr.String(), grpc.WithInsecure())
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer conn.Close()
-
-	c := api.NewManagerRemoteClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-	defer cancel()
-
-	addr := fmt.Sprintf("http://%s", s.Node.Flags.ListenRaftAddr.String())
-
-	join, joinErr := c.Join(ctx, &api.ManagerRemoteJoinReq{Addr: addr})
-
-	if joinErr != nil {
-		return nil, joinErr
-	}
-
-	saveErr := s.Node.SaveRaftNodeID(join.MemberId)
-
-	if saveErr != nil {
-		return nil, saveErr
-	}
-
-	raft, state, err := cluster.NewRaft(s.Node.Flags, true, join.Members, join.MemberId)
-
-	if err != nil {
-		return nil, err
-	}
-
-	s.Node.Raft = raft
-
-	s.Node.State = state
-
-	res := &api.BlockControlJoinRes{}
+	res := &api.BlockControlJoinResponse{}
 
 	return res, nil
 }
 
-// StartControlServer : starts manager control server
-func StartControlServer(node *cluster.Node) {
-	socketPath := fmt.Sprintf("%s/control.sock", node.Flags.ConfigDir)
+// ControlServer : starts block control server
+func ControlServer(b *Block) {
+	socketPath := fmt.Sprintf("%s/control.sock", b.Flags.configDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
 		log.Fatal(err)
@@ -86,8 +40,8 @@ func StartControlServer(node *cluster.Node) {
 
 	s := grpc.NewServer()
 
-	cs := &ControlServer{
-		Node: node,
+	cs := &controlServer{
+		block: b,
 	}
 
 	logrus.Info("Started block control gRPC socket server.")

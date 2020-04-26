@@ -51,24 +51,6 @@ $ rm -rf .raft/manager-01 && go run ./cmd/manager --config-dir .raft/manager-01 
 $ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager init
 ```
 
-# Three node cluster
-
-```
-$ rm -rf .raft/manager-01 && go run ./cmd/manager --config-dir .raft/manager-01
-$ rm -rf .raft/manager-02 && go run ./cmd/manager --config-dir .raft/manager-02 \
---listen-raft-port 15761 \
---listen-remote-port 27243
-$ rm -rf .raft/manager-03 && go run ./cmd/manager --config-dir .raft/manager-03 \
---listen-raft-port 15762 \
---listen-remote-port 27244
-```
-
-```
-$ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager init --peers "http://192.168.88.21:15761,http://192.168.88.21:15762"
-$ go run ./cmd/cli --socket ".raft/manager-02/control.sock" manager init --join-addr 127.0.0.1:27242
-$ go run ./cmd/cli --socket ".raft/manager-03/control.sock" manager init --join-addr 127.0.0.1:27242
-```
-
 # Add an additional nodes to the cluster
 
 ```
@@ -86,9 +68,6 @@ $ go run ./cmd/cli --socket ".raft/manager-05/control.sock" manager join 127.0.0
 # Remove a node from the cluster
 
 ```
-$ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager get members
+$ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager members
 $ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager remove <member-id>
 ```
-
-go run ./cmd/cli --socket ".raft/manager-02/control.sock" manager join 192.168.88.21:27242
-go run ./cmd/cli --socket ".raft/manager-03/control.sock" manager join 192.168.88.21:27242

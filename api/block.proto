@@ -3,7 +3,7 @@ syntax = "proto3";
 package api;
 
 service BlockControl {
-  rpc Join(BlockControlJoinReq) returns (BlockControlJoinRes) {}
+  rpc Join(BlockControlJoinRequest) returns (BlockControlJoinResponse) {}
 }
 
 service BlockRemote {
@@ -18,8 +18,8 @@ service BlockRemote {
   rpc RemoveVg(BlockVgFields) returns (RemoveStatus) {}
 }
 
-message BlockControlJoinReq { string join_addr = 1; }
-message BlockControlJoinRes {}
+message BlockControlJoinRequest { string join_addr = 1; }
+message BlockControlJoinResponse {}
 
 message BlockLvFields {
   string ID = 1;

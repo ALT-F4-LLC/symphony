@@ -13,7 +13,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go manager.StartRemoteServer(m)
+	go manager.RemoteServer(m)
 
-	manager.StartControlServer(m)
+	manager.ControlServer(m)
 }

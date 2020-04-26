@@ -1,12 +1,9 @@
 package manager
 
 import (
-	"fmt"
-	"log"
 	"net"
-	"os"
-	"path/filepath"
 
+	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -24,63 +21,23 @@ var (
 	listenRemotePort = kingpin.Flag("listen-remote-port", "Sets the remote gRPC listener port.").Int()
 )
 
-// GetListenAddr : returns the TCP listen addr
-func GetListenAddr(defaultPort int, ip net.IP, overridePort *int) (*net.TCPAddr, error) {
-	if *overridePort != 0 {
-		defaultPort = *overridePort
-	}
+// GetFlags : gets struct of flags from command line
+func GetFlags() (*Flags, error) {
+	kingpin.Parse()
 
-	listenAddr := fmt.Sprintf("%s:%d", ip.String(), defaultPort)
-
-	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddr)
+	configPath, err := config.GetDirPath(configDir)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return listenTCPAddr, nil
-}
-
-// GetOutboundIP : get preferred outbound ip of this machine
-func GetOutboundIP() net.IP {
-	conn, err := net.Dial("udp", "1.1.1.1:80")
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer conn.Close()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-
-	return localAddr.IP
-}
-
-// GetFlags : gets struct of flags from command line
-func GetFlags() (*Flags, error) {
-	kingpin.Parse()
-
-	configPath, err := filepath.Abs(*configDir)
-
-	if err != nil {
-		logrus.Fatal(err)
-	}
-
-	_, statErr := os.Stat(configPath)
-
-	if statErr != nil {
-		if err := os.MkdirAll(configPath, 0750); err != nil {
-			logrus.Fatal(err)
-		}
-	}
-
 	flags := &Flags{
-		ConfigDir: configPath,
+		ConfigDir: *configPath,
 	}
 
-	ip := GetOutboundIP()
+	ip := config.GetOutboundIP()
 
-	listenRaftAddr, err := GetListenAddr(15760, ip, listenRaftPort)
+	listenRaftAddr, err := config.GetListenAddr(15760, ip, listenRaftPort)
 
 	if err != nil {
 		return nil, err
@@ -88,7 +45,7 @@ func GetFlags() (*Flags, error) {
 
 	flags.ListenRaftAddr = listenRaftAddr
 
-	listenRemoteAddr, err := GetListenAddr(27242, ip, listenRemotePort)
+	listenRemoteAddr, err := config.GetListenAddr(27242, ip, listenRemotePort)
 
 	if err != nil {
 		return nil, err

@@ -21,7 +21,7 @@ func BlockJoin(joinAddr *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.BlockControlJoinReq{JoinAddr: *joinAddr}
+	opts := &api.BlockControlJoinRequest{JoinAddr: *joinAddr}
 
 	_, joinErr := c.Join(ctx, opts)
 

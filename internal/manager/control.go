@@ -202,11 +202,13 @@ func (s *controlServer) Remove(ctx context.Context, in *api.ManagerControlRemove
 
 	log.Printf("Removed member from cluster %d", in.RaftId)
 
+	// TODO : Make sure no members or raft data exist on remove
+
 	return res, nil
 }
 
-// StartControlServer : starts manager control server
-func StartControlServer(m *Manager) {
+// ControlServer : starts manager control server
+func ControlServer(m *Manager) {
 	socketPath := fmt.Sprintf("%s/control.sock", m.Flags.ConfigDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
