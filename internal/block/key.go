@@ -1,4 +1,4 @@
-package manager
+package block
 
 import (
 	"encoding/json"
@@ -9,14 +9,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// Key : key used for initialization and authentication of nodes
-type Key struct {
-	RaftID    uint64    `json:"RAFT_ID"`
+// key : key used for initialization and authentication of nodes
+type key struct {
 	ServiceID uuid.UUID `json:"SERVICE_ID"`
 }
 
 // GetKey : gets the node key.json file
-func GetKey(configDir string) (*Key, error) {
+func GetKey(configDir string) (*key, error) {
 	keyPath := fmt.Sprintf("%s/%s", configDir, "key.json")
 
 	keyFile, err := os.OpenFile(keyPath, os.O_RDONLY|os.O_CREATE, 0666)
@@ -33,7 +32,7 @@ func GetKey(configDir string) (*Key, error) {
 		return nil, err
 	}
 
-	var key Key
+	var key key
 
 	if len(data) > 0 {
 		keyErr := json.Unmarshal(data, &key)

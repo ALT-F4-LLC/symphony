@@ -12,6 +12,7 @@ import (
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/raft"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
@@ -22,6 +23,7 @@ type controlServer struct {
 	Manager *Manager
 }
 
+// Init : initializes manager node and raft
 func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequest) (*api.ManagerControlInitResponse, error) {
 	if s.Manager.Raft != nil {
 		return nil, errors.New("invalid_raft_state")
@@ -33,12 +35,12 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 
 	raftID := uint64(1)
 
-	raftLeader := &api.RaftMember{
+	raftMember := &api.RaftMember{
 		Addr: raftAddr,
 		Id:   raftID,
 	}
 
-	raftMembers := []*api.RaftMember{raftLeader}
+	raftMembers := []*api.RaftMember{raftMember}
 
 	raftConfig := raft.Config{
 		ConfigDir:  s.Manager.Flags.ConfigDir,
@@ -59,10 +61,44 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 
 	s.Manager.State = state
 
-	saveErr := s.Manager.SaveRaftNodeID(raftID)
+	raftMembersJSON, err := json.Marshal(raftMembers)
 
-	if saveErr != nil {
+	if err != nil {
 		return nil, err
+	}
+
+	state.Propose("raft:members", string(raftMembersJSON))
+
+	saveRaftIDErr := s.Manager.SaveRaftID(raftID)
+
+	if saveRaftIDErr != nil {
+		return nil, saveRaftIDErr
+	}
+
+	serviceID := uuid.New()
+
+	serviceAddr := fmt.Sprintf("%s", s.Manager.Flags.ListenRemoteAddr.String())
+
+	service := &api.ServiceMember{
+		Id:   serviceID.String(),
+		Addr: serviceAddr,
+		Type: api.ServiceType_MANAGER,
+	}
+
+	serviceMembers := []*api.ServiceMember{service}
+
+	serviceMembersJSON, err := json.Marshal(serviceMembers)
+
+	if err != nil {
+		return nil, err
+	}
+
+	state.Propose("service:members", string(serviceMembersJSON))
+
+	saveServiceIDErr := s.Manager.SaveServiceID(serviceID)
+
+	if saveServiceIDErr != nil {
+		return nil, saveServiceIDErr
 	}
 
 	res := &api.ManagerControlInitResponse{}
@@ -72,14 +108,15 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 	return res, nil
 }
 
+// Join : joins a manager to the cluster
 func (s *controlServer) Join(ctx context.Context, in *api.ManagerControlJoinRequest) (*api.ManagerControlJoinResponse, error) {
-	joinAddr, err := net.ResolveTCPAddr("tcp", in.JoinAddr)
+	remoteAddr, err := net.ResolveTCPAddr("tcp", in.RemoteAddr)
 
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := grpc.Dial(joinAddr.String(), grpc.WithInsecure())
+	conn, err := grpc.Dial(remoteAddr.String(), grpc.WithInsecure())
 
 	if err != nil {
 		return nil, err
@@ -93,34 +130,49 @@ func (s *controlServer) Join(ctx context.Context, in *api.ManagerControlJoinRequ
 
 	defer cancel()
 
-	addr := fmt.Sprintf("http://%s", s.Manager.Flags.ListenRaftAddr.String())
+	serviceAddr := fmt.Sprintf("%s", s.Manager.Flags.ListenRemoteAddr.String())
 
-	opts := &api.ManagerRemoteJoinRequest{
-		Addr: addr,
-		Role: api.Role_MANAGER,
+	serviceJoinOpts := &api.ManagerRemoteJoinRequest{
+		Addr: serviceAddr,
+		Type: api.ServiceType_MANAGER,
 	}
 
-	join, err := c.Join(ctx, opts)
+	serviceJoin, err := c.Join(ctx, serviceJoinOpts)
 
 	if err != nil {
 		return nil, err
 	}
 
-	saveErr := s.Manager.SaveRaftNodeID(join.RaftId)
+	serviceID, err := uuid.Parse(serviceJoin.Id)
 
-	if saveErr != nil {
-		return nil, saveErr
+	if err != nil {
+		return nil, err
+	}
+
+	saveServiceIDErr := s.Manager.SaveServiceID(serviceID)
+
+	if saveServiceIDErr != nil {
+		return nil, saveServiceIDErr
 	}
 
 	httpStopC := make(chan struct{})
+
+	raftAddr := fmt.Sprintf("http://%s", s.Manager.Flags.ListenRaftAddr.String())
+
+	raftJoinOpts := &api.ManagerRemoteJoinRaftRequest{
+		RaftAddr:  raftAddr,
+		ServiceId: serviceJoin.Id,
+	}
+
+	raftJoin, err := c.JoinRaft(ctx, raftJoinOpts)
 
 	raftConfig := raft.Config{
 		ConfigDir:  s.Manager.Flags.ConfigDir,
 		HTTPStopC:  httpStopC,
 		Join:       true,
 		ListenAddr: s.Manager.Flags.ListenRaftAddr,
-		Members:    join.RaftMembers,
-		NodeID:     join.RaftId,
+		Members:    raftJoin.RaftMembers,
+		NodeID:     raftJoin.RaftId,
 	}
 
 	raft, state, err := raft.New(raftConfig)
@@ -129,15 +181,16 @@ func (s *controlServer) Join(ctx context.Context, in *api.ManagerControlJoinRequ
 		return nil, err
 	}
 
-	_, raftMember := GetRaftMemberByID(join.RaftMembers, join.RaftId)
-
-	if raftMember == nil {
-		return nil, api.ProtoError(errors.New("invalid_raft_member"))
-	}
-
 	s.Manager.Raft = raft
 
 	s.Manager.State = state
+
+	saveRaftIDErr := s.Manager.SaveRaftID(raftJoin.RaftId)
+
+	if saveRaftIDErr != nil {
+
+		return nil, saveRaftIDErr
+	}
 
 	res := &api.ManagerControlJoinResponse{}
 
@@ -151,6 +204,12 @@ func (s *controlServer) Members(ctx context.Context, in *api.ManagerControlMembe
 		return nil, errors.New("invalid_raft_state")
 	}
 
+	gossip, err := s.Manager.GetGossipMembers()
+
+	if err != nil {
+		return nil, err
+	}
+
 	raft, err := s.Manager.GetRaftMembers()
 
 	if err != nil {
@@ -158,7 +217,8 @@ func (s *controlServer) Members(ctx context.Context, in *api.ManagerControlMembe
 	}
 
 	res := &api.ManagerControlMembersResponse{
-		Raft: raft,
+		Gossip: gossip,
+		Raft:   raft,
 	}
 
 	return res, nil
@@ -196,7 +256,7 @@ func (s *controlServer) Remove(ctx context.Context, in *api.ManagerControlRemove
 		return nil, err
 	}
 
-	s.Manager.State.Propose("members", string(json))
+	s.Manager.State.Propose("raft:members", string(json))
 
 	res := &api.ManagerControlRemoveResponse{}
 

@@ -2,39 +2,66 @@ syntax = "proto3";
 
 package api;
 
-import "api/cluster.proto";
+import "api/gossip.proto";
 import "api/raft.proto";
+import "api/service.proto";
 
 service ManagerControl {
   rpc Init(ManagerControlInitRequest) returns (ManagerControlInitResponse) {}
   rpc Join(ManagerControlJoinRequest) returns (ManagerControlJoinResponse) {}
-  rpc Members(ManagerControlMembersRequest)
-      returns (ManagerControlMembersResponse) {}
-  rpc Remove(ManagerControlRemoveRequest)
-      returns (ManagerControlRemoveResponse) {}
+  rpc Members(ManagerControlMembersRequest) returns (ManagerControlMembersResponse) {}
+  rpc Remove(ManagerControlRemoveRequest) returns (ManagerControlRemoveResponse) {}
 }
 
 service ManagerRemote {
   rpc Join(ManagerRemoteJoinRequest) returns (ManagerRemoteJoinResponse) {}
+  rpc JoinGossip(ManagerRemoteJoinGossipRequest) returns (ManagerRemoteJoinGossipResponse) {}
+  rpc JoinRaft(ManagerRemoteJoinRaftRequest) returns (ManagerRemoteJoinRaftResponse) {}
 }
+
+// -- CONTROL ENDPOINTS -- //
 
 message ManagerControlInitRequest {}
 message ManagerControlInitResponse {}
 
-message ManagerControlJoinRequest { string join_addr = 1; }
+message ManagerControlJoinRequest {
+  string remote_addr = 1;
+}
 message ManagerControlJoinResponse {}
 
 message ManagerControlMembersRequest {}
-message ManagerControlMembersResponse { repeated RaftMember raft = 1; }
+message ManagerControlMembersResponse {
+  repeated GossipMember gossip = 1;
+  repeated RaftMember raft = 2;
+}
 
 message ManagerControlRemoveRequest { uint64 raft_id = 1; }
 message ManagerControlRemoveResponse {}
 
+// -- REMOTE ENDPOINTS -- //
+
 message ManagerRemoteJoinRequest {
   string addr = 1;
-  Role role = 2;
+  ServiceType type = 2;
 }
 message ManagerRemoteJoinResponse {
+  string id = 1;
+}
+
+message ManagerRemoteJoinGossipRequest {
+  string service_id = 1;
+  string gossip_addr = 2;
+}
+message ManagerRemoteJoinGossipResponse {
+  string gossip_id = 1;
+  string gossip_peer_addr = 2;
+}
+
+message ManagerRemoteJoinRaftRequest {
+  string service_id = 1;
+  string raft_addr = 2;
+}
+message ManagerRemoteJoinRaftResponse {
   uint64 raft_id = 1;
   repeated RaftMember raft_members = 2;
 }

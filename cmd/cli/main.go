@@ -6,9 +6,9 @@ import (
 )
 
 var (
-	// block                      = kingpin.Command("block", "Block service commands.")
-	// blockJoin                  = block.Command("join", "Joins an existing initialized cluster.")
-	// blockJoinAddr              = blockJoin.Arg("addr", "Manager address of existing initialized cluster.").Required().String()
+	block         = kingpin.Command("block", "Block service commands.")
+	blockJoin     = block.Command("join", "Joins an existing initialized cluster.")
+	blockJoinAddr = blockJoin.Arg("addr", "Manager address of existing initialized cluster.").Required().String()
 	// blockLv                    = block.Command("lv", "Block service logical volume commands.")
 	// blockLvCreate              = blockLv.Command("create", "Creates a logical volume.")
 	// blockLvCreateID            = blockLvCreate.Arg("id", "Set logical volume id.").Required().String()
@@ -48,8 +48,8 @@ var (
 
 func main() {
 	switch kingpin.Parse() {
-	// case blockJoin.FullCommand():
-	// 	cli.BlockJoin(blockJoinAddr, socket)
+	case blockJoin.FullCommand():
+		cli.BlockJoin(blockJoinAddr, socket)
 	// case blockLvCreate.FullCommand():
 	// 	cli.BlockLvCreate(blockLvCreateID, blockLvCreateVolumeGroupID, blockLvCreateSize, remoteAddr)
 	// case blockLvGet.FullCommand():

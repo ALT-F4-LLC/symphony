@@ -35,7 +35,11 @@ func GetFlags() (*Flags, error) {
 		ConfigDir: *configPath,
 	}
 
-	ip := config.GetOutboundIP()
+	ip, err := config.GetOutboundIP()
+
+	if err != nil {
+		return nil, err
+	}
 
 	listenRaftAddr, err := config.GetListenAddr(15760, ip, listenRaftPort)
 

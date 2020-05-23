@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package api;
+
+enum ServiceType {
+  MANAGER = 0;
+  BLOCK = 1;
+}
+
+message ServiceMember {
+  string id = 1;
+  string addr = 2;
+  ServiceType type = 3;
+}

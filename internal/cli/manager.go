@@ -30,7 +30,7 @@ func ManagerInit(socket *string) {
 }
 
 // ManagerJoin : handle the "join" command
-func ManagerJoin(joinAddr *string, socket *string) {
+func ManagerJoin(addr *string, socket *string) {
 	conn := NewConnSocket(socket)
 
 	defer conn.Close()
@@ -42,7 +42,7 @@ func ManagerJoin(joinAddr *string, socket *string) {
 	defer cancel()
 
 	opts := &api.ManagerControlJoinRequest{
-		JoinAddr: *joinAddr,
+		RemoteAddr: *addr,
 	}
 
 	_, joinErr := c.Join(ctx, opts)

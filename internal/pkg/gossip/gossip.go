@@ -1,7 +1,13 @@
 package gossip
 
 import (
+	"encoding/json"
+	"fmt"
 	"sync"
+
+	"github.com/erkrnt/symphony/api"
+	"github.com/google/uuid"
+	"github.com/hashicorp/memberlist"
 )
 
 // Delegate : generic gossip protocol delegate
@@ -67,36 +73,37 @@ func (d *Delegate) MergeRemoteState(buf []byte, join bool) {
 	d.remoteState = buf
 }
 
-// func NewMemberList(flags *Flags, gossipID uuid.UUID, raftID uint64) (*memberlist.Memberlist, error) {
-// 	data := api.GossipMember{
-// 		RaftId: raftID,
-// 	}
+// NewMemberList : creates memberlist for gossip protocol
+func NewMemberList(id uuid.UUID, port int) (*memberlist.Memberlist, error) {
+	data := api.GossipMember{
+		ID: id.String(),
+	}
 
-// 	meta, err := json.Marshal(data)
+	meta, err := json.Marshal(data)
 
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	if err != nil {
+		return nil, err
+	}
 
-// 	config := memberlist.DefaultLocalConfig()
+	config := memberlist.DefaultLocalConfig()
 
-// 	config.AdvertisePort = flags.ListenGossipAddr.Port
+	config.AdvertisePort = port
 
-// 	config.Delegate = &gossip.Delegate{Meta: meta}
+	config.Delegate = &Delegate{Meta: meta}
 
-// 	config.BindPort = flags.ListenGossipAddr.Port
+	config.BindPort = port
 
-// 	config.Name = gossipID.String()
+	config.Name = id.String()
 
-// 	list, err := memberlist.Create(config)
+	list, err := memberlist.Create(config)
 
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	if err != nil {
+		return nil, err
+	}
 
-// 	for _, member := range list.Members() {
-// 		fmt.Printf("Member: %s %s\n", member.Name, member.Addr)
-// 	}
+	for _, member := range list.Members() {
+		fmt.Printf("Member: %s %s\n", member.Name, member.Addr)
+	}
 
-// 	return list, nil
-// }
+	return list, nil
+}

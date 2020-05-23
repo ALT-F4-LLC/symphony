@@ -10,11 +10,13 @@ import (
 
 type flags struct {
 	configDir        string
+	listenGossipAddr *net.TCPAddr
 	listenRemoteAddr *net.TCPAddr
 }
 
 var (
 	configDir        = kingpin.Flag("config-dir", "Sets configuration directory for block service.").Default(".").String()
+	listenGossipPort = kingpin.Flag("listen-gossip-port", "Sets the gossip listener port.").Int()
 	listenRemotePort = kingpin.Flag("listen-remote-port", "Sets the remote listener port.").Int()
 )
 
@@ -31,7 +33,19 @@ func getFlags() (*flags, error) {
 		configDir: *configPath,
 	}
 
-	ip := config.GetOutboundIP()
+	ip, err := config.GetOutboundIP()
+
+	if err != nil {
+		return nil, err
+	}
+
+	listenGossipAddr, err := config.GetListenAddr(37065, ip, listenGossipPort)
+
+	if err != nil {
+		return nil, err
+	}
+
+	flags.listenGossipAddr = listenGossipAddr
 
 	listenRemoteAddr, err := config.GetListenAddr(27242, ip, listenRemotePort)
 
@@ -43,6 +57,7 @@ func getFlags() (*flags, error) {
 
 	fields := logrus.Fields{
 		"ConfigDir":        flags.configDir,
+		"ListenGossipAddr": flags.listenGossipAddr.String(),
 		"ListenRemoteAddr": flags.listenRemoteAddr.String(),
 	}
 

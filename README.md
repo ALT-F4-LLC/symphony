@@ -45,29 +45,40 @@ Worker nodes maintain their resources from the raft state and join/leave the clu
 # Single node manager cluster
 
 ```
-$ rm -rf .raft/manager-01 && go run ./cmd/manager --config-dir .raft/manager-01 \
---listen-raft-addr 127.0.0.1:15760 \
---listen-remote-addr 127.0.0.1:27242
-$ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager init
+$ rm -rf .config/manager-01 && go run ./cmd/manager --config-dir .config/manager-01
+$ go run ./cmd/cli --socket ".config/manager-01/control.sock" manager init
 ```
 
-# Add an additional nodes to the cluster
+# Add an additional managers to the cluster
 
 ```
-$ rm -rf .raft/manager-04 && go run ./cmd/manager --config-dir .raft/manager-04 \
---listen-raft-port 15763 \
+$ rm -rf .config/manager-02 && go run ./cmd/manager --config-dir .config/manager-02 \
+--listen-raft-port 15761 \
+--listen-remote-port 27243
+$ rm -rf .config/manager-03 && go run ./cmd/manager --config-dir .config/manager-03 \
+--listen-raft-port 15762 \
+--listen-remote-port 27244
+
+$ go run ./cmd/cli --socket ".config/manager-02/control.sock" manager join <host-address>:27242
+$ go run ./cmd/cli --socket ".config/manager-03/control.sock" manager join <host-address>:27242
+```
+
+# Add an cloud services to the cluster
+
+```
+$ rm -rf .config/block-01 && go run ./cmd/block --config-dir .config/block-01 \
 --listen-remote-port 27245
-$ rm -rf .raft/manager-05 && go run ./cmd/manager --config-dir .raft/manager-05 \
---listen-raft-port 15764 \
+$ rm -rf .config/block-02 && go run ./cmd/block --config-dir .config/block-02 \
+--listen-gossip-port 37066 \
 --listen-remote-port 27246
 
-$ go run ./cmd/cli --socket ".raft/manager-04/control.sock" manager join 192.168.88.21:27242
-$ go run ./cmd/cli --socket ".raft/manager-05/control.sock" manager join 127.0.0.1:27242
+$ go run ./cmd/cli --socket ".config/block-01/control.sock" block join <host-address>:27242
+$ go run ./cmd/cli --socket ".config/block-02/control.sock" block join <host-address>:27242
 ```
 
 # Remove a node from the cluster
 
 ```
-$ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager members
-$ go run ./cmd/cli --socket ".raft/manager-01/control.sock" manager remove <member-id>
+$ go run ./cmd/cli --socket ".config/manager-01/control.sock" manager members
+$ go run ./cmd/cli --socket ".config/manager-01/control.sock" manager remove <member-id>
 ```

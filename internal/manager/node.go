@@ -2,6 +2,7 @@ package manager
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/raft"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,14 +24,14 @@ type Manager struct {
 	mu sync.Mutex
 }
 
-// GetRaftMembers : retrieves raft member list
-func (m *Manager) GetRaftMembers() ([]*api.RaftMember, error) {
-	var members []*api.RaftMember
+// GetGossipMembers : gets members from the gossip protocol
+func (m *Manager) GetGossipMembers() ([]*api.GossipMember, error) {
+	var members []*api.GossipMember
 
-	state, ok := m.State.Lookup("members")
+	state, ok := m.State.Lookup("gossip:members")
 
 	if !ok {
-		members = m.Raft.Members
+		members = make([]*api.GossipMember, 0)
 	} else {
 		err := json.Unmarshal([]byte(state), &members)
 
@@ -41,9 +43,47 @@ func (m *Manager) GetRaftMembers() ([]*api.RaftMember, error) {
 	return members, nil
 }
 
-// SaveRaftNodeID : sets the RAFT_NODE_ID in key.json
-func (m *Manager) SaveRaftNodeID(nodeID uint64) error {
-	m.Key.RaftNodeID = nodeID
+// GetRaftMembers : retrieves raft member list
+func (m *Manager) GetRaftMembers() ([]*api.RaftMember, error) {
+	var members []*api.RaftMember
+
+	state, ok := m.State.Lookup("raft:members")
+
+	if !ok {
+		return nil, errors.New("invalid_raft_state")
+	} else {
+		err := json.Unmarshal([]byte(state), &members)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return members, nil
+}
+
+// GetServiceMembers : retrieves services list
+func (m *Manager) GetServiceMembers() ([]*api.ServiceMember, error) {
+	var services []*api.ServiceMember
+
+	state, ok := m.State.Lookup("service:members")
+
+	if !ok {
+		return nil, errors.New("invalid_raft_state")
+	} else {
+		err := json.Unmarshal([]byte(state), &services)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return services, nil
+}
+
+// SaveRaftID : sets the RAFT_ID in key.json
+func (m *Manager) SaveRaftID(id uint64) error {
+	m.Key.RaftID = id
 
 	m.mu.Lock()
 
@@ -60,7 +100,38 @@ func (m *Manager) SaveRaftNodeID(nodeID uint64) error {
 	}
 
 	fields := logrus.Fields{
-		"RAFT_NODE_ID": m.Key.RaftNodeID,
+		"RAFT_ID": m.Key.RaftID,
+	}
+
+	logrus.WithFields(fields).Info("Updated key.json file")
+
+	return nil
+}
+
+// SaveServiceID : sets the SERVICE_ID in key.json
+func (m *Manager) SaveServiceID(id uuid.UUID) error {
+	m.Key.ServiceID = id
+
+	m.mu.Lock()
+
+	keyJSON, err := json.Marshal(m.Key)
+
+	if err != nil {
+		return err
+	}
+
+	path := fmt.Sprintf("%s/key.json", m.Flags.ConfigDir)
+
+	writeErr := ioutil.WriteFile(path, keyJSON, 0644)
+
+	if writeErr != nil {
+		return writeErr
+	}
+
+	defer m.mu.Unlock()
+
+	fields := logrus.Fields{
+		"SERVICE_ID": m.Key.ServiceID,
 	}
 
 	logrus.WithFields(fields).Info("Updated key.json file")
@@ -87,7 +158,7 @@ func New() (*Manager, error) {
 		Key:   key,
 	}
 
-	if key.RaftNodeID != 0 {
+	if key.RaftID != 0 {
 		join := true
 
 		httpStopC := make(chan struct{})
@@ -97,7 +168,7 @@ func New() (*Manager, error) {
 			HTTPStopC:  httpStopC,
 			Join:       join,
 			Members:    nil,
-			NodeID:     key.RaftNodeID,
+			NodeID:     key.RaftID,
 			ListenAddr: n.Flags.ListenRaftAddr,
 		}
 
@@ -109,7 +180,7 @@ func New() (*Manager, error) {
 
 		var members []api.RaftMember
 
-		m, ok := state.Lookup("members")
+		m, ok := state.Lookup("raft:members")
 
 		if !ok {
 			log.Print("we are not okay")
