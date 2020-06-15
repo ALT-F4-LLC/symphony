@@ -7,8 +7,8 @@ import (
 
 var (
 	block         = kingpin.Command("block", "Block service commands.")
-	blockJoin     = block.Command("join", "Joins an existing initialized cluster.")
-	blockJoinAddr = blockJoin.Arg("addr", "Manager address of existing initialized cluster.").Required().String()
+	blockInit     = block.Command("init", "Joins an existing initialized cluster.")
+	blockInitAddr = blockInit.Arg("addr", "Manager address of existing initialized cluster.").Required().String()
 	// blockLv                    = block.Command("lv", "Block service logical volume commands.")
 	// blockLvCreate              = blockLv.Command("create", "Creates a logical volume.")
 	// blockLvCreateID            = blockLvCreate.Arg("id", "Set logical volume id.").Required().String()
@@ -37,19 +37,16 @@ var (
 	// blockVgRemoveID            = blockVgRemove.Arg("id", "Sets volume group id.").Required().String()
 	manager               = kingpin.Command("manager", "Manager service commands.")
 	managerInit           = manager.Command("init", "Initializes a new cluster.")
-	managerJoin           = manager.Command("join", "Joins an existing initialized cluster.")
-	managerJoinAddr       = managerJoin.Arg("addr", "Manager address of existing initialized cluster.").Required().String()
-	managerMembers        = manager.Command("members", "Retrieves active cluster members.")
-	managerRemove         = manager.Command("remove", "Removes a node from the cluster.")
-	managerRemoveMemberID = managerRemove.Arg("member-id", "Raft member ID to be removed from the cluster.").Required().Uint64()
+	managerRemove         = manager.Command("remove", "Removes a service from the cluster.")
+	managerRemoveMemberID = managerRemove.Arg("service-id", "Service to be removed from the cluster.").Required().String()
 	remoteAddr            = kingpin.Flag("remote-addr", "Block service commands.").Default("127.0.0.1:27242").String()
 	socket                = kingpin.Flag("socket", "Sets the socket connection for the client.").Default("./control.sock").String()
 )
 
 func main() {
 	switch kingpin.Parse() {
-	case blockJoin.FullCommand():
-		cli.BlockJoin(blockJoinAddr, socket)
+	case blockInit.FullCommand():
+		cli.BlockInit(blockInitAddr, socket)
 	// case blockLvCreate.FullCommand():
 	// 	cli.BlockLvCreate(blockLvCreateID, blockLvCreateVolumeGroupID, blockLvCreateSize, remoteAddr)
 	// case blockLvGet.FullCommand():
@@ -70,10 +67,6 @@ func main() {
 	// 	cli.BlockVgRemove(blockVgRemoveID, remoteAddr)
 	case managerInit.FullCommand():
 		cli.ManagerInit(socket)
-	case managerJoin.FullCommand():
-		cli.ManagerJoin(managerJoinAddr, socket)
-	case managerMembers.FullCommand():
-		cli.ManagerMembers(socket)
 	case managerRemove.FullCommand():
 		cli.ManagerRemove(managerRemoveMemberID, socket)
 	}

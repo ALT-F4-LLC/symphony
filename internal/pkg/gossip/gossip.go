@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/erkrnt/symphony/api"
 	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
 )
@@ -18,6 +17,11 @@ type Delegate struct {
 	mu          sync.Mutex
 	remoteState []byte
 	state       []byte
+}
+
+// Member : defines gossip member metadata
+type Member struct {
+	id string
 }
 
 // GetBroadcasts : gets broadcasts from gossip protocol
@@ -75,8 +79,8 @@ func (d *Delegate) MergeRemoteState(buf []byte, join bool) {
 
 // NewMemberList : creates memberlist for gossip protocol
 func NewMemberList(id uuid.UUID, port int) (*memberlist.Memberlist, error) {
-	data := api.GossipMember{
-		ID: id.String(),
+	data := Member{
+		id: id.String(),
 	}
 
 	meta, err := json.Marshal(data)

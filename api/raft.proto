@@ -1,8 +1,0 @@
-syntax = "proto3";
-
-package api;
-
-message RaftMember {
-  uint64 id = 1;
-  string addr = 2;
-}

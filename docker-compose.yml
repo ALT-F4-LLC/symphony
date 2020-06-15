@@ -1,0 +1,64 @@
+networks:
+  etcd:
+services:
+  etcd_01:
+    command: >-
+      etcd
+      -advertise-client-urls http://etcd_01:2379,http://etcd_01:4001
+      -initial-advertise-peer-urls http://etcd_01:2380
+      -initial-cluster etcd_01=http://etcd_01:2380,etcd_02=http://etcd_02:2380,etcd_03=http://etcd_03:2380
+      -initial-cluster-state new
+      -initial-cluster-token etcd-cluster-1
+      -listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001
+      -listen-peer-urls http://0.0.0.0:2380
+      -name etcd_01
+    image: quay.io/coreos/etcd:v3.4.9
+    networks:
+      - etcd
+    ports:
+      - 12379:2379
+      - 12380:2380
+      - 14001:4001
+    volumes:
+      - /usr/share/ca-certificates/:/etc/ssl/certs
+  etcd_02:
+    command: >-
+      etcd
+      -advertise-client-urls http://etcd_02:2379,http://etcd_02:4001
+      -initial-advertise-peer-urls http://etcd_02:2380
+      -initial-cluster etcd_01=http://etcd_01:2380,etcd_02=http://etcd_02:2380,etcd_03=http://etcd_03:2380
+      -initial-cluster-state new
+      -initial-cluster-token etcd-cluster-1
+      -listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001
+      -listen-peer-urls http://0.0.0.0:2380
+      -name etcd_02
+    image: quay.io/coreos/etcd:v3.4.9
+    networks:
+      - etcd
+    ports:
+      - 22379:2379
+      - 22380:2380
+      - 24001:4001
+    volumes:
+      - /usr/share/ca-certificates/:/etc/ssl/certs
+  etcd_03:
+    command: >-
+      etcd
+      -advertise-client-urls http://etcd_03:2379,http://etcd_03:4001
+      -initial-advertise-peer-urls http://etcd_03:2380
+      -initial-cluster etcd_01=http://etcd_01:2380,etcd_02=http://etcd_02:2380,etcd_03=http://etcd_03:2380
+      -initial-cluster-state new
+      -initial-cluster-token etcd-cluster-1
+      -listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001
+      -listen-peer-urls http://0.0.0.0:2380
+      -name etcd_03
+    image: quay.io/coreos/etcd:v3.4.9
+    networks:
+      - etcd
+    ports:
+      - 32379:2379
+      - 32380:2380
+      - 34001:4001
+    volumes:
+      - /usr/share/ca-certificates/:/etc/ssl/certs
+version: "3.7"

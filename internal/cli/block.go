@@ -9,9 +9,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-// BlockJoin : handles joining block node to an existing cluster
-func BlockJoin(joinAddr *string, socket *string) {
-	conn := NewConnSocket(socket)
+// BlockInit : handles joining block node to an existing cluster
+func BlockInit(joinAddr *string, socket *string) {
+	conn := NewConnControl(socket)
 
 	defer conn.Close()
 
@@ -21,9 +21,9 @@ func BlockJoin(joinAddr *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.BlockControlJoinRequest{JoinAddr: *joinAddr}
+	opts := &api.BlockControlInitRequest{Addr: *joinAddr}
 
-	_, joinErr := c.Join(ctx, opts)
+	_, joinErr := c.Init(ctx, opts)
 
 	if joinErr != nil {
 		log.Fatal(joinErr)

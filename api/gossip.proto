@@ -1,8 +1,0 @@
-syntax = "proto3";
-
-package api;
-
-message GossipMember {
-  string Addr = 1;
-  string ID = 2;
-}

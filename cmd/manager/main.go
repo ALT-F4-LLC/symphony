@@ -1,19 +1,18 @@
 package main
 
 import (
-	"log"
-
 	"github.com/erkrnt/symphony/internal/manager"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
 	m, err := manager.New()
 
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 
-	go manager.RemoteServer(m)
+	go m.RemoteServer()
 
-	manager.ControlServer(m)
+	m.ControlServer()
 }

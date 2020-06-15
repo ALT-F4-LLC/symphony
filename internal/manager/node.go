@@ -1,142 +1,25 @@
 package manager
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"sync"
+	"net"
+	"os"
+	"time"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/raft"
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"go.etcd.io/etcd/clientv3"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Manager : manager node
 type Manager struct {
 	Flags *Flags
-	Key   *Key
-	Raft  *raft.Raft
-	State *raft.State
-
-	mu sync.Mutex
-}
-
-// GetGossipMembers : gets members from the gossip protocol
-func (m *Manager) GetGossipMembers() ([]*api.GossipMember, error) {
-	var members []*api.GossipMember
-
-	state, ok := m.State.Lookup("gossip:members")
-
-	if !ok {
-		members = make([]*api.GossipMember, 0)
-	} else {
-		err := json.Unmarshal([]byte(state), &members)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return members, nil
-}
-
-// GetRaftMembers : retrieves raft member list
-func (m *Manager) GetRaftMembers() ([]*api.RaftMember, error) {
-	var members []*api.RaftMember
-
-	state, ok := m.State.Lookup("raft:members")
-
-	if !ok {
-		return nil, errors.New("invalid_raft_state")
-	} else {
-		err := json.Unmarshal([]byte(state), &members)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return members, nil
-}
-
-// GetServiceMembers : retrieves services list
-func (m *Manager) GetServiceMembers() ([]*api.ServiceMember, error) {
-	var services []*api.ServiceMember
-
-	state, ok := m.State.Lookup("service:members")
-
-	if !ok {
-		return nil, errors.New("invalid_raft_state")
-	} else {
-		err := json.Unmarshal([]byte(state), &services)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return services, nil
-}
-
-// SaveRaftID : sets the RAFT_ID in key.json
-func (m *Manager) SaveRaftID(id uint64) error {
-	m.Key.RaftID = id
-
-	m.mu.Lock()
-
-	keyJSON, _ := json.Marshal(m.Key)
-
-	path := fmt.Sprintf("%s/key.json", m.Flags.ConfigDir)
-
-	err := ioutil.WriteFile(path, keyJSON, 0644)
-
-	defer m.mu.Unlock()
-
-	if err != nil {
-		return err
-	}
-
-	fields := logrus.Fields{
-		"RAFT_ID": m.Key.RaftID,
-	}
-
-	logrus.WithFields(fields).Info("Updated key.json file")
-
-	return nil
-}
-
-// SaveServiceID : sets the SERVICE_ID in key.json
-func (m *Manager) SaveServiceID(id uuid.UUID) error {
-	m.Key.ServiceID = id
-
-	m.mu.Lock()
-
-	keyJSON, err := json.Marshal(m.Key)
-
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("%s/key.json", m.Flags.ConfigDir)
-
-	writeErr := ioutil.WriteFile(path, keyJSON, 0644)
-
-	if writeErr != nil {
-		return writeErr
-	}
-
-	defer m.mu.Unlock()
-
-	fields := logrus.Fields{
-		"SERVICE_ID": m.Key.ServiceID,
-	}
-
-	logrus.WithFields(fields).Info("Updated key.json file")
-
-	return nil
 }
 
 // New : creates a new manager struct
@@ -147,61 +30,106 @@ func New() (*Manager, error) {
 		return nil, err
 	}
 
-	key, err := GetKey(flags.ConfigDir)
+	manager := &Manager{
+		Flags: flags,
+	}
+
+	return manager, nil
+}
+
+// ControlServer : starts manager control server
+func (m *Manager) ControlServer() {
+	socketPath := fmt.Sprintf("%s/control.sock", m.Flags.ConfigPath)
+
+	if err := os.RemoveAll(socketPath); err != nil {
+		log.Fatal(err)
+	}
+
+	listen, err := net.Listen("unix", socketPath)
 
 	if err != nil {
-		return nil, err
+		log.Fatalf("failed to listen: %v", err)
 	}
 
-	n := &Manager{
-		Flags: flags,
-		Key:   key,
+	server := grpc.NewServer()
+
+	control := &controlServer{
+		Manager: m,
 	}
 
-	if key.RaftID != 0 {
-		join := true
+	api.RegisterManagerControlServer(server, control)
 
-		httpStopC := make(chan struct{})
+	logrus.Info("Started manager control gRPC socket server.")
 
-		config := raft.Config{
-			ConfigDir:  n.Flags.ConfigDir,
-			HTTPStopC:  httpStopC,
-			Join:       join,
-			Members:    nil,
-			NodeID:     key.RaftID,
-			ListenAddr: n.Flags.ListenRaftAddr,
-		}
+	if err := server.Serve(listen); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
+}
 
-		raft, state, err := raft.New(config)
+func (m *Manager) GetServices() ([]*api.Service, error) {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.Flags.EtcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	results, err := etcd.Get(ctx, "/service", clientv3.WithPrefix())
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	services := make([]*api.Service, 0)
+
+	for _, ev := range results.Kvs {
+		var s *api.Service
+
+		err := json.Unmarshal(ev.Value, &s)
 
 		if err != nil {
-			return nil, err
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
 		}
 
-		var members []api.RaftMember
-
-		m, ok := state.Lookup("raft:members")
-
-		if !ok {
-			log.Print("we are not okay")
-		}
-
-		if err := json.Unmarshal([]byte(m), &members); err != nil {
-			return nil, err
-		}
-
-		log.Print(members)
-
-		go func() {
-			<-httpStopC
-
-			log.Print("left the raft after a restart")
-		}()
-
-		n.Raft = raft
-
-		n.State = state
+		services = append(services, s)
 	}
 
-	return n, nil
+	return services, nil
+}
+
+// RemoteServer : starts remote gRPC server
+func (m *Manager) RemoteServer() {
+	listen, err := net.Listen("tcp", m.Flags.ListenAddr.String())
+
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	remote := &remoteServer{
+		Manager: m,
+	}
+
+	server := grpc.NewServer()
+
+	api.RegisterManagerRemoteServer(server, remote)
+
+	logrus.Info("Started manager remote gRPC tcp server.")
+
+	if err := server.Serve(listen); err != nil {
+		logrus.Fatal(err)
+	}
 }

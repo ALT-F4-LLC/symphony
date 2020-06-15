@@ -1,84 +1,77 @@
 # symphony
 
-An open-source cloud platform written in Go, heavily inspired from Docker Swarm and developed weekly live at [The Alt-F4 Stream](https://www.google.com "The Alt-F4 Stream") on Twitch.
+An open-source cloud platform written in Go, heavily inspired from existing orchestrators (Docker Swarm, Kubernetes, OpenStack, tc) and developed weekly live at [The Alt-F4 Stream](https://www.google.com "The Alt-F4 Stream") on Twitch.
 
 > NOTE: All documentation below is a WIP (work-in-progress) which is subject to change at any time and is mostly conceptual for development purposes.
 
 ## Development
 
-Currently, we are not using `go mod` yet for package management and it does require manual package `go get` to setup.
+This repository uses `go mod` for versioned modules. You will also need to install the `protoc-gen-go@v1.3.2` package to build grpc files properly with the version of grpc used in this project.
 
-The biggest requirement for development is when using `go get` to grab `go.etcd.io/etcd` - the vendor folder in that module contains a specific `go.uber.org/zap` module version to work properly.
+> SEE: https://github.com/grpc/grpc-go/issues/3347
 
-In order to solve this problem, you must move the `go.etcd.io/etcd` module from `go get` and place it in a `vendor` folder at the root of this repository. You must also move the `go.uber.org/zap` in the `go.etcd.io/etcd` module's `vendor` folder to the `vender` folder you just created. An example final folder structure is shown below:
-
-```
-symphony
-└── vendor
-    ├── go.etcd.io
-    └── go.uber.org
-```
+You will also need `docker` and `docker-compose` if you would like to run the local development `etcd` cluster.
 
 ## Concepts
 
-Below describes basic concepts of a Symphony cluster.
+Below describes basic concepts of a Symphony environment.
 
-### I. Manager
+### Manager
 
-Manager nodes maintain all raft state as well as node discovery.
+Manager nodes maintain all environment state as well as node discovery.
 
-#### Manager Initialization
+#### Initialization
 
 The following steps happen when a cluster is initialized:
 
-- First manager generates `key.json` to store `raft_node_id`
-- First manager generates `manager` and `worker` join tokens
+- Manager initalizes in `etcd` for discovery
+- If not already a node - will automatically create/join the cluster
+- If already a node - will fail request
 
-### II. Worker
+### Service
 
-Worker nodes maintain their resources from the raft state and join/leave the cluster via manager nodes.
+Service nodes maintain their resources and state from managers. Worker nodes are not able to directly affect state outside of node discovery.
 
-> NOTE: Worker nodes are not able to directly affect state outside of node discovery.
+## Examples
 
-## Example Configurations
+Below shows a simple environment setup process.
 
-# Single node manager cluster
+#### Start local etcd cluster:
 
-```
-$ rm -rf .config/manager-01 && go run ./cmd/manager --config-dir .config/manager-01
-$ go run ./cmd/cli --socket ".config/manager-01/control.sock" manager init
-```
-
-# Add an additional managers to the cluster
+> NOTE: This does require docker and docker-compose to work.
 
 ```
-$ rm -rf .config/manager-02 && go run ./cmd/manager --config-dir .config/manager-02 \
---listen-raft-port 15761 \
---listen-remote-port 27243
-$ rm -rf .config/manager-03 && go run ./cmd/manager --config-dir .config/manager-03 \
---listen-raft-port 15762 \
---listen-remote-port 27244
-
-$ go run ./cmd/cli --socket ".config/manager-02/control.sock" manager join <host-address>:27242
-$ go run ./cmd/cli --socket ".config/manager-03/control.sock" manager join <host-address>:27242
+$ docker-compose up -d
 ```
 
-# Add an cloud services to the cluster
+#### Initialize a manager:
 
 ```
-$ rm -rf .config/block-01 && go run ./cmd/block --config-dir .config/block-01 \
---listen-remote-port 27245
-$ rm -rf .config/block-02 && go run ./cmd/block --config-dir .config/block-02 \
---listen-gossip-port 37066 \
---listen-remote-port 27246
-
-$ go run ./cmd/cli --socket ".config/block-01/control.sock" block join <host-address>:27242
-$ go run ./cmd/cli --socket ".config/block-02/control.sock" block join <host-address>:27242
+$ go run ./cmd/manager \
+--config-dir=".config/manager-01" \
+--etcd-endpoints="http://127.0.0.1:12379,http://127.0.0.1:22379,http://127.0.0.1:32379"
+$ go run ./cmd/cli --socket=".config/manager-01/control.sock" manager init
 ```
 
-# Remove a node from the cluster
+#### Initialize a cloud service:
 
 ```
-$ go run ./cmd/cli --socket ".config/manager-01/control.sock" manager members
-$ go run ./cmd/cli --socket ".config/manager-01/control.sock" manager remove <member-id>
+$ go run ./cmd/block \
+--config-dir=".config/block-01" \
+--listen-port 15761
+$ go run ./cmd/cli --socket=".config/block-01/control.sock" block init <manager-hostname | manager-ip>:15760
+```
+
+#### Check etcd for state:
+
+```
+docker-compose exec etcd_01 etcdctl \
+--endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379" \
+get /service --prefix
+```
+
+#### Remove a cloud service:
+
+```
+go run ./cmd/cli --socket=".config/manager-01/control.sock" manager remove <service-id>
 ```

@@ -8,8 +8,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-// NewConnSocket : creates a new grpc connection
-func NewConnSocket(socketPath *string) *grpc.ClientConn {
+// NewConnControl : creates a new control connection
+func NewConnControl(socketPath *string) *grpc.ClientConn {
 	socket, err := filepath.Abs(*socketPath)
 
 	if err != nil {
