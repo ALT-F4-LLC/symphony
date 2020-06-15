@@ -4,17 +4,16 @@ import (
 	"log"
 
 	"github.com/erkrnt/symphony/internal/manager"
-	"github.com/erkrnt/symphony/internal/pkg/cluster"
 )
 
 func main() {
-	node, err := cluster.NewNode()
+	m, err := manager.New()
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	go manager.StartRemoteServer(node)
+	go manager.RemoteServer(m)
 
-	manager.StartControlServer(node)
+	manager.ControlServer(m)
 }

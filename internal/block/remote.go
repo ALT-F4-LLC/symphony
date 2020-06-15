@@ -6,7 +6,6 @@ import (
 	"net"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/cluster"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -14,13 +13,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// RemoteServer : block remote requests
-type RemoteServer struct {
-	Node *cluster.Node
+type remoteServer struct {
+	block *Block
 }
 
 // GetLv : gets logical volume metadata from block host
-func (s *RemoteServer) GetLv(ctx context.Context, in *api.BlockLvFields) (*api.BlockLvMetadata, error) {
+func (s *remoteServer) GetLv(ctx context.Context, in *api.BlockLvFields) (*api.BlockLvMetadata, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -70,7 +68,7 @@ func (s *RemoteServer) GetLv(ctx context.Context, in *api.BlockLvFields) (*api.B
 }
 
 // GetPv : gets physical volume
-func (s *RemoteServer) GetPv(ctx context.Context, in *api.BlockPvFields) (*api.BlockPvMetadata, error) {
+func (s *remoteServer) GetPv(ctx context.Context, in *api.BlockPvFields) (*api.BlockPvMetadata, error) {
 	pv, pvErr := getPv(in.Device)
 
 	if pvErr != nil {
@@ -98,7 +96,7 @@ func (s *RemoteServer) GetPv(ctx context.Context, in *api.BlockPvFields) (*api.B
 }
 
 // GetVg : gets volume group
-func (s *RemoteServer) GetVg(ctx context.Context, in *api.BlockVgFields) (*api.BlockVgMetadata, error) {
+func (s *remoteServer) GetVg(ctx context.Context, in *api.BlockVgFields) (*api.BlockVgMetadata, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -127,7 +125,7 @@ func (s *RemoteServer) GetVg(ctx context.Context, in *api.BlockVgFields) (*api.B
 }
 
 // NewLv : creates logical volume
-func (s *RemoteServer) NewLv(ctx context.Context, in *api.BlockNewLvFields) (*api.BlockLvMetadata, error) {
+func (s *remoteServer) NewLv(ctx context.Context, in *api.BlockNewLvFields) (*api.BlockLvMetadata, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -173,7 +171,7 @@ func (s *RemoteServer) NewLv(ctx context.Context, in *api.BlockNewLvFields) (*ap
 }
 
 // NewPv : creates physical volume
-func (s *RemoteServer) NewPv(ctx context.Context, in *api.BlockPvFields) (*api.BlockPvMetadata, error) {
+func (s *remoteServer) NewPv(ctx context.Context, in *api.BlockPvFields) (*api.BlockPvMetadata, error) {
 	pv, err := newPv(in.Device)
 
 	if err != nil {
@@ -195,7 +193,7 @@ func (s *RemoteServer) NewPv(ctx context.Context, in *api.BlockPvFields) (*api.B
 }
 
 // NewVg : creates volume group
-func (s *RemoteServer) NewVg(ctx context.Context, in *api.BlockNewVgFields) (*api.BlockVgMetadata, error) {
+func (s *remoteServer) NewVg(ctx context.Context, in *api.BlockNewVgFields) (*api.BlockVgMetadata, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -224,7 +222,7 @@ func (s *RemoteServer) NewVg(ctx context.Context, in *api.BlockNewVgFields) (*ap
 }
 
 // RemoveLv : removes logical volume
-func (s *RemoteServer) RemoveLv(ctx context.Context, in *api.BlockLvFields) (*api.RemoveStatus, error) {
+func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockLvFields) (*api.RemoveStatus, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -251,7 +249,7 @@ func (s *RemoteServer) RemoveLv(ctx context.Context, in *api.BlockLvFields) (*ap
 }
 
 // RemovePv : removes physical volume
-func (s *RemoteServer) RemovePv(ctx context.Context, in *api.BlockPvFields) (*api.RemoveStatus, error) {
+func (s *remoteServer) RemovePv(ctx context.Context, in *api.BlockPvFields) (*api.RemoveStatus, error) {
 	err := removePv(in.Device)
 
 	if err != nil {
@@ -266,7 +264,7 @@ func (s *RemoteServer) RemovePv(ctx context.Context, in *api.BlockPvFields) (*ap
 }
 
 // RemoveVg : removes volume group
-func (s *RemoteServer) RemoveVg(ctx context.Context, in *api.BlockVgFields) (*api.RemoveStatus, error) {
+func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockVgFields) (*api.RemoveStatus, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -286,9 +284,9 @@ func (s *RemoteServer) RemoveVg(ctx context.Context, in *api.BlockVgFields) (*ap
 	return status, nil
 }
 
-// StartRemoteServer : starts Raft memebership server
-func StartRemoteServer(node *cluster.Node) {
-	lis, err := net.Listen("tcp", node.Flags.ListenRemoteAddr.String())
+// RemoteServer : starts Raft memebership server
+func RemoteServer(b *Block) {
+	lis, err := net.Listen("tcp", b.Flags.listenRemoteAddr.String())
 
 	if err != nil {
 		log.Fatal("Failed to listen")
@@ -296,8 +294,8 @@ func StartRemoteServer(node *cluster.Node) {
 
 	s := grpc.NewServer()
 
-	server := &RemoteServer{
-		Node: node,
+	server := &remoteServer{
+		block: b,
 	}
 
 	logrus.Info("Started block remote gRPC tcp server.")

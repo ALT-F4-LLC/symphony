@@ -1,4 +1,5 @@
 ### symphony ###
+.config
 .raft
 *.db
 *.pb.go

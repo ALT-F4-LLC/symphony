@@ -1,15 +1,18 @@
-package config
+package manager
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
+
+	"github.com/google/uuid"
 )
 
 // Key : key used for initialization and authentication of nodes
 type Key struct {
-	RaftNodeID uint64 `json:"RAFT_NODE_ID"`
+	RaftID    uint64    `json:"RAFT_ID"`
+	ServiceID uuid.UUID `json:"SERVICE_ID"`
 }
 
 // GetKey : gets the node key.json file

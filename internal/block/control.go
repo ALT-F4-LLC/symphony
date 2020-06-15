@@ -9,18 +9,17 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/cluster"
+	"github.com/erkrnt/symphony/internal/pkg/gossip"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
-// ControlServer : block socket requests
-type ControlServer struct {
-	Node *cluster.Node
+type controlServer struct {
+	block *Block
 }
 
-// Join : joins a manager to a existing cluster
-func (s *ControlServer) Join(ctx context.Context, in *api.BlockControlJoinReq) (*api.BlockControlJoinRes, error) {
+func (s *controlServer) Join(ctx context.Context, in *api.BlockControlJoinRequest) (*api.BlockControlJoinResponse, error) {
 	joinAddr, err := net.ResolveTCPAddr("tcp", in.JoinAddr)
 
 	if err != nil {
@@ -41,38 +40,74 @@ func (s *ControlServer) Join(ctx context.Context, in *api.BlockControlJoinReq) (
 
 	defer cancel()
 
-	addr := fmt.Sprintf("http://%s", s.Node.Flags.ListenRaftAddr.String())
+	serviceAddr := fmt.Sprintf("%s", s.block.Flags.listenRemoteAddr.String())
 
-	join, joinErr := c.Join(ctx, &api.ManagerRemoteJoinReq{Addr: addr})
-
-	if joinErr != nil {
-		return nil, joinErr
+	serviceJoinOpts := &api.ManagerRemoteJoinRequest{
+		Addr: serviceAddr,
+		Type: api.ServiceType_BLOCK,
 	}
 
-	saveErr := s.Node.SaveRaftNodeID(join.MemberId)
-
-	if saveErr != nil {
-		return nil, saveErr
-	}
-
-	raft, state, err := cluster.NewRaft(s.Node.Flags, true, join.Members, join.MemberId)
+	serviceJoin, err := c.Join(ctx, serviceJoinOpts)
 
 	if err != nil {
 		return nil, err
 	}
 
-	s.Node.RaftNode = raft
+	serviceID, err := uuid.Parse(serviceJoin.Id)
 
-	s.Node.RaftState = state
+	if err != nil {
+		return nil, err
+	}
 
-	res := &api.BlockControlJoinRes{}
+	saveServiceIDErr := s.block.SaveServiceID(serviceID)
+
+	if saveServiceIDErr != nil {
+		return nil, saveServiceIDErr
+	}
+
+	addr := s.block.Flags.listenGossipAddr
+
+	opts := &api.ManagerRemoteJoinGossipRequest{
+		GossipAddr: addr.String(),
+		ServiceId:  serviceID.String(),
+	}
+
+	join, err := c.JoinGossip(ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	id, err := uuid.Parse(join.GossipId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	memberlist, gossipErr := gossip.NewMemberList(id, addr.Port)
+
+	if gossipErr != nil {
+		return nil, err
+	}
+
+	log.Print(join.GossipPeerAddr)
+
+	if join.GossipPeerAddr != addr.String() {
+		_, err := memberlist.Join([]string{join.GossipPeerAddr})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	res := &api.BlockControlJoinResponse{}
 
 	return res, nil
 }
 
-// StartControlServer : starts manager control server
-func StartControlServer(node *cluster.Node) {
-	socketPath := fmt.Sprintf("%s/control.sock", node.Flags.ConfigDir)
+// ControlServer : starts block control server
+func ControlServer(b *Block) {
+	socketPath := fmt.Sprintf("%s/control.sock", b.Flags.configDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
 		log.Fatal(err)
@@ -86,8 +121,8 @@ func StartControlServer(node *cluster.Node) {
 
 	s := grpc.NewServer()
 
-	cs := &ControlServer{
-		Node: node,
+	cs := &controlServer{
+		block: b,
 	}
 
 	logrus.Info("Started block control gRPC socket server.")

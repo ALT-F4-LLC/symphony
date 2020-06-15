@@ -1,154 +1,61 @@
 package config
 
 import (
-	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
-
-	"github.com/sirupsen/logrus"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-// Flags : command line flags for service
-type Flags struct {
-	ConfigDir        string
-	JoinAddr         *net.TCPAddr
-	Peers            []string
-	ListenRaftAddr   *net.TCPAddr
-	ListenRemoteAddr *net.TCPAddr
-}
-
-var (
-	configDir        = kingpin.Flag("config-dir", "Sets configuration directory for manager.").Default(".").String()
-	joinAddr         = kingpin.Flag("join-addr", "Sets existing Raft remote manager address to join.").String()
-	peersList        = kingpin.Flag("peers", "Sets the initial custer size (minimum of 2 other nodes required).").String()
-	listenRaftAddr   = kingpin.Flag("listen-raft-addr", "Sets the raft address.").String()
-	listenRemoteAddr = kingpin.Flag("listen-remote-addr", "Sets the remote API address.").String()
-)
-
-// GetOutboundIP : get preferred outbound ip of this machine
-func GetOutboundIP() net.IP {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-
-	return localAddr.IP
-}
-
-// GetPeersFromString : parses a peers list to generate an array
-func GetPeersFromString(list *string) ([]string, error) {
-	peers := strings.Split(*list, ",")
-
-	if len(peers) < 1 {
-		return nil, errors.New("--peers list requires minimum 2 other peers")
-	}
-
-	return nil, nil
-}
-
-// GetFlags : gets struct of flags from command line
-func GetFlags() (*Flags, error) {
-	kingpin.Parse()
-
-	configPath, err := filepath.Abs(*configDir)
+// GetDirPath : resolves full path for directory
+func GetDirPath(dir *string) (*string, error) {
+	path, err := filepath.Abs(*dir)
 
 	if err != nil {
-		logrus.Fatal(err)
+		return nil, err
 	}
 
-	_, statErr := os.Stat(configPath)
+	_, statErr := os.Stat(path)
 
 	if statErr != nil {
-		if err := os.MkdirAll(configPath, 0750); err != nil {
-			logrus.Fatal(err)
-		}
-	}
-
-	nodeFlags := &Flags{
-		ConfigDir: configPath,
-	}
-
-	if *joinAddr != "" {
-		join, err := net.ResolveTCPAddr("tcp", *joinAddr)
-
-		if err != nil {
+		if err := os.MkdirAll(path, 0750); err != nil {
 			return nil, err
 		}
-
-		nodeFlags.JoinAddr = join
 	}
 
-	if *listenRaftAddr != "" {
-		addr, err := net.ResolveTCPAddr("tcp", *listenRaftAddr)
+	return &path, nil
+}
 
-		if err != nil {
-			return nil, err
-		}
-
-		nodeFlags.ListenRaftAddr = addr
-	} else {
-		ip := GetOutboundIP()
-
-		tcpAddr := fmt.Sprintf("%s:15760", ip.String())
-
-		addr, err := net.ResolveTCPAddr("tcp", tcpAddr)
-
-		if err != nil {
-			return nil, err
-		}
-
-		nodeFlags.ListenRaftAddr = addr
+// GetListenAddr : returns the TCP listen addr
+func GetListenAddr(defaultPort int, ip *net.IP, overridePort *int) (*net.TCPAddr, error) {
+	if *overridePort != 0 {
+		defaultPort = *overridePort
 	}
 
-	if *listenRemoteAddr != "" {
-		addr, err := net.ResolveTCPAddr("tcp", *listenRemoteAddr)
+	listenAddr := fmt.Sprintf("%s:%d", ip.String(), defaultPort)
 
-		if err != nil {
-			return nil, err
-		}
+	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddr)
 
-		nodeFlags.ListenRemoteAddr = addr
-	} else {
-		ip := GetOutboundIP()
-
-		tcpAddr := fmt.Sprintf("%s:27242", ip.String())
-
-		addr, err := net.ResolveTCPAddr("tcp", tcpAddr)
-
-		if err != nil {
-			return nil, err
-		}
-
-		nodeFlags.ListenRemoteAddr = addr
+	if err != nil {
+		return nil, err
 	}
 
-	if peersList != nil {
-		peers, err := GetPeersFromString(peersList)
+	return listenTCPAddr, nil
+}
 
-		if err != nil {
-			return nil, err
-		}
+// GetOutboundIP : get preferred outbound ip of this machine
+func GetOutboundIP() (*net.IP, error) {
+	conn, err := net.Dial("udp", "1.1.1.1:80")
 
-		nodeFlags.Peers = peers
+	if err != nil {
+		return nil, err
 	}
 
-	fields := logrus.Fields{
-		"ConfigDir":        nodeFlags.ConfigDir,
-		"JoinAddr":         nodeFlags.JoinAddr.String(),
-		"Peers":            nodeFlags.Peers,
-		"ListenRaftAddr":   nodeFlags.ListenRaftAddr.String(),
-		"ListenRemoteAddr": nodeFlags.ListenRemoteAddr.String(),
-	}
+	defer conn.Close()
 
-	logrus.WithFields(fields).Info("Loaded command-line flags")
+	addr := conn.LocalAddr().(*net.UDPAddr)
 
-	return nodeFlags, nil
+	ip := addr.IP
+
+	return &ip, nil
 }
