@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option go_package = "github.com/erkrnt/symphony/api";
+
 package api;
 
 enum ServiceType {
@@ -7,8 +9,8 @@ enum ServiceType {
   BLOCK = 1;
 }
 
-message ServiceMember {
+message Service {
   string id = 1;
   string addr = 2;
-  ServiceType type = 3;
+  string type = 3;
 }

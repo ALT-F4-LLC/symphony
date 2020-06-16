@@ -1,16 +1,15 @@
 package main
 
 import (
-	"log"
-
 	"github.com/erkrnt/symphony/internal/block"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
 	b, err := block.New()
 
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 
 	go block.RemoteServer(b)

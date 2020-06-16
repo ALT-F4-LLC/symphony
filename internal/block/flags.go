@@ -9,15 +9,13 @@ import (
 )
 
 type flags struct {
-	configDir        string
-	listenGossipAddr *net.TCPAddr
-	listenRemoteAddr *net.TCPAddr
+	configDir  string
+	listenAddr *net.TCPAddr
 }
 
 var (
-	configDir        = kingpin.Flag("config-dir", "Sets configuration directory for block service.").Default(".").String()
-	listenGossipPort = kingpin.Flag("listen-gossip-port", "Sets the gossip listener port.").Int()
-	listenRemotePort = kingpin.Flag("listen-remote-port", "Sets the remote listener port.").Int()
+	configDir  = kingpin.Flag("config-dir", "Sets configuration directory for block service.").Default(".").String()
+	listenPort = kingpin.Flag("listen-port", "Sets the remote listener port.").Int()
 )
 
 func getFlags() (*flags, error) {
@@ -29,36 +27,26 @@ func getFlags() (*flags, error) {
 		return nil, err
 	}
 
-	flags := &flags{
-		configDir: *configPath,
-	}
-
 	ip, err := config.GetOutboundIP()
 
 	if err != nil {
 		return nil, err
 	}
 
-	listenGossipAddr, err := config.GetListenAddr(37065, ip, listenGossipPort)
+	listenAddr, err := config.GetListenAddr(27242, ip, listenPort)
 
 	if err != nil {
 		return nil, err
 	}
 
-	flags.listenGossipAddr = listenGossipAddr
-
-	listenRemoteAddr, err := config.GetListenAddr(27242, ip, listenRemotePort)
-
-	if err != nil {
-		return nil, err
+	flags := &flags{
+		configDir:  *configPath,
+		listenAddr: listenAddr,
 	}
-
-	flags.listenRemoteAddr = listenRemoteAddr
 
 	fields := logrus.Fields{
 		"ConfigDir":        flags.configDir,
-		"ListenGossipAddr": flags.listenGossipAddr.String(),
-		"ListenRemoteAddr": flags.listenRemoteAddr.String(),
+		"ListenRemoteAddr": flags.listenAddr.String(),
 	}
 
 	logrus.WithFields(fields).Info("Loaded command-line flags")

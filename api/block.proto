@@ -1,9 +1,11 @@
 syntax = "proto3";
 
+option go_package = "github.com/erkrnt/symphony/api";
+
 package api;
 
 service BlockControl {
-  rpc Join(BlockControlJoinRequest) returns (BlockControlJoinResponse) {}
+  rpc Init(BlockControlInitRequest) returns (BlockControlInitResponse) {}
 }
 
 service BlockRemote {
@@ -18,8 +20,8 @@ service BlockRemote {
   rpc RemoveVg(BlockVgFields) returns (RemoveStatus) {}
 }
 
-message BlockControlJoinRequest { string join_addr = 1; }
-message BlockControlJoinResponse {}
+message BlockControlInitRequest { string addr = 1; }
+message BlockControlInitResponse { string id = 1; }
 
 message BlockLvFields {
   string ID = 1;

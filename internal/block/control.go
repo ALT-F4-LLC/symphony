@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -19,8 +18,8 @@ type controlServer struct {
 	block *Block
 }
 
-func (s *controlServer) Join(ctx context.Context, in *api.BlockControlJoinRequest) (*api.BlockControlJoinResponse, error) {
-	joinAddr, err := net.ResolveTCPAddr("tcp", in.JoinAddr)
+func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitRequest) (*api.BlockControlInitResponse, error) {
+	joinAddr, err := net.ResolveTCPAddr("tcp", in.Addr)
 
 	if err != nil {
 		return nil, err
@@ -40,14 +39,14 @@ func (s *controlServer) Join(ctx context.Context, in *api.BlockControlJoinReques
 
 	defer cancel()
 
-	serviceAddr := fmt.Sprintf("%s", s.block.Flags.listenRemoteAddr.String())
+	serviceAddr := fmt.Sprintf("%s", s.block.Flags.listenAddr.String())
 
-	serviceJoinOpts := &api.ManagerRemoteJoinRequest{
+	serviceJoinOpts := &api.ManagerRemoteInitRequest{
 		Addr: serviceAddr,
 		Type: api.ServiceType_BLOCK,
 	}
 
-	serviceJoin, err := c.Join(ctx, serviceJoinOpts)
+	serviceJoin, err := c.Init(ctx, serviceJoinOpts)
 
 	if err != nil {
 		return nil, err
@@ -59,48 +58,9 @@ func (s *controlServer) Join(ctx context.Context, in *api.BlockControlJoinReques
 		return nil, err
 	}
 
-	saveServiceIDErr := s.block.SaveServiceID(serviceID)
-
-	if saveServiceIDErr != nil {
-		return nil, saveServiceIDErr
+	res := &api.BlockControlInitResponse{
+		Id: serviceID.String(),
 	}
-
-	addr := s.block.Flags.listenGossipAddr
-
-	opts := &api.ManagerRemoteJoinGossipRequest{
-		GossipAddr: addr.String(),
-		ServiceId:  serviceID.String(),
-	}
-
-	join, err := c.JoinGossip(ctx, opts)
-
-	if err != nil {
-		return nil, err
-	}
-
-	id, err := uuid.Parse(join.GossipId)
-
-	if err != nil {
-		return nil, err
-	}
-
-	memberlist, gossipErr := gossip.NewMemberList(id, addr.Port)
-
-	if gossipErr != nil {
-		return nil, err
-	}
-
-	log.Print(join.GossipPeerAddr)
-
-	if join.GossipPeerAddr != addr.String() {
-		_, err := memberlist.Join([]string{join.GossipPeerAddr})
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	res := &api.BlockControlJoinResponse{}
 
 	return res, nil
 }

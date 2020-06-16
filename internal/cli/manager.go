@@ -10,7 +10,7 @@ import (
 
 // ManagerInit : handle the "init" command
 func ManagerInit(socket *string) {
-	conn := NewConnSocket(socket)
+	conn := NewConnControl(socket)
 
 	defer conn.Close()
 
@@ -29,59 +29,13 @@ func ManagerInit(socket *string) {
 	}
 }
 
-// ManagerJoin : handle the "join" command
-func ManagerJoin(addr *string, socket *string) {
-	conn := NewConnSocket(socket)
-
-	defer conn.Close()
-
-	c := api.NewManagerControlClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-	defer cancel()
-
-	opts := &api.ManagerControlJoinRequest{
-		RemoteAddr: *addr,
-	}
-
-	_, joinErr := c.Join(ctx, opts)
-
-	if joinErr != nil {
-		log.Fatal(joinErr)
-	}
-}
-
-// ManagerMembers : handle the "members" command
-func ManagerMembers(socket *string) {
-	conn := NewConnSocket(socket)
-
-	defer conn.Close()
-
-	c := api.NewManagerControlClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-	defer cancel()
-
-	opts := &api.ManagerControlMembersRequest{}
-
-	members, err := c.Members(ctx, opts)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Print(members)
-}
-
 // ManagerRemove : handle the "remove" command
-func ManagerRemove(raftID *uint64, socket *string) {
-	if *raftID == 0 {
+func ManagerRemove(id *string, socket *string) {
+	if *id == "" {
 		log.Fatal("invalid_member_id")
 	}
 
-	conn := NewConnSocket(socket)
+	conn := NewConnControl(socket)
 
 	defer conn.Close()
 
@@ -92,7 +46,7 @@ func ManagerRemove(raftID *uint64, socket *string) {
 	defer cancel()
 
 	opts := &api.ManagerControlRemoveRequest{
-		RaftId: *raftID,
+		Id: *id,
 	}
 
 	_, removeErr := c.Remove(ctx, opts)
