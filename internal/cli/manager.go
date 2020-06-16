@@ -9,18 +9,20 @@ import (
 )
 
 // ManagerInit : handle the "init" command
-func ManagerInit(socket *string) {
+func ManagerInit(addr *string, socket *string) {
 	conn := NewConnControl(socket)
 
 	defer conn.Close()
 
 	c := api.NewManagerControlClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	defer cancel()
 
-	opts := &api.ManagerControlInitRequest{}
+	opts := &api.ManagerControlInitRequest{
+		Addr: *addr,
+	}
 
 	_, initErr := c.Init(ctx, opts)
 
@@ -46,7 +48,7 @@ func ManagerRemove(id *string, socket *string) {
 	defer cancel()
 
 	opts := &api.ManagerControlRemoveRequest{
-		Id: *id,
+		ServiceID: *id,
 	}
 
 	_, removeErr := c.Remove(ctx, opts)

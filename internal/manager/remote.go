@@ -14,50 +14,12 @@ import (
 )
 
 type remoteServer struct {
-	Manager *Manager
-}
-
-func (s *remoteServer) Gossip(ctx context.Context, in *api.ManagerRemoteGossipRequest) (*api.ManagerRemoteGossipResponse, error) {
-	services, err := s.Manager.GetServices()
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	serviceID, err := uuid.Parse(in.ServiceId)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	service := GetServiceByID(services, serviceID)
-
-	if service == nil {
-		st := status.New(codes.NotFound, "invalid_service_id")
-
-		return nil, st.Err()
-	}
-
-	if service.Type != api.ServiceType_MANAGER.String() {
-		st := status.New(codes.PermissionDenied, "invalid_service_type")
-
-		return nil, st.Err()
-	}
-
-	res := &api.ManagerRemoteGossipResponse{
-		GossipAddr: s.Manager.Flags.ListenGossipAddr.String(),
-	}
-
-	return res, nil
+	manager *Manager
 }
 
 func (s *remoteServer) Init(ctx context.Context, in *api.ManagerRemoteInitRequest) (*api.ManagerRemoteInitResponse, error) {
 	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   s.Manager.Flags.EtcdEndpoints,
+		Endpoints:   s.manager.flags.etcdEndpoints,
 		DialTimeout: 5 * time.Second,
 	})
 
@@ -92,7 +54,7 @@ func (s *remoteServer) Init(ctx context.Context, in *api.ManagerRemoteInitReques
 			return nil, st.Err()
 		}
 
-		if srvc.Addr == in.Addr {
+		if srvc.Addr == in.ServiceAddr {
 			st := status.New(codes.AlreadyExists, codes.AlreadyExists.String())
 
 			return nil, st.Err()
@@ -102,12 +64,12 @@ func (s *remoteServer) Init(ctx context.Context, in *api.ManagerRemoteInitReques
 	serviceID := uuid.New()
 
 	service := api.Service{
-		Addr: in.Addr,
-		Id:   serviceID.String(),
-		Type: in.Type.String(),
+		Addr: in.ServiceAddr,
+		ID:   serviceID.String(),
+		Type: in.ServiceType.String(),
 	}
 
-	serviceKey := fmt.Sprintf("/service/%s", service.Id)
+	serviceKey := fmt.Sprintf("/service/%s", service.ID)
 
 	serviceJSON, err := json.Marshal(service)
 
@@ -125,10 +87,18 @@ func (s *remoteServer) Init(ctx context.Context, in *api.ManagerRemoteInitReques
 		return nil, st.Err()
 	}
 
+	gossipAddr := s.manager.flags.listenGossipAddr
+
 	res := &api.ManagerRemoteInitResponse{
-		GossipAddr: s.Manager.Flags.ListenGossipAddr.String(),
-		Id:         service.Id,
+		GossipAddr: gossipAddr.String(),
+		ServiceID:  service.ID,
 	}
+
+	return res, nil
+}
+
+func (s *remoteServer) Leave(ctx context.Context, in *api.ManagerRemoteLeaveRequest) (*api.ManagerRemoteLeaveResponse, error) {
+	res := &api.ManagerRemoteLeaveResponse{}
 
 	return res, nil
 }

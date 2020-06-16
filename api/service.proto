@@ -10,8 +10,7 @@ enum ServiceType {
 }
 
 message Service {
-  string addr = 1;
-  string id = 2;
-  string key = 3;
-  string type = 4;
+  string Addr = 1;
+  string ID = 2;
+  string Type = 4;
 }

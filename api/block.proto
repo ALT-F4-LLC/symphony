@@ -6,44 +6,52 @@ package api;
 
 service BlockControl {
   rpc Init(BlockControlInitRequest) returns (BlockControlInitResponse) {}
+  rpc Leave(BlockControlLeaveRequest) returns (BlockControlLeaveResponse) {}
 }
 
 service BlockRemote {
-  rpc GetLv(BlockLvFields) returns (BlockLvMetadata) {}
-  rpc GetPv(BlockPvFields) returns (BlockPvMetadata) {}
-  rpc GetVg(BlockVgFields) returns (BlockVgMetadata) {}
-  rpc NewLv(BlockNewLvFields) returns (BlockLvMetadata) {}
-  rpc NewPv(BlockPvFields) returns (BlockPvMetadata) {}
-  rpc NewVg(BlockNewVgFields) returns (BlockVgMetadata) {}
-  rpc RemoveLv(BlockLvFields) returns (RemoveStatus) {}
-  rpc RemovePv(BlockPvFields) returns (RemoveStatus) {}
-  rpc RemoveVg(BlockVgFields) returns (RemoveStatus) {}
+  rpc GetLv(BlockRemoteLvRequest) returns (BlockRemoteLvResponse) {}
+  rpc GetPv(BlockRemotePvRequest) returns (BlockRemotePvResponse) {}
+  rpc GetVg(BlockRemoteVgRequest) returns (BlockRemoteVgResponse) {}
+  rpc Leave(BlockRemoteLeaveRequest) returns (BlockRemoteLeaveResponse) {}
+  rpc NewLv(BlockRemoteNewLvRequest) returns (BlockRemoteLvResponse) {}
+  rpc NewPv(BlockRemotePvRequest) returns (BlockRemotePvResponse) {}
+  rpc NewVg(BlockRemoteNewVgRequest) returns (BlockRemoteVgResponse) {}
+  rpc RemoveLv(BlockRemoteLvRequest) returns (RemoveStatusResponse) {}
+  rpc RemovePv(BlockRemotePvRequest) returns (RemoveStatusResponse) {}
+  rpc RemoveVg(BlockRemoteVgRequest) returns (RemoveStatusResponse) {}
 }
 
-message BlockControlInitRequest { string addr = 1; }
-message BlockControlInitResponse { string id = 1; }
+message BlockControlInitRequest { string Addr = 1; }
+message BlockControlInitResponse { string ServiceID = 1; }
 
-message BlockLvFields {
+message BlockControlLeaveRequest {}
+message BlockControlLeaveResponse {}
+
+message BlockRemoteLeaveRequest { string ServiceID = 1; }
+message BlockRemoteLeaveResponse {}
+
+message BlockRemoteLvRequest {
   string ID = 1;
   string VolumeGroupID = 2;
 }
 
-message BlockPvFields { string Device = 1; }
+message BlockRemotePvRequest { string Device = 1; }
 
-message BlockVgFields { string ID = 1; }
+message BlockRemoteVgRequest { string ID = 1; }
 
-message BlockNewLvFields {
+message BlockRemoteNewLvRequest {
   string ID = 1;
   string VolumeGroupID = 2;
   string Size = 3;
 }
 
-message BlockNewVgFields {
+message BlockRemoteNewVgRequest {
   string Device = 1;
   string ID = 2;
 }
 
-message BlockLvMetadata {
+message BlockRemoteLvResponse {
   string LvName = 1;
   string VgName = 2;
   string LvAttr = 3;
@@ -58,7 +66,7 @@ message BlockLvMetadata {
   string ConvertLv = 12;
 }
 
-message BlockPvMetadata {
+message BlockRemotePvResponse {
   string PvName = 1;
   string VgName = 2;
   string PvFmt = 3;
@@ -67,7 +75,7 @@ message BlockPvMetadata {
   string PvFree = 6;
 }
 
-message BlockVgMetadata {
+message BlockRemoteVgResponse {
   string VgName = 1;
   string PvCount = 2;
   string LvCount = 3;
@@ -77,4 +85,4 @@ message BlockVgMetadata {
   string VgFree = 7;
 }
 
-message RemoveStatus { bool Success = 1; }
+message RemoveStatusResponse { bool Success = 1; }

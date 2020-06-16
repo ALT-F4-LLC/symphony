@@ -9,13 +9,12 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-// Flags : command line flags for service
-type Flags struct {
-	ConfigPath        string
-	EtcdEndpoints     []string
-	ListenGossipAddr  *net.TCPAddr
-	ListenServiceAddr *net.TCPAddr
-	Verbose           bool
+type flags struct {
+	configPath        string
+	etcdEndpoints     []string
+	listenGossipAddr  *net.TCPAddr
+	listenServiceAddr *net.TCPAddr
+	verbose           bool
 }
 
 var (
@@ -26,8 +25,7 @@ var (
 	verbose           = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
 )
 
-// GetFlags : gets struct of flags from command line
-func GetFlags() (*Flags, error) {
+func getFlags() (*flags, error) {
 	kingpin.Parse()
 
 	configPath, err := config.GetDirPath(configDir)
@@ -54,20 +52,20 @@ func GetFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	flags := &Flags{
-		ConfigPath:        *configPath,
-		EtcdEndpoints:     strings.Split(*etcdEndpoints, ","),
-		ListenGossipAddr:  listenGossipAddr,
-		ListenServiceAddr: listenServiceAddr,
-		Verbose:           *verbose,
+	flags := &flags{
+		configPath:        *configPath,
+		etcdEndpoints:     strings.Split(*etcdEndpoints, ","),
+		listenGossipAddr:  listenGossipAddr,
+		listenServiceAddr: listenServiceAddr,
+		verbose:           *verbose,
 	}
 
 	fields := logrus.Fields{
-		"ConfigPath":        flags.ConfigPath,
-		"EtcdEndpoints":     flags.EtcdEndpoints,
-		"ListenGossipAddr":  flags.ListenGossipAddr.String(),
-		"ListenServiceAddr": flags.ListenServiceAddr.String(),
-		"Verbose":           flags.Verbose,
+		"configPath":        flags.configPath,
+		"etcdEndpoints":     flags.etcdEndpoints,
+		"listenGossipAddr":  flags.listenGossipAddr.String(),
+		"listenServiceAddr": flags.listenServiceAddr.String(),
+		"verbose":           flags.verbose,
 	}
 
 	logrus.WithFields(fields).Info("Loaded command-line flags")

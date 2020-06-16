@@ -20,24 +20,24 @@ import (
 
 // Manager : manager node
 type Manager struct {
-	Flags *Flags
-	Key   *config.Key
+	flags *flags
+	key   *config.Key
 }
 
 // New : creates a new manager struct
 func New() (*Manager, error) {
-	flags, err := GetFlags()
+	flags, err := getFlags()
 
 	if err != nil {
 		return nil, err
 	}
 
-	if flags.Verbose {
+	if flags.verbose {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
 	manager := &Manager{
-		Flags: flags,
+		flags: flags,
 	}
 
 	return manager, nil
@@ -45,7 +45,7 @@ func New() (*Manager, error) {
 
 // ControlServer : starts manager control server
 func (m *Manager) ControlServer() {
-	socketPath := fmt.Sprintf("%s/control.sock", m.Flags.ConfigPath)
+	socketPath := fmt.Sprintf("%s/control.sock", m.flags.configPath)
 
 	if err := os.RemoveAll(socketPath); err != nil {
 		log.Fatal(err)
@@ -60,7 +60,7 @@ func (m *Manager) ControlServer() {
 	server := grpc.NewServer()
 
 	control := &controlServer{
-		Manager: m,
+		manager: m,
 	}
 
 	api.RegisterManagerControlServer(server, control)
@@ -72,9 +72,10 @@ func (m *Manager) ControlServer() {
 	}
 }
 
+// GetServices : gets all services from state
 func (m *Manager) GetServices() ([]*api.Service, error) {
 	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   m.Flags.EtcdEndpoints,
+		Endpoints:   m.flags.etcdEndpoints,
 		DialTimeout: 5 * time.Second,
 	})
 
@@ -119,14 +120,14 @@ func (m *Manager) GetServices() ([]*api.Service, error) {
 
 // RemoteServer : starts remote gRPC server
 func (m *Manager) RemoteServer() {
-	listen, err := net.Listen("tcp", m.Flags.ListenServiceAddr.String())
+	listen, err := net.Listen("tcp", m.flags.listenServiceAddr.String())
 
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
 	remote := &remoteServer{
-		Manager: m,
+		manager: m,
 	}
 
 	server := grpc.NewServer()

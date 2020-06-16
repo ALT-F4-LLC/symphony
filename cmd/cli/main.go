@@ -36,7 +36,8 @@ var (
 	// blockVgRemove              = blockVg.Command("remove", "Removes a volume group.")
 	// blockVgRemoveID            = blockVgRemove.Arg("id", "Sets volume group id.").Required().String()
 	manager               = kingpin.Command("manager", "Manager service commands.")
-	managerInit           = manager.Command("init", "Initializes a new cluster.")
+	managerInit           = manager.Command("init", "Initializes new cluster.")
+	managerInitAddr       = managerInit.Arg("addr", "Initializes in an existing cluster.").String()
 	managerRemove         = manager.Command("remove", "Removes a service from the cluster.")
 	managerRemoveMemberID = managerRemove.Arg("service-id", "Service to be removed from the cluster.").Required().String()
 	remoteAddr            = kingpin.Flag("remote-addr", "Block service commands.").Default("127.0.0.1:27242").String()
@@ -66,7 +67,7 @@ func main() {
 	// case blockVgRemove.FullCommand():
 	// 	cli.BlockVgRemove(blockVgRemoveID, remoteAddr)
 	case managerInit.FullCommand():
-		cli.ManagerInit(socket)
+		cli.ManagerInit(managerInitAddr, socket)
 	case managerRemove.FullCommand():
 		cli.ManagerRemove(managerRemoveMemberID, socket)
 	}

@@ -8,34 +8,40 @@ import "api/service.proto";
 
 service ManagerControl {
   rpc Init(ManagerControlInitRequest) returns (ManagerControlInitResponse) {}
+  rpc Leave(ManagerControlLeaveRequest) returns (ManagerControlLeaveResponse) {}
   rpc Remove(ManagerControlRemoveRequest) returns (ManagerControlRemoveResponse) {}
 }
 
 service ManagerRemote {
-  rpc Gossip(ManagerRemoteGossipRequest) returns (ManagerRemoteGossipResponse) {}
   rpc Init(ManagerRemoteInitRequest) returns (ManagerRemoteInitResponse) {}
+  rpc Leave(ManagerRemoteLeaveRequest) returns (ManagerRemoteLeaveResponse) {}
 }
 
 // -- CONTROL ENDPOINTS -- //
 
-message ManagerControlInitRequest {}
+message ManagerControlInitRequest {
+  string Addr = 1;
+}
 message ManagerControlInitResponse {
-  string id = 1;
+  string ServiceID = 1;
 }
 
-message ManagerControlRemoveRequest { string id = 1; }
+message ManagerControlLeaveRequest {}
+message ManagerControlLeaveResponse {}
+
+message ManagerControlRemoveRequest { string ServiceID = 1; }
 message ManagerControlRemoveResponse {}
 
 // -- REMOTE ENDPOINTS -- //
 
-message ManagerRemoteGossipRequest { string service_id = 1; }
-message ManagerRemoteGossipResponse { string gossip_addr = 1; }
-
 message ManagerRemoteInitRequest {
-  string addr = 1;
-  ServiceType type = 2;
+  string ServiceAddr = 1;
+  ServiceType ServiceType = 2;
 }
 message ManagerRemoteInitResponse {
-  string id = 1;
-  string gossip_addr = 2;
+  string GossipAddr = 1;
+  string ServiceID = 2;
 }
+
+message ManagerRemoteLeaveRequest { string ServiceID = 1; }
+message ManagerRemoteLeaveResponse {}

@@ -39,26 +39,26 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 
 	defer conn.Close()
 
-	c := api.NewManagerRemoteClient(conn)
+	r := api.NewManagerRemoteClient(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
 	defer cancel()
 
-	addr := fmt.Sprintf("%s", s.block.Flags.listenServiceAddr.String())
+	serviceAddr := fmt.Sprintf("%s", s.block.Flags.listenServiceAddr.String())
 
 	opts := &api.ManagerRemoteInitRequest{
-		Addr: addr,
-		Type: api.ServiceType_BLOCK,
+		ServiceAddr: serviceAddr,
+		ServiceType: api.ServiceType_BLOCK,
 	}
 
-	join, err := c.Init(ctx, opts)
+	join, err := r.Init(ctx, opts)
 
 	if err != nil {
 		return nil, err
 	}
 
-	serviceID, err := uuid.Parse(join.Id)
+	serviceID, err := uuid.Parse(join.ServiceID)
 
 	if err != nil {
 		return nil, err
@@ -79,9 +79,9 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 	gossipID := uuid.New()
 
 	gossipMember := &gossip.Member{
-		ServiceAddr: addr,
+		ServiceAddr: opts.ServiceAddr,
 		ServiceID:   serviceID.String(),
-		ServiceType: opts.Type.String(),
+		ServiceType: opts.ServiceType.String(),
 	}
 
 	memberlist, err := gossip.NewMemberList(gossipID, gossipMember, s.block.Flags.listenGossipAddr.Port)
@@ -101,8 +101,15 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 	}
 
 	res := &api.BlockControlInitResponse{
-		Id: serviceID.String(),
+		ServiceID: serviceID.String(),
 	}
+
+	return res, nil
+}
+
+func (s *controlServer) Leave(ctx context.Context, in *api.BlockControlLeaveRequest) (*api.BlockControlLeaveResponse, error) {
+
+	res := &api.BlockControlLeaveResponse{}
 
 	return res, nil
 }

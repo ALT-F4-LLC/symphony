@@ -18,7 +18,7 @@ type remoteServer struct {
 }
 
 // GetLv : gets logical volume metadata from block host
-func (s *remoteServer) GetLv(ctx context.Context, in *api.BlockLvFields) (*api.BlockLvMetadata, error) {
+func (s *remoteServer) GetLv(ctx context.Context, in *api.BlockRemoteLvRequest) (*api.BlockRemoteLvResponse, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -42,7 +42,7 @@ func (s *remoteServer) GetLv(ctx context.Context, in *api.BlockLvFields) (*api.B
 		return nil, api.ProtoError(err)
 	}
 
-	metadata := &api.BlockLvMetadata{
+	metadata := &api.BlockRemoteLvResponse{
 		LvName:          lv.LvName,
 		VgName:          lv.VgName,
 		LvAttr:          lv.LvAttr,
@@ -68,7 +68,7 @@ func (s *remoteServer) GetLv(ctx context.Context, in *api.BlockLvFields) (*api.B
 }
 
 // GetPv : gets physical volume
-func (s *remoteServer) GetPv(ctx context.Context, in *api.BlockPvFields) (*api.BlockPvMetadata, error) {
+func (s *remoteServer) GetPv(ctx context.Context, in *api.BlockRemotePvRequest) (*api.BlockRemotePvResponse, error) {
 	pv, pvErr := getPv(in.Device)
 
 	if pvErr != nil {
@@ -81,7 +81,7 @@ func (s *remoteServer) GetPv(ctx context.Context, in *api.BlockPvFields) (*api.B
 		return nil, api.ProtoError(err)
 	}
 
-	metadata := &api.BlockPvMetadata{
+	metadata := &api.BlockRemotePvResponse{
 		PvName: pv.PvName,
 		VgName: pv.VgName,
 		PvFmt:  pv.PvFmt,
@@ -96,7 +96,7 @@ func (s *remoteServer) GetPv(ctx context.Context, in *api.BlockPvFields) (*api.B
 }
 
 // GetVg : gets volume group
-func (s *remoteServer) GetVg(ctx context.Context, in *api.BlockVgFields) (*api.BlockVgMetadata, error) {
+func (s *remoteServer) GetVg(ctx context.Context, in *api.BlockRemoteVgRequest) (*api.BlockRemoteVgResponse, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -109,7 +109,7 @@ func (s *remoteServer) GetVg(ctx context.Context, in *api.BlockVgFields) (*api.B
 		return nil, api.ProtoError(err)
 	}
 
-	metadata := &api.BlockVgMetadata{
+	metadata := &api.BlockRemoteVgResponse{
 		VgName:    vg.VgName,
 		PvCount:   vg.PvCount,
 		LvCount:   vg.LvCount,
@@ -124,8 +124,15 @@ func (s *remoteServer) GetVg(ctx context.Context, in *api.BlockVgFields) (*api.B
 	return metadata, nil
 }
 
+// Leave : removes from cluster
+func (s *remoteServer) Leave(ctx context.Context, in *api.BlockRemoteLeaveRequest) (*api.BlockRemoteLeaveResponse, error) {
+	res := &api.BlockRemoteLeaveResponse{}
+
+	return res, nil
+}
+
 // NewLv : creates logical volume
-func (s *remoteServer) NewLv(ctx context.Context, in *api.BlockNewLvFields) (*api.BlockLvMetadata, error) {
+func (s *remoteServer) NewLv(ctx context.Context, in *api.BlockRemoteNewLvRequest) (*api.BlockRemoteLvResponse, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -144,7 +151,7 @@ func (s *remoteServer) NewLv(ctx context.Context, in *api.BlockNewLvFields) (*ap
 		return nil, err
 	}
 
-	metadata := &api.BlockLvMetadata{
+	metadata := &api.BlockRemoteLvResponse{
 		LvName:          lv.LvName,
 		VgName:          lv.VgName,
 		LvAttr:          lv.LvAttr,
@@ -171,14 +178,14 @@ func (s *remoteServer) NewLv(ctx context.Context, in *api.BlockNewLvFields) (*ap
 }
 
 // NewPv : creates physical volume
-func (s *remoteServer) NewPv(ctx context.Context, in *api.BlockPvFields) (*api.BlockPvMetadata, error) {
+func (s *remoteServer) NewPv(ctx context.Context, in *api.BlockRemotePvRequest) (*api.BlockRemotePvResponse, error) {
 	pv, err := newPv(in.Device)
 
 	if err != nil {
 		return nil, api.ProtoError(err)
 	}
 
-	metadata := &api.BlockPvMetadata{
+	metadata := &api.BlockRemotePvResponse{
 		PvName: pv.PvName,
 		VgName: pv.VgName,
 		PvFmt:  pv.PvFmt,
@@ -193,7 +200,7 @@ func (s *remoteServer) NewPv(ctx context.Context, in *api.BlockPvFields) (*api.B
 }
 
 // NewVg : creates volume group
-func (s *remoteServer) NewVg(ctx context.Context, in *api.BlockNewVgFields) (*api.BlockVgMetadata, error) {
+func (s *remoteServer) NewVg(ctx context.Context, in *api.BlockRemoteNewVgRequest) (*api.BlockRemoteVgResponse, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -206,7 +213,7 @@ func (s *remoteServer) NewVg(ctx context.Context, in *api.BlockNewVgFields) (*ap
 		return nil, api.ProtoError(err)
 	}
 
-	metadata := &api.BlockVgMetadata{
+	metadata := &api.BlockRemoteVgResponse{
 		VgName:    vg.VgName,
 		PvCount:   vg.PvCount,
 		LvCount:   vg.LvCount,
@@ -222,7 +229,7 @@ func (s *remoteServer) NewVg(ctx context.Context, in *api.BlockNewVgFields) (*ap
 }
 
 // RemoveLv : removes logical volume
-func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockLvFields) (*api.RemoveStatus, error) {
+func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockRemoteLvRequest) (*api.RemoveStatusResponse, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -241,7 +248,7 @@ func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockLvFields) (*ap
 		return nil, api.ProtoError(rmErr)
 	}
 
-	status := &api.RemoveStatus{Success: true}
+	status := &api.RemoveStatusResponse{Success: true}
 
 	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveLv")
 
@@ -249,14 +256,14 @@ func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockLvFields) (*ap
 }
 
 // RemovePv : removes physical volume
-func (s *remoteServer) RemovePv(ctx context.Context, in *api.BlockPvFields) (*api.RemoveStatus, error) {
+func (s *remoteServer) RemovePv(ctx context.Context, in *api.BlockRemotePvRequest) (*api.RemoveStatusResponse, error) {
 	err := removePv(in.Device)
 
 	if err != nil {
 		return nil, api.ProtoError(err)
 	}
 
-	status := &api.RemoveStatus{Success: true}
+	status := &api.RemoveStatusResponse{Success: true}
 
 	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemovePv")
 
@@ -264,7 +271,7 @@ func (s *remoteServer) RemovePv(ctx context.Context, in *api.BlockPvFields) (*ap
 }
 
 // RemoveVg : removes volume group
-func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockVgFields) (*api.RemoveStatus, error) {
+func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockRemoteVgRequest) (*api.RemoveStatusResponse, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -277,7 +284,7 @@ func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockVgFields) (*ap
 		return nil, api.ProtoError(rmErr)
 	}
 
-	status := &api.RemoveStatus{Success: true}
+	status := &api.RemoveStatusResponse{Success: true}
 
 	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveVg")
 

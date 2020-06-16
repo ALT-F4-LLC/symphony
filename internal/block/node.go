@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"sync"
 
+	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -13,7 +14,7 @@ import (
 // Block : block node
 type Block struct {
 	Flags *flags
-	Key   *key
+	Key   *config.Key
 
 	mu sync.Mutex
 }
@@ -57,16 +58,13 @@ func New() (*Block, error) {
 		return nil, err
 	}
 
-	key, err := GetKey(flags.configDir)
-
-	if err != nil {
-		return nil, err
+	if flags.verbose {
+		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	b := &Block{
+	block := &Block{
 		Flags: flags,
-		Key:   key,
 	}
 
-	return b, nil
+	return block, nil
 }
