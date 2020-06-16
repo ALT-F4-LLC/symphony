@@ -9,13 +9,18 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/google/uuid"
+	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type controlServer struct {
-	block *Block
+	block      *Block
+	memberlist *memberlist.Memberlist
 }
 
 func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitRequest) (*api.BlockControlInitResponse, error) {
@@ -39,23 +44,48 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 
 	defer cancel()
 
-	serviceAddr := fmt.Sprintf("%s", s.block.Flags.listenAddr.String())
+	addr := fmt.Sprintf("%s", s.block.Flags.listenServiceAddr.String())
 
-	serviceJoinOpts := &api.ManagerRemoteInitRequest{
-		Addr: serviceAddr,
+	opts := &api.ManagerRemoteInitRequest{
+		Addr: addr,
 		Type: api.ServiceType_BLOCK,
 	}
 
-	serviceJoin, err := c.Init(ctx, serviceJoinOpts)
+	join, err := c.Init(ctx, opts)
 
 	if err != nil {
 		return nil, err
 	}
 
-	serviceID, err := uuid.Parse(serviceJoin.Id)
+	serviceID, err := uuid.Parse(join.Id)
 
 	if err != nil {
 		return nil, err
+	}
+
+	gossipID := uuid.New()
+
+	gossipMember := &gossip.Member{
+		Id:          gossipID.String(),
+		ServiceAddr: addr,
+		ServiceId:   serviceID.String(),
+		ServiceType: opts.Type.String(),
+	}
+
+	memberlist, err := gossip.NewMemberList(gossipMember, s.block.Flags.listenGossipAddr.Port)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	_, joinErr := memberlist.Join([]string{join.GossipAddr})
+
+	if joinErr != nil {
+		st := status.New(codes.Internal, joinErr.Error())
+
+		return nil, st.Err()
 	}
 
 	res := &api.BlockControlInitResponse{

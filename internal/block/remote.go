@@ -286,7 +286,7 @@ func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockVgFields) (*ap
 
 // RemoteServer : starts remote grpc endpoints
 func RemoteServer(b *Block) {
-	lis, err := net.Listen("tcp", b.Flags.listenAddr.String())
+	lis, err := net.Listen("tcp", b.Flags.listenServiceAddr.String())
 
 	if err != nil {
 		log.Fatal("Failed to listen")

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
 )
 
@@ -21,7 +20,10 @@ type Delegate struct {
 
 // Member : defines gossip member metadata
 type Member struct {
-	id string
+	Id          string
+	ServiceAddr string
+	ServiceId   string
+	ServiceType string
 }
 
 // GetBroadcasts : gets broadcasts from gossip protocol
@@ -78,12 +80,8 @@ func (d *Delegate) MergeRemoteState(buf []byte, join bool) {
 }
 
 // NewMemberList : creates memberlist for gossip protocol
-func NewMemberList(id uuid.UUID, port int) (*memberlist.Memberlist, error) {
-	data := Member{
-		id: id.String(),
-	}
-
-	meta, err := json.Marshal(data)
+func NewMemberList(member *Member, port int) (*memberlist.Memberlist, error) {
+	meta, err := json.Marshal(member)
 
 	if err != nil {
 		return nil, err
@@ -97,7 +95,7 @@ func NewMemberList(id uuid.UUID, port int) (*memberlist.Memberlist, error) {
 
 	config.BindPort = port
 
-	config.Name = id.String()
+	config.Name = member.Id
 
 	list, err := memberlist.Create(config)
 

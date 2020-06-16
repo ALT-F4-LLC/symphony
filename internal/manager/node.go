@@ -113,7 +113,7 @@ func (m *Manager) GetServices() ([]*api.Service, error) {
 
 // RemoteServer : starts remote gRPC server
 func (m *Manager) RemoteServer() {
-	listen, err := net.Listen("tcp", m.Flags.ListenAddr.String())
+	listen, err := net.Listen("tcp", m.Flags.ListenServiceAddr.String())
 
 	if err != nil {
 		logrus.Fatal(err)

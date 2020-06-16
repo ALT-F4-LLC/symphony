@@ -4,18 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/google/uuid"
+	"github.com/hashicorp/memberlist"
+	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/clientv3"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // controlServer : manager remote requests
 type controlServer struct {
-	Manager *Manager
+	Manager    *Manager
+	Memberlist *memberlist.Memberlist
 }
 
 func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
@@ -33,9 +39,9 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 	return etcd, nil
 }
 
-func GetServiceByID(services []*api.Service, id string) *api.Service {
+func GetServiceByID(services []*api.Service, id uuid.UUID) *api.Service {
 	for _, service := range services {
-		if service.Id == id {
+		if service.Id == id.String() {
 			return service
 		}
 	}
@@ -67,7 +73,7 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 	}
 
 	for _, service := range services {
-		if service.Addr == s.Manager.Flags.ListenAddr.String() {
+		if service.Addr == s.Manager.Flags.ListenServiceAddr.String() {
 			st := status.New(codes.AlreadyExists, codes.AlreadyExists.String())
 
 			return nil, st.Err()
@@ -76,8 +82,8 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 
 	serviceID := uuid.New()
 
-	service := api.Service{
-		Addr: s.Manager.Flags.ListenAddr.String(),
+	service := &api.Service{
+		Addr: s.Manager.Flags.ListenServiceAddr.String(),
 		Id:   serviceID.String(),
 		Type: api.ServiceType_MANAGER.String(),
 	}
@@ -99,6 +105,65 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 
 		return nil, st.Err()
 	}
+
+	gossipID := uuid.New()
+
+	gossipMember := &gossip.Member{
+		Id:          gossipID.String(),
+		ServiceAddr: service.Addr,
+		ServiceId:   service.Id,
+		ServiceType: service.Type,
+	}
+
+	memberlist, err := gossip.NewMemberList(gossipMember, s.Manager.Flags.ListenGossipAddr.Port)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if len(services) > 0 {
+		remoteService := services[0]
+
+		conn, err := grpc.Dial(remoteService.Addr, grpc.WithInsecure())
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		defer conn.Close()
+
+		c := api.NewManagerRemoteClient(conn)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+		defer cancel()
+
+		opts := &api.ManagerRemoteGossipRequest{
+			ServiceId: service.Id,
+		}
+
+		gossipRes, err := c.Gossip(ctx, opts)
+
+		logrus.Print(gossipRes.GossipAddr)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		_, joinErr := memberlist.Join([]string{gossipRes.GossipAddr})
+
+		if joinErr != nil {
+			st := status.New(codes.Internal, joinErr.Error())
+
+			return nil, st.Err()
+		}
+	}
+
+	s.Memberlist = memberlist
 
 	res := &api.ManagerControlInitResponse{
 		Id: service.Id,
@@ -139,7 +204,7 @@ func (s *controlServer) Remove(ctx context.Context, in *api.ManagerControlRemove
 		return nil, st.Err()
 	}
 
-	service := GetServiceByID(services, serviceID.String())
+	service := GetServiceByID(services, serviceID)
 
 	if service == nil {
 		st := status.New(codes.NotFound, "service_not_found")

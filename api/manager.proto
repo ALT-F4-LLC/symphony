@@ -12,6 +12,7 @@ service ManagerControl {
 }
 
 service ManagerRemote {
+  rpc Gossip(ManagerRemoteGossipRequest) returns (ManagerRemoteGossipResponse) {}
   rpc Init(ManagerRemoteInitRequest) returns (ManagerRemoteInitResponse) {}
 }
 
@@ -27,10 +28,14 @@ message ManagerControlRemoveResponse {}
 
 // -- REMOTE ENDPOINTS -- //
 
+message ManagerRemoteGossipRequest { string service_id = 1; }
+message ManagerRemoteGossipResponse { string gossip_addr = 1; }
+
 message ManagerRemoteInitRequest {
   string addr = 1;
   ServiceType type = 2;
 }
 message ManagerRemoteInitResponse {
   string id = 1;
+  string gossip_addr = 2;
 }
