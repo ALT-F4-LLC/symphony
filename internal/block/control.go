@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
@@ -63,16 +64,27 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 		return nil, err
 	}
 
+	key := &config.Key{
+		ServiceID: serviceID,
+	}
+
+	saveErr := key.Save(s.block.Flags.configDir)
+
+	if saveErr != nil {
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return nil, st.Err()
+	}
+
 	gossipID := uuid.New()
 
 	gossipMember := &gossip.Member{
-		Id:          gossipID.String(),
 		ServiceAddr: addr,
-		ServiceId:   serviceID.String(),
+		ServiceID:   serviceID.String(),
 		ServiceType: opts.Type.String(),
 	}
 
-	memberlist, err := gossip.NewMemberList(gossipMember, s.block.Flags.listenGossipAddr.Port)
+	memberlist, err := gossip.NewMemberList(gossipID, gossipMember, s.block.Flags.listenGossipAddr.Port)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())

@@ -2,10 +2,11 @@ package gossip
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
+	"github.com/sirupsen/logrus"
 )
 
 // Delegate : generic gossip protocol delegate
@@ -20,9 +21,8 @@ type Delegate struct {
 
 // Member : defines gossip member metadata
 type Member struct {
-	Id          string
 	ServiceAddr string
-	ServiceId   string
+	ServiceID   string
 	ServiceType string
 }
 
@@ -80,22 +80,26 @@ func (d *Delegate) MergeRemoteState(buf []byte, join bool) {
 }
 
 // NewMemberList : creates memberlist for gossip protocol
-func NewMemberList(member *Member, port int) (*memberlist.Memberlist, error) {
-	meta, err := json.Marshal(member)
+func NewMemberList(id uuid.UUID, member *Member, port int) (*memberlist.Memberlist, error) {
+	data, err := json.Marshal(member)
 
 	if err != nil {
 		return nil, err
 	}
 
+	fields := logrus.Fields{"metadata": string(data)}
+
+	logrus.WithFields(fields).Debug("Gossip memberlist metadata created.")
+
 	config := memberlist.DefaultLocalConfig()
 
 	config.AdvertisePort = port
 
-	config.Delegate = &Delegate{Meta: meta}
+	config.Delegate = &Delegate{Meta: data}
 
 	config.BindPort = port
 
-	config.Name = member.Id
+	config.Name = id.String()
 
 	list, err := memberlist.Create(config)
 
@@ -104,7 +108,9 @@ func NewMemberList(member *Member, port int) (*memberlist.Memberlist, error) {
 	}
 
 	for _, member := range list.Members() {
-		fmt.Printf("Member: %s %s\n", member.Name, member.Addr)
+		fields := logrus.Fields{"addr": member.Addr, "name": member.Name}
+
+		logrus.WithFields(fields).Debug("Gossip memberlist updated.")
 	}
 
 	return list, nil

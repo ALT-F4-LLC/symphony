@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
@@ -20,6 +21,7 @@ import (
 // Manager : manager node
 type Manager struct {
 	Flags *Flags
+	Key   *config.Key
 }
 
 // New : creates a new manager struct
@@ -28,6 +30,10 @@ func New() (*Manager, error) {
 
 	if err != nil {
 		return nil, err
+	}
+
+	if flags.Verbose {
+		logrus.SetLevel(logrus.DebugLevel)
 	}
 
 	manager := &Manager{

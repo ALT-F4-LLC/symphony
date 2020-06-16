@@ -15,6 +15,7 @@ type Flags struct {
 	EtcdEndpoints     []string
 	ListenGossipAddr  *net.TCPAddr
 	ListenServiceAddr *net.TCPAddr
+	Verbose           bool
 }
 
 var (
@@ -22,6 +23,7 @@ var (
 	etcdEndpoints     = kingpin.Flag("etcd-endpoints", "Sets the etcd endpoints list.").Required().String()
 	listenGossipPort  = kingpin.Flag("listen-gossip-port", "Sets the remote gossip listener port.").Int()
 	listenServicePort = kingpin.Flag("listen-service-port", "Sets the remote service port.").Int()
+	verbose           = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
 )
 
 // GetFlags : gets struct of flags from command line
@@ -57,6 +59,7 @@ func GetFlags() (*Flags, error) {
 		EtcdEndpoints:     strings.Split(*etcdEndpoints, ","),
 		ListenGossipAddr:  listenGossipAddr,
 		ListenServiceAddr: listenServiceAddr,
+		Verbose:           *verbose,
 	}
 
 	fields := logrus.Fields{
@@ -64,6 +67,7 @@ func GetFlags() (*Flags, error) {
 		"EtcdEndpoints":     flags.EtcdEndpoints,
 		"ListenGossipAddr":  flags.ListenGossipAddr.String(),
 		"ListenServiceAddr": flags.ListenServiceAddr.String(),
+		"Verbose":           flags.Verbose,
 	}
 
 	logrus.WithFields(fields).Info("Loaded command-line flags")

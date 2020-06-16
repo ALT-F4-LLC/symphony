@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
@@ -24,6 +25,7 @@ type controlServer struct {
 	Memberlist *memberlist.Memberlist
 }
 
+// NewEtcdClient : creates new etcd client
 func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 	etcd, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
@@ -39,6 +41,7 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 	return etcd, nil
 }
 
+// GetServiceByID : gets service from services
 func GetServiceByID(services []*api.Service, id uuid.UUID) *api.Service {
 	for _, service := range services {
 		if service.Id == id.String() {
@@ -88,7 +91,7 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 		Type: api.ServiceType_MANAGER.String(),
 	}
 
-	serviceKey := fmt.Sprintf("/service/%s", service.Id)
+	serviceEtcdKey := fmt.Sprintf("/service/%s", service.Id)
 
 	serviceJSON, err := json.Marshal(service)
 
@@ -98,7 +101,7 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 		return nil, st.Err()
 	}
 
-	_, putErr := etcd.Put(ctx, serviceKey, string(serviceJSON))
+	_, putErr := etcd.Put(ctx, serviceEtcdKey, string(serviceJSON))
 
 	if putErr != nil {
 		st := status.New(codes.Internal, putErr.Error())
@@ -106,16 +109,27 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 		return nil, st.Err()
 	}
 
+	key := &config.Key{
+		ServiceID: serviceID,
+	}
+
+	saveErr := key.Save(s.Manager.Flags.ConfigPath)
+
+	if saveErr != nil {
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return nil, st.Err()
+	}
+
 	gossipID := uuid.New()
 
 	gossipMember := &gossip.Member{
-		Id:          gossipID.String(),
 		ServiceAddr: service.Addr,
-		ServiceId:   service.Id,
+		ServiceID:   service.Id,
 		ServiceType: service.Type,
 	}
 
-	memberlist, err := gossip.NewMemberList(gossipMember, s.Manager.Flags.ListenGossipAddr.Port)
+	memberlist, err := gossip.NewMemberList(gossipID, gossipMember, s.Manager.Flags.ListenGossipAddr.Port)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
