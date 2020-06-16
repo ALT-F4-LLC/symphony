@@ -13,6 +13,7 @@ import (
 
 // Key : key used for initialization and authentication of nodes
 type Key struct {
+	ClusterID uuid.UUID `json:"cluster_id"`
 	ServiceID uuid.UUID `json:"service_id"`
 
 	mu sync.Mutex
@@ -39,6 +40,7 @@ func (k *Key) Save(configDir string) error {
 	defer k.mu.Unlock()
 
 	fields := logrus.Fields{
+		"cluster_id": k.ClusterID.String(),
 		"service_id": k.ServiceID.String(),
 	}
 

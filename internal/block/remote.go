@@ -2,13 +2,11 @@ package block
 
 import (
 	"context"
-	"log"
-	"net"
+	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -124,9 +122,48 @@ func (s *remoteServer) GetVg(ctx context.Context, in *api.BlockRemoteVgRequest) 
 	return metadata, nil
 }
 
-// Leave : removes from cluster
-func (s *remoteServer) Leave(ctx context.Context, in *api.BlockRemoteLeaveRequest) (*api.BlockRemoteLeaveResponse, error) {
-	res := &api.BlockRemoteLeaveResponse{}
+func (s *remoteServer) Leave(ctx context.Context, in *api.BlockRemoteLeaveRequest) (*api.SuccessStatusResponse, error) {
+	serviceID, err := uuid.Parse(in.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	key, err := s.block.key.Get(s.block.flags.configDir)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if serviceID != key.ServiceID {
+		st := status.New(codes.PermissionDenied, err.Error())
+
+		return nil, st.Err()
+	}
+
+	leaveErr := s.block.memberlist.Leave(time.Second)
+
+	if leaveErr != nil {
+		st := status.New(codes.Internal, leaveErr.Error())
+
+		return nil, st.Err()
+	}
+
+	shutdownErr := s.block.memberlist.Shutdown()
+
+	if shutdownErr != nil {
+		st := status.New(codes.Internal, shutdownErr.Error())
+
+		return nil, st.Err()
+	}
+
+	logrus.Debug("Block service has left the cluster.")
+
+	res := &api.SuccessStatusResponse{}
 
 	return res, nil
 }
@@ -229,7 +266,7 @@ func (s *remoteServer) NewVg(ctx context.Context, in *api.BlockRemoteNewVgReques
 }
 
 // RemoveLv : removes logical volume
-func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockRemoteLvRequest) (*api.RemoveStatusResponse, error) {
+func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockRemoteLvRequest) (*api.SuccessStatusResponse, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -248,7 +285,7 @@ func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockRemoteLvReques
 		return nil, api.ProtoError(rmErr)
 	}
 
-	status := &api.RemoveStatusResponse{Success: true}
+	status := &api.SuccessStatusResponse{Success: true}
 
 	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveLv")
 
@@ -256,14 +293,14 @@ func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockRemoteLvReques
 }
 
 // RemovePv : removes physical volume
-func (s *remoteServer) RemovePv(ctx context.Context, in *api.BlockRemotePvRequest) (*api.RemoveStatusResponse, error) {
+func (s *remoteServer) RemovePv(ctx context.Context, in *api.BlockRemotePvRequest) (*api.SuccessStatusResponse, error) {
 	err := removePv(in.Device)
 
 	if err != nil {
 		return nil, api.ProtoError(err)
 	}
 
-	status := &api.RemoveStatusResponse{Success: true}
+	status := &api.SuccessStatusResponse{Success: true}
 
 	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemovePv")
 
@@ -271,7 +308,7 @@ func (s *remoteServer) RemovePv(ctx context.Context, in *api.BlockRemotePvReques
 }
 
 // RemoveVg : removes volume group
-func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockRemoteVgRequest) (*api.RemoveStatusResponse, error) {
+func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockRemoteVgRequest) (*api.SuccessStatusResponse, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -284,32 +321,9 @@ func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockRemoteVgReques
 		return nil, api.ProtoError(rmErr)
 	}
 
-	status := &api.RemoveStatusResponse{Success: true}
+	status := &api.SuccessStatusResponse{Success: true}
 
 	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveVg")
 
 	return status, nil
-}
-
-// RemoteServer : starts remote grpc endpoints
-func RemoteServer(b *Block) {
-	lis, err := net.Listen("tcp", b.Flags.listenServiceAddr.String())
-
-	if err != nil {
-		log.Fatal("Failed to listen")
-	}
-
-	s := grpc.NewServer()
-
-	server := &remoteServer{
-		block: b,
-	}
-
-	logrus.Info("Started block remote gRPC tcp server.")
-
-	api.RegisterBlockRemoteServer(s, server)
-
-	if err := s.Serve(lis); err != nil {
-		log.Fatal("Failed to serve")
-	}
 }

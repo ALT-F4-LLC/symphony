@@ -10,7 +10,7 @@ import (
 )
 
 // BlockInit : handles joining block node to an existing cluster
-func BlockInit(joinAddr *string, socket *string) {
+func BlockInit(serviceAddr *string, socket *string) {
 	conn := NewConnControl(socket)
 
 	defer conn.Close()
@@ -21,7 +21,7 @@ func BlockInit(joinAddr *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.BlockControlInitRequest{Addr: *joinAddr}
+	opts := &api.BlockControlInitRequest{ServiceAddr: *serviceAddr}
 
 	_, joinErr := c.Init(ctx, opts)
 

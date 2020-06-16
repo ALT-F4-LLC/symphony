@@ -4,33 +4,35 @@ option go_package = "github.com/erkrnt/symphony/api";
 
 package api;
 
+import "api/generic.proto";
 import "api/service.proto";
 
 service ManagerControl {
   rpc Init(ManagerControlInitRequest) returns (ManagerControlInitResponse) {}
-  rpc Leave(ManagerControlLeaveRequest) returns (ManagerControlLeaveResponse) {}
-  rpc Remove(ManagerControlRemoveRequest) returns (ManagerControlRemoveResponse) {}
+  rpc Remove(ManagerControlRemoveRequest) returns (SuccessStatusResponse) {}
 }
 
 service ManagerRemote {
   rpc Init(ManagerRemoteInitRequest) returns (ManagerRemoteInitResponse) {}
-  rpc Leave(ManagerRemoteLeaveRequest) returns (ManagerRemoteLeaveResponse) {}
+  rpc Leave(ManagerRemoteLeaveRequest) returns (SuccessStatusResponse) {}
+  rpc Remove(ManagerRemoteRemoveRequest) returns (SuccessStatusResponse) {}
 }
 
 // -- CONTROL ENDPOINTS -- //
 
 message ManagerControlInitRequest {
-  string Addr = 1;
+  string ServiceAddr = 1;
 }
 message ManagerControlInitResponse {
-  string ServiceID = 1;
+  string ClusterID = 1;
+  string ServiceID = 2;
 }
 
 message ManagerControlLeaveRequest {}
-message ManagerControlLeaveResponse {}
 
-message ManagerControlRemoveRequest { string ServiceID = 1; }
-message ManagerControlRemoveResponse {}
+message ManagerControlRemoveRequest {
+  string ServiceID = 1;
+}
 
 // -- REMOTE ENDPOINTS -- //
 
@@ -39,9 +41,15 @@ message ManagerRemoteInitRequest {
   ServiceType ServiceType = 2;
 }
 message ManagerRemoteInitResponse {
-  string GossipAddr = 1;
-  string ServiceID = 2;
+  string ClusterID = 1;
+  string GossipAddr = 2;
+  string ServiceID = 3;
 }
 
-message ManagerRemoteLeaveRequest { string ServiceID = 1; }
-message ManagerRemoteLeaveResponse {}
+message ManagerRemoteLeaveRequest {
+  string ServiceID = 1;
+}
+
+message ManagerRemoteRemoveRequest {
+  string ServiceID = 1;
+}

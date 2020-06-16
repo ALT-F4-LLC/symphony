@@ -4,32 +4,34 @@ option go_package = "github.com/erkrnt/symphony/api";
 
 package api;
 
+import "api/generic.proto";
+
 service BlockControl {
   rpc Init(BlockControlInitRequest) returns (BlockControlInitResponse) {}
-  rpc Leave(BlockControlLeaveRequest) returns (BlockControlLeaveResponse) {}
 }
 
 service BlockRemote {
   rpc GetLv(BlockRemoteLvRequest) returns (BlockRemoteLvResponse) {}
   rpc GetPv(BlockRemotePvRequest) returns (BlockRemotePvResponse) {}
   rpc GetVg(BlockRemoteVgRequest) returns (BlockRemoteVgResponse) {}
-  rpc Leave(BlockRemoteLeaveRequest) returns (BlockRemoteLeaveResponse) {}
+  rpc Leave(BlockRemoteLeaveRequest) returns (SuccessStatusResponse) {}
   rpc NewLv(BlockRemoteNewLvRequest) returns (BlockRemoteLvResponse) {}
   rpc NewPv(BlockRemotePvRequest) returns (BlockRemotePvResponse) {}
   rpc NewVg(BlockRemoteNewVgRequest) returns (BlockRemoteVgResponse) {}
-  rpc RemoveLv(BlockRemoteLvRequest) returns (RemoveStatusResponse) {}
-  rpc RemovePv(BlockRemotePvRequest) returns (RemoveStatusResponse) {}
-  rpc RemoveVg(BlockRemoteVgRequest) returns (RemoveStatusResponse) {}
+  rpc RemoveLv(BlockRemoteLvRequest) returns (SuccessStatusResponse) {}
+  rpc RemovePv(BlockRemotePvRequest) returns (SuccessStatusResponse) {}
+  rpc RemoveVg(BlockRemoteVgRequest) returns (SuccessStatusResponse) {}
 }
 
-message BlockControlInitRequest { string Addr = 1; }
-message BlockControlInitResponse { string ServiceID = 1; }
-
-message BlockControlLeaveRequest {}
-message BlockControlLeaveResponse {}
+message BlockControlInitRequest {
+  string ServiceAddr = 1;
+}
+message BlockControlInitResponse {
+  string ClusterID = 1;
+  string ServiceID = 2;
+}
 
 message BlockRemoteLeaveRequest { string ServiceID = 1; }
-message BlockRemoteLeaveResponse {}
 
 message BlockRemoteLvRequest {
   string ID = 1;
@@ -84,5 +86,3 @@ message BlockRemoteVgResponse {
   string VgSize = 6;
   string VgFree = 7;
 }
-
-message RemoveStatusResponse { bool Success = 1; }

@@ -1,53 +1,52 @@
 package block
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"sync"
+	"log"
+	"net"
+	"os"
 
+	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/config"
-	"github.com/google/uuid"
+	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 // Block : block node
 type Block struct {
-	Flags *flags
-	Key   *config.Key
-
-	mu sync.Mutex
+	flags      *flags
+	key        *config.Key
+	memberlist *memberlist.Memberlist
 }
 
-// SaveServiceID : sets the SERVICE_ID in key.json
-func (b *Block) SaveServiceID(id uuid.UUID) error {
-	b.Key.ServiceID = id
+// ControlServer : starts block control server
+func (b *Block) ControlServer() {
+	socketPath := fmt.Sprintf("%s/control.sock", b.flags.configDir)
 
-	b.mu.Lock()
+	if err := os.RemoveAll(socketPath); err != nil {
+		log.Fatal(err)
+	}
 
-	keyJSON, err := json.Marshal(b.Key)
+	lis, err := net.Listen("unix", socketPath)
 
 	if err != nil {
-		return err
+		log.Fatalf("failed to listen: %v", err)
 	}
 
-	path := fmt.Sprintf("%s/key.json", b.Flags.configDir)
+	s := grpc.NewServer()
 
-	writeErr := ioutil.WriteFile(path, keyJSON, 0644)
-
-	if writeErr != nil {
-		return writeErr
+	cs := &controlServer{
+		block: b,
 	}
 
-	defer b.mu.Unlock()
+	logrus.Info("Started block control gRPC socket server.")
 
-	fields := logrus.Fields{
-		"SERVICE_ID": id.String(),
+	api.RegisterBlockControlServer(s, cs)
+
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
-
-	logrus.WithFields(fields).Info("Updated key.json file")
-
-	return nil
 }
 
 // New : creates new block node
@@ -63,8 +62,31 @@ func New() (*Block, error) {
 	}
 
 	block := &Block{
-		Flags: flags,
+		flags: flags,
 	}
 
 	return block, nil
+}
+
+// RemoteServer : starts remote grpc endpoints
+func (b *Block) RemoteServer() {
+	lis, err := net.Listen("tcp", b.flags.listenServiceAddr.String())
+
+	if err != nil {
+		log.Fatal("Failed to listen")
+	}
+
+	s := grpc.NewServer()
+
+	server := &remoteServer{
+		block: b,
+	}
+
+	logrus.Info("Started block remote gRPC tcp server.")
+
+	api.RegisterBlockRemoteServer(s, server)
+
+	if err := s.Serve(lis); err != nil {
+		log.Fatal("Failed to serve")
+	}
 }

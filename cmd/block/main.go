@@ -12,7 +12,7 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	go block.RemoteServer(b)
+	go b.RemoteServer()
 
-	block.ControlServer(b)
+	b.ControlServer()
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/config"
+	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
@@ -20,8 +21,9 @@ import (
 
 // Manager : manager node
 type Manager struct {
-	flags *flags
-	key   *config.Key
+	flags      *flags
+	key        *config.Key
+	memberlist *memberlist.Memberlist
 }
 
 // New : creates a new manager struct
@@ -72,8 +74,112 @@ func (m *Manager) ControlServer() {
 	}
 }
 
-// GetServices : gets all services from state
-func (m *Manager) GetServices() ([]*api.Service, error) {
+func (m *Manager) saveCluster(cluster *api.Cluster) error {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	clusterJSON, err := json.Marshal(cluster)
+
+	if err != nil {
+		return err
+	}
+
+	_, putErr := etcd.Put(ctx, "/cluster", string(clusterJSON))
+
+	if putErr != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) saveService(service *api.Service) error {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	serviceKey := fmt.Sprintf("/service/%s", service.ID)
+
+	serviceJSON, err := json.Marshal(service)
+
+	if err != nil {
+		return err
+	}
+
+	_, putErr := etcd.Put(ctx, serviceKey, string(serviceJSON))
+
+	if putErr != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) getCluster() (*api.Cluster, error) {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	results, err := etcd.Get(ctx, "/cluster")
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	var cluster *api.Cluster
+
+	for _, ev := range results.Kvs {
+		err := json.Unmarshal(ev.Value, &cluster)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+	}
+
+	return cluster, nil
+}
+
+func (m *Manager) getServices() ([]*api.Service, error) {
 	etcd, err := clientv3.New(clientv3.Config{
 		Endpoints:   m.flags.etcdEndpoints,
 		DialTimeout: 5 * time.Second,
