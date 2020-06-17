@@ -32,6 +32,7 @@ services:
       - etcd
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
+      - etcd_01:/etcd_01.etcd
   etcd_02:
     command: >-
       etcd
@@ -48,6 +49,7 @@ services:
       - etcd
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
+      - etcd_02:/etcd_02.etcd
   etcd_03:
     command: >-
       etcd
@@ -64,6 +66,7 @@ services:
       - etcd
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
+      - etcd_03:/etcd_03.etcd
   manager_01:
     build:
       context: .
@@ -121,6 +124,9 @@ services:
 version: "3.7"
 volumes:
   block_01:
+  etcd_01:
+  etcd_02:
+  etcd_03:
   manager_01:
   manager_02:
   manager_03:
