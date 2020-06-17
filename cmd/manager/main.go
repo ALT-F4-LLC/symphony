@@ -12,7 +12,5 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	go m.RemoteServer()
-
-	m.ControlServer()
+	m.Start()
 }

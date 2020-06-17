@@ -100,6 +100,64 @@ func (s *remoteServer) Init(ctx context.Context, in *api.ManagerRemoteInitReques
 	return res, nil
 }
 
+func (s *remoteServer) Join(ctx context.Context, in *api.ManagerRemoteJoinRequest) (*api.ManagerRemoteInitResponse, error) {
+	cluster, err := s.manager.getCluster()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	clusterID, err := uuid.Parse(in.ClusterID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if cluster.ID != clusterID.String() {
+		st := status.New(codes.InvalidArgument, "invalid_cluster_id")
+
+		return nil, st.Err()
+	}
+
+	serviceID, err := uuid.Parse(in.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	services, err := s.manager.getServices()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	service := GetServiceByID(services, serviceID)
+
+	if service == nil {
+		st := status.New(codes.InvalidArgument, "invalid_service_id")
+
+		return nil, st.Err()
+	}
+
+	gossipAddr := s.manager.flags.listenGossipAddr
+
+	res := &api.ManagerRemoteInitResponse{
+		ClusterID:  cluster.ID,
+		GossipAddr: gossipAddr.String(),
+		ServiceID:  service.ID,
+	}
+
+	return res, nil
+}
+
 func (s *remoteServer) Leave(ctx context.Context, in *api.ManagerRemoteLeaveRequest) (*api.SuccessStatusResponse, error) {
 	serviceID, err := uuid.Parse(in.ServiceID)
 
@@ -109,7 +167,7 @@ func (s *remoteServer) Leave(ctx context.Context, in *api.ManagerRemoteLeaveRequ
 		return nil, st.Err()
 	}
 
-	key, err := s.manager.key.Get(s.manager.flags.configPath)
+	key, err := s.manager.key.Get(s.manager.flags.configDir)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -117,7 +175,7 @@ func (s *remoteServer) Leave(ctx context.Context, in *api.ManagerRemoteLeaveRequ
 		return nil, st.Err()
 	}
 
-	if serviceID != key.ServiceID {
+	if serviceID != *key.ServiceID {
 		st := status.New(codes.PermissionDenied, err.Error())
 
 		return nil, st.Err()

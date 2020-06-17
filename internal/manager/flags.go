@@ -10,7 +10,7 @@ import (
 )
 
 type flags struct {
-	configPath        string
+	configDir         string
 	etcdEndpoints     []string
 	listenGossipAddr  *net.TCPAddr
 	listenServiceAddr *net.TCPAddr
@@ -28,7 +28,7 @@ var (
 func getFlags() (*flags, error) {
 	kingpin.Parse()
 
-	configPath, err := config.GetDirPath(configDir)
+	configDirPath, err := config.GetDirPath(configDir)
 
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func getFlags() (*flags, error) {
 	}
 
 	flags := &flags{
-		configPath:        *configPath,
+		configDir:         *configDirPath,
 		etcdEndpoints:     strings.Split(*etcdEndpoints, ","),
 		listenGossipAddr:  listenGossipAddr,
 		listenServiceAddr: listenServiceAddr,
@@ -61,7 +61,7 @@ func getFlags() (*flags, error) {
 	}
 
 	fields := logrus.Fields{
-		"configPath":        flags.configPath,
+		"configDir":         flags.configDir,
 		"etcdEndpoints":     flags.etcdEndpoints,
 		"listenGossipAddr":  flags.listenGossipAddr.String(),
 		"listenServiceAddr": flags.listenServiceAddr.String(),

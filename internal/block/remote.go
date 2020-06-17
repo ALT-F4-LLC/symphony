@@ -139,7 +139,7 @@ func (s *remoteServer) Leave(ctx context.Context, in *api.BlockRemoteLeaveReques
 		return nil, st.Err()
 	}
 
-	if serviceID != key.ServiceID {
+	if serviceID != *key.ServiceID {
 		st := status.New(codes.PermissionDenied, err.Error())
 
 		return nil, st.Err()

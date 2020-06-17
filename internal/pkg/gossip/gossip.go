@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
 )
@@ -80,7 +79,7 @@ func (d *Delegate) MergeRemoteState(buf []byte, join bool) {
 }
 
 // NewMemberList : creates memberlist for gossip protocol
-func NewMemberList(id uuid.UUID, member *Member, port int) (*memberlist.Memberlist, error) {
+func NewMemberList(member *Member, port int) (*memberlist.Memberlist, error) {
 	data, err := json.Marshal(member)
 
 	if err != nil {
@@ -99,7 +98,7 @@ func NewMemberList(id uuid.UUID, member *Member, port int) (*memberlist.Memberli
 
 	config.BindPort = port
 
-	config.Name = id.String()
+	config.Name = member.ServiceID
 
 	list, err := memberlist.Create(config)
 

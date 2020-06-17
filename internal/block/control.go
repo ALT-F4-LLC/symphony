@@ -61,8 +61,8 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 	}
 
 	key := &config.Key{
-		ClusterID: clusterID,
-		ServiceID: serviceID,
+		ClusterID: &clusterID,
+		ServiceID: &serviceID,
 	}
 
 	saveErr := key.Save(s.block.flags.configDir)
@@ -73,15 +73,13 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 		return nil, st.Err()
 	}
 
-	gossipID := uuid.New()
-
 	gossipMember := &gossip.Member{
 		ServiceAddr: opts.ServiceAddr,
 		ServiceID:   serviceID.String(),
 		ServiceType: opts.ServiceType.String(),
 	}
 
-	memberlist, err := gossip.NewMemberList(gossipID, gossipMember, s.block.flags.listenGossipAddr.Port)
+	memberlist, err := gossip.NewMemberList(gossipMember, s.block.flags.listenGossipAddr.Port)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())

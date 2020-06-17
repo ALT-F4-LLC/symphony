@@ -14,6 +14,7 @@ service ManagerControl {
 
 service ManagerRemote {
   rpc Init(ManagerRemoteInitRequest) returns (ManagerRemoteInitResponse) {}
+  rpc Join(ManagerRemoteJoinRequest) returns (ManagerRemoteInitResponse) {}
   rpc Leave(ManagerRemoteLeaveRequest) returns (SuccessStatusResponse) {}
   rpc Remove(ManagerRemoteRemoveRequest) returns (SuccessStatusResponse) {}
 }
@@ -44,6 +45,11 @@ message ManagerRemoteInitResponse {
   string ClusterID = 1;
   string GossipAddr = 2;
   string ServiceID = 3;
+}
+
+message ManagerRemoteJoinRequest {
+  string ClusterID = 1;
+  string ServiceID = 2;
 }
 
 message ManagerRemoteLeaveRequest {

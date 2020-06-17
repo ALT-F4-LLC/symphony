@@ -11,6 +11,7 @@ import (
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/config"
+	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/clientv3"
@@ -26,28 +27,9 @@ type Manager struct {
 	memberlist *memberlist.Memberlist
 }
 
-// New : creates a new manager struct
-func New() (*Manager, error) {
-	flags, err := getFlags()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if flags.verbose {
-		logrus.SetLevel(logrus.DebugLevel)
-	}
-
-	manager := &Manager{
-		flags: flags,
-	}
-
-	return manager, nil
-}
-
-// ControlServer : starts manager control server
-func (m *Manager) ControlServer() {
-	socketPath := fmt.Sprintf("%s/control.sock", m.flags.configPath)
+// Control : starts control service plane
+func (m *Manager) Control() {
+	socketPath := fmt.Sprintf("%s/control.sock", m.flags.configDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
 		log.Fatal(err)
@@ -72,6 +54,238 @@ func (m *Manager) ControlServer() {
 	if err := server.Serve(listen); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+}
+
+// Remote : starts the remote service plane
+func (m *Manager) Remote() {
+	listen, err := net.Listen("tcp", m.flags.listenServiceAddr.String())
+
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	remote := &remoteServer{
+		manager: m,
+	}
+
+	server := grpc.NewServer()
+
+	api.RegisterManagerRemoteServer(server, remote)
+
+	logrus.Info("Started manager remote gRPC tcp server.")
+
+	if err := server.Serve(listen); err != nil {
+		logrus.Fatal(err)
+	}
+}
+
+// Start : handles start of manager service
+func (m *Manager) Start() error {
+	key, err := m.key.Get(m.flags.configDir)
+
+	if err != nil {
+		return err
+	}
+
+	if key.ClusterID != nil && key.ServiceID != nil {
+		restartErr := m.restart(key)
+
+		if restartErr != nil {
+			return restartErr
+		}
+	}
+
+	go m.Remote()
+
+	m.Control()
+
+	return nil
+}
+
+func (m *Manager) getCluster() (*api.Cluster, error) {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	results, err := etcd.Get(ctx, "/cluster")
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	var cluster *api.Cluster
+
+	for _, ev := range results.Kvs {
+		err := json.Unmarshal(ev.Value, &cluster)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+	}
+
+	return cluster, nil
+}
+
+func (m *Manager) getManagers(services []*api.Service) []*api.Service {
+	managers := make([]*api.Service, 0)
+
+	for _, s := range services {
+		if s.Type == api.ServiceType_MANAGER.String() {
+			managers = append(services, s)
+		}
+	}
+
+	return managers
+}
+
+func (m *Manager) getServices() ([]*api.Service, error) {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	results, err := etcd.Get(ctx, "/service", clientv3.WithPrefix())
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	services := make([]*api.Service, 0)
+
+	for _, ev := range results.Kvs {
+		var s *api.Service
+
+		err := json.Unmarshal(ev.Value, &s)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		services = append(services, s)
+	}
+
+	return services, nil
+}
+
+func (m *Manager) restart(key *config.Key) error {
+	cluster, err := m.getCluster()
+
+	if err != nil {
+		return err
+	}
+
+	if cluster != nil {
+		services, err := m.getServices()
+
+		if err != nil {
+			return err
+		}
+
+		service := GetServiceByID(services, *key.ServiceID)
+
+		managerType := api.ServiceType_MANAGER.String()
+
+		if service != nil && service.Type == managerType {
+			gossipMember := &gossip.Member{
+				ServiceAddr: m.flags.listenServiceAddr.String(),
+				ServiceID:   service.ID,
+				ServiceType: service.Type,
+			}
+
+			listenGossipAddr := m.flags.listenGossipAddr
+
+			memberlist, err := gossip.NewMemberList(gossipMember, listenGossipAddr.Port)
+
+			if err != nil {
+				return err
+			}
+
+			m.memberlist = memberlist
+
+			managers := m.getManagers(services)
+
+			for _, manager := range managers {
+
+				if manager.ID != service.ID {
+					joinAddr, err := net.ResolveTCPAddr("tcp", manager.Addr)
+
+					if err != nil {
+						return err
+					}
+
+					conn, err := grpc.Dial(joinAddr.String(), grpc.WithInsecure())
+
+					if err != nil {
+						logrus.Debug("Restart join failed to remote peer... skipping.")
+						continue
+					}
+
+					defer conn.Close()
+
+					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+					defer cancel()
+
+					r := api.NewManagerRemoteClient(conn)
+
+					opts := &api.ManagerRemoteJoinRequest{
+						ClusterID: cluster.ID,
+						ServiceID: service.ID,
+					}
+
+					join, err := r.Join(ctx, opts)
+
+					if err != nil {
+						logrus.Debug("Restart join failed to remote peer... skipping.")
+						continue
+					}
+
+					_, joinErr := memberlist.Join([]string{join.GossipAddr})
+
+					if joinErr != nil {
+						return err
+					}
+
+					return nil
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (m *Manager) saveCluster(cluster *api.Cluster) error {
@@ -138,111 +352,24 @@ func (m *Manager) saveService(service *api.Service) error {
 	return nil
 }
 
-func (m *Manager) getCluster() (*api.Cluster, error) {
-	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+// New : creates a new manager
+func New() (*Manager, error) {
+	flags, err := getFlags()
 
 	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
+		return nil, err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	results, err := etcd.Get(ctx, "/cluster")
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
+	if flags.verbose {
+		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	var cluster *api.Cluster
+	key := &config.Key{}
 
-	for _, ev := range results.Kvs {
-		err := json.Unmarshal(ev.Value, &cluster)
-
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
+	manager := &Manager{
+		flags: flags,
+		key:   key,
 	}
 
-	return cluster, nil
-}
-
-func (m *Manager) getServices() ([]*api.Service, error) {
-	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	results, err := etcd.Get(ctx, "/service", clientv3.WithPrefix())
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	services := make([]*api.Service, 0)
-
-	for _, ev := range results.Kvs {
-		var s *api.Service
-
-		err := json.Unmarshal(ev.Value, &s)
-
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-
-		services = append(services, s)
-	}
-
-	return services, nil
-}
-
-// RemoteServer : starts remote gRPC server
-func (m *Manager) RemoteServer() {
-	listen, err := net.Listen("tcp", m.flags.listenServiceAddr.String())
-
-	if err != nil {
-		logrus.Fatal(err)
-	}
-
-	remote := &remoteServer{
-		manager: m,
-	}
-
-	server := grpc.NewServer()
-
-	api.RegisterManagerRemoteServer(server, remote)
-
-	logrus.Info("Started manager remote gRPC tcp server.")
-
-	if err := server.Serve(listen); err != nil {
-		logrus.Fatal(err)
-	}
+	return manager, nil
 }

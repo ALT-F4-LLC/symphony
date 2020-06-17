@@ -98,19 +98,17 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 	}
 
 	key := &config.Key{
-		ClusterID: clusterID,
-		ServiceID: serviceID,
+		ClusterID: &clusterID,
+		ServiceID: &serviceID,
 	}
 
-	saveErr := key.Save(s.manager.flags.configPath)
+	saveErr := key.Save(s.manager.flags.configDir)
 
 	if saveErr != nil {
 		st := status.New(codes.Internal, saveErr.Error())
 
 		return nil, st.Err()
 	}
-
-	gossipID := uuid.New()
 
 	gossipMember := &gossip.Member{
 		ServiceAddr: opts.ServiceAddr,
@@ -120,7 +118,7 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 
 	listenGossipAddr := s.manager.flags.listenGossipAddr
 
-	memberlist, err := gossip.NewMemberList(gossipID, gossipMember, listenGossipAddr.Port)
+	memberlist, err := gossip.NewMemberList(gossipMember, listenGossipAddr.Port)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())

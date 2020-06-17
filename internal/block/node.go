@@ -61,8 +61,21 @@ func New() (*Block, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
+	key := &config.Key{}
+
 	block := &Block{
 		flags: flags,
+		key:   key,
+	}
+
+	keyData, err := key.Get(flags.configDir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if keyData.ClusterID != nil && keyData.ServiceID != nil {
+		logrus.Print("good to reconnect")
 	}
 
 	return block, nil

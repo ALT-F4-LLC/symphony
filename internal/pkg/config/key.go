@@ -13,8 +13,8 @@ import (
 
 // Key : key used for initialization and authentication of nodes
 type Key struct {
-	ClusterID uuid.UUID `json:"cluster_id"`
-	ServiceID uuid.UUID `json:"service_id"`
+	ClusterID *uuid.UUID `json:"cluster_id"`
+	ServiceID *uuid.UUID `json:"service_id"`
 
 	mu sync.Mutex
 }
