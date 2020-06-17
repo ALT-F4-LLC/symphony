@@ -12,7 +12,9 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	go b.RemoteServer()
+	go b.Start()
 
-	b.ControlServer()
+	startErr := <-b.ErrorC
+
+	logrus.Fatal(startErr)
 }

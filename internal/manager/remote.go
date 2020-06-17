@@ -89,10 +89,19 @@ func (s *remoteServer) Init(ctx context.Context, in *api.ManagerRemoteInitReques
 		return nil, st.Err()
 	}
 
+	endpoints := make([]string, 0)
+
+	for _, service := range services {
+		if service.Type == api.ServiceType_MANAGER.String() {
+			endpoints = append(endpoints, service.Addr)
+		}
+	}
+
 	gossipAddr := s.manager.flags.listenGossipAddr
 
 	res := &api.ManagerRemoteInitResponse{
 		ClusterID:  cluster.ID,
+		Endpoints:  endpoints,
 		GossipAddr: gossipAddr.String(),
 		ServiceID:  service.ID,
 	}
@@ -147,10 +156,19 @@ func (s *remoteServer) Join(ctx context.Context, in *api.ManagerRemoteJoinReques
 		return nil, st.Err()
 	}
 
+	endpoints := make([]string, 0)
+
+	for _, service := range services {
+		if service.Type == api.ServiceType_MANAGER.String() {
+			endpoints = append(endpoints, service.Addr)
+		}
+	}
+
 	gossipAddr := s.manager.flags.listenGossipAddr
 
 	res := &api.ManagerRemoteInitResponse{
 		ClusterID:  cluster.ID,
+		Endpoints:  endpoints,
 		GossipAddr: gossipAddr.String(),
 		ServiceID:  service.ID,
 	}

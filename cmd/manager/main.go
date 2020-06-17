@@ -12,5 +12,9 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	m.Start()
+	go m.Start()
+
+	startErr := <-m.ErrorC
+
+	logrus.Fatal(startErr)
 }

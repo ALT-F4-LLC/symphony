@@ -43,8 +43,9 @@ message ManagerRemoteInitRequest {
 }
 message ManagerRemoteInitResponse {
   string ClusterID = 1;
+  repeated string Endpoints = 3;
   string GossipAddr = 2;
-  string ServiceID = 3;
+  string ServiceID = 4;
 }
 
 message ManagerRemoteJoinRequest {

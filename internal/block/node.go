@@ -1,13 +1,16 @@
 package block
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
+	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/config"
+	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -15,23 +18,45 @@ import (
 
 // Block : block node
 type Block struct {
+	ErrorC chan string
+
 	flags      *flags
 	key        *config.Key
 	memberlist *memberlist.Memberlist
 }
 
-// ControlServer : starts block control server
-func (b *Block) ControlServer() {
+// Start : handles start of manager service
+func (b *Block) Start() {
+	key, err := b.key.Get(b.flags.configDir)
+
+	if err != nil {
+		b.ErrorC <- err.Error()
+	}
+
+	if key.ClusterID != nil && key.ServiceID != nil {
+		restartErr := b.restart(key)
+
+		if restartErr != nil {
+			b.ErrorC <- restartErr.Error()
+		}
+	}
+
+	go b.listenControl()
+
+	go b.listenRemote()
+}
+
+func (b *Block) listenControl() {
 	socketPath := fmt.Sprintf("%s/control.sock", b.flags.configDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
-		log.Fatal(err)
+		b.ErrorC <- err.Error()
 	}
 
 	lis, err := net.Listen("unix", socketPath)
 
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		b.ErrorC <- err.Error()
 	}
 
 	s := grpc.NewServer()
@@ -40,17 +65,112 @@ func (b *Block) ControlServer() {
 		block: b,
 	}
 
-	logrus.Info("Started block control gRPC socket server.")
-
 	api.RegisterBlockControlServer(s, cs)
 
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+	logrus.Info("Started block control gRPC socket server.")
+
+	serveErr := s.Serve(lis)
+
+	if serveErr != nil {
+		b.ErrorC <- serveErr.Error()
 	}
+}
+
+func (b *Block) listenRemote() {
+	lis, err := net.Listen("tcp", b.flags.listenServiceAddr.String())
+
+	if err != nil {
+		b.ErrorC <- err.Error()
+	}
+
+	s := grpc.NewServer()
+
+	server := &remoteServer{
+		block: b,
+	}
+
+	api.RegisterBlockRemoteServer(s, server)
+
+	logrus.Info("Started block remote gRPC tcp server.")
+
+	serveErr := s.Serve(lis)
+
+	if serveErr != nil {
+		b.ErrorC <- err.Error()
+	}
+}
+
+func (b *Block) restart(key *config.Key) error {
+	managers := key.Endpoints
+
+	for _, manager := range managers {
+		joinAddr, err := net.ResolveTCPAddr("tcp", manager)
+
+		if err != nil {
+			return err
+		}
+
+		conn, err := grpc.Dial(joinAddr.String(), grpc.WithInsecure())
+
+		if err != nil {
+			logrus.Debug("Restart join failed to remote peer... skipping.")
+			continue
+		}
+
+		defer conn.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+		defer cancel()
+
+		r := api.NewManagerRemoteClient(conn)
+
+		opts := &api.ManagerRemoteJoinRequest{
+			ClusterID: key.ClusterID.String(),
+			ServiceID: key.ServiceID.String(),
+		}
+
+		join, err := r.Join(ctx, opts)
+
+		if err != nil {
+			logrus.Debug("Restart join failed to remote peer... skipping.")
+			continue
+		}
+
+		gossipMember := &gossip.Member{
+			ServiceAddr: b.flags.listenServiceAddr.String(),
+			ServiceID:   join.ServiceID,
+			ServiceType: api.ServiceType_BLOCK.String(),
+		}
+
+		listenGossipAddr := b.flags.listenGossipAddr
+
+		memberlist, err := gossip.NewMemberList(gossipMember, listenGossipAddr.Port)
+
+		if err != nil {
+			return err
+		}
+
+		b.memberlist = memberlist
+
+		_, joinErr := memberlist.Join([]string{join.GossipAddr})
+
+		if joinErr != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return errors.New("invalid_manager_endpoints")
 }
 
 // New : creates new block node
 func New() (*Block, error) {
+	errorC := make(chan string)
+
+	key := &config.Key{}
+
 	flags, err := getFlags()
 
 	if err != nil {
@@ -61,45 +181,12 @@ func New() (*Block, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	key := &config.Key{}
-
 	block := &Block{
+		ErrorC: errorC,
+
 		flags: flags,
 		key:   key,
 	}
 
-	keyData, err := key.Get(flags.configDir)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if keyData.ClusterID != nil && keyData.ServiceID != nil {
-		logrus.Print("good to reconnect")
-	}
-
 	return block, nil
-}
-
-// RemoteServer : starts remote grpc endpoints
-func (b *Block) RemoteServer() {
-	lis, err := net.Listen("tcp", b.flags.listenServiceAddr.String())
-
-	if err != nil {
-		log.Fatal("Failed to listen")
-	}
-
-	s := grpc.NewServer()
-
-	server := &remoteServer{
-		block: b,
-	}
-
-	logrus.Info("Started block remote gRPC tcp server.")
-
-	api.RegisterBlockRemoteServer(s, server)
-
-	if err := s.Serve(lis); err != nil {
-		log.Fatal("Failed to serve")
-	}
 }

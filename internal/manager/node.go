@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"time"
@@ -22,23 +21,45 @@ import (
 
 // Manager : manager node
 type Manager struct {
+	ErrorC chan string
+
 	flags      *flags
 	key        *config.Key
 	memberlist *memberlist.Memberlist
 }
 
-// Control : starts control service plane
-func (m *Manager) Control() {
+// Start : handles start of manager service
+func (m *Manager) Start() {
+	key, err := m.key.Get(m.flags.configDir)
+
+	if err != nil {
+		m.ErrorC <- err.Error()
+	}
+
+	if key.ClusterID != nil && key.ServiceID != nil {
+		restartErr := m.restart(key)
+
+		if restartErr != nil {
+			m.ErrorC <- restartErr.Error()
+		}
+	}
+
+	go m.listenControl()
+
+	go m.listenRemote()
+}
+
+func (m *Manager) listenControl() {
 	socketPath := fmt.Sprintf("%s/control.sock", m.flags.configDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
-		log.Fatal(err)
+		m.ErrorC <- err.Error()
 	}
 
 	listen, err := net.Listen("unix", socketPath)
 
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		m.ErrorC <- err.Error()
 	}
 
 	server := grpc.NewServer()
@@ -51,17 +72,18 @@ func (m *Manager) Control() {
 
 	logrus.Info("Started manager control gRPC socket server.")
 
-	if err := server.Serve(listen); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+	serveErr := server.Serve(listen)
+
+	if serveErr != nil {
+		m.ErrorC <- serveErr.Error()
 	}
 }
 
-// Remote : starts the remote service plane
-func (m *Manager) Remote() {
+func (m *Manager) listenRemote() {
 	listen, err := net.Listen("tcp", m.flags.listenServiceAddr.String())
 
 	if err != nil {
-		logrus.Fatal(err)
+		m.ErrorC <- err.Error()
 	}
 
 	remote := &remoteServer{
@@ -74,32 +96,11 @@ func (m *Manager) Remote() {
 
 	logrus.Info("Started manager remote gRPC tcp server.")
 
-	if err := server.Serve(listen); err != nil {
-		logrus.Fatal(err)
+	serveErr := server.Serve(listen)
+
+	if serveErr != nil {
+		m.ErrorC <- serveErr.Error()
 	}
-}
-
-// Start : handles start of manager service
-func (m *Manager) Start() error {
-	key, err := m.key.Get(m.flags.configDir)
-
-	if err != nil {
-		return err
-	}
-
-	if key.ClusterID != nil && key.ServiceID != nil {
-		restartErr := m.restart(key)
-
-		if restartErr != nil {
-			return restartErr
-		}
-	}
-
-	go m.Remote()
-
-	m.Control()
-
-	return nil
 }
 
 func (m *Manager) getCluster() (*api.Cluster, error) {
@@ -354,6 +355,10 @@ func (m *Manager) saveService(service *api.Service) error {
 
 // New : creates a new manager
 func New() (*Manager, error) {
+	errorC := make(chan string)
+
+	key := &config.Key{}
+
 	flags, err := getFlags()
 
 	if err != nil {
@@ -364,9 +369,9 @@ func New() (*Manager, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	key := &config.Key{}
-
 	manager := &Manager{
+		ErrorC: errorC,
+
 		flags: flags,
 		key:   key,
 	}

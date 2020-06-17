@@ -6,7 +6,10 @@ services:
     build:
       context: .
       dockerfile: cmd/block/Dockerfile
-    command: block --config-dir="/config" --verbose
+    command: >
+      block
+      --config-dir="/config"
+      --verbose
     depends_on:
       - manager_01
       - manager_02
@@ -81,8 +84,10 @@ services:
       - etcd_02
       - etcd_03
     networks:
-      - etcd
-      - symphony
+      etcd:
+      symphony:
+        aliases:
+          - manager
     volumes:
       - manager_01:/config
   manager_02:
@@ -99,8 +104,10 @@ services:
       - etcd_02
       - etcd_03
     networks:
-      - etcd
-      - symphony
+      etcd:
+      symphony:
+        aliases:
+          - manager
     volumes:
       - manager_02:/config
   manager_03:
@@ -117,8 +124,10 @@ services:
       - etcd_02
       - etcd_03
     networks:
-      - etcd
-      - symphony
+      etcd:
+      symphony:
+        aliases:
+          - manager
     volumes:
       - manager_03:/config
 version: "3.7"

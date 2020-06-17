@@ -99,6 +99,7 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 
 	key := &config.Key{
 		ClusterID: &clusterID,
+		Endpoints: init.Endpoints,
 		ServiceID: &serviceID,
 	}
 

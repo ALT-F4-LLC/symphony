@@ -68,7 +68,7 @@ func getFlags() (*flags, error) {
 		"verbose":           flags.verbose,
 	}
 
-	logrus.WithFields(fields).Info("Loaded command-line flags")
+	logrus.WithFields(fields).Info("Service command-line flags loaded.")
 
 	return flags, nil
 }
