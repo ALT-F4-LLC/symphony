@@ -1,6 +1,6 @@
 FROM golang:1.14-alpine as base_block
 
-RUN apk add --no-cache git protobuf
+RUN apk add --no-cache git lvm2 protobuf
 
 WORKDIR /go/src/github.com/erkrnt/symphony
 

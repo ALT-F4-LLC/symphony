@@ -31,12 +31,12 @@ func BlockInit(serviceAddr *string, socket *string) {
 }
 
 // BlockLvCreate : handles creation of new logical volume
-func BlockLvCreate(id *string, volumeGroupID *string, size *string, remoteAddr *string) {
+func BlockLvCreate(id *string, volumeGroupID *string, size *string, blockEndpoint *string) {
 	if *id == "" || *volumeGroupID == "" || *size == "" {
 		log.Fatal("invalid_parameters")
 	}
 
-	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*blockEndpoint, grpc.WithInsecure())
 
 	if err != nil {
 		log.Fatal(err)
