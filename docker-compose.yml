@@ -1,6 +1,21 @@
 networks:
   etcd:
+  symphony:
 services:
+  block_01:
+    build:
+      context: .
+      dockerfile: cmd/block/Dockerfile
+    command: block --config-dir="/config" --verbose
+    depends_on:
+      - manager_01
+      - manager_02
+      - manager_03
+    networks:
+      - etcd
+      - symphony
+    volumes:
+      - block_01:/config
   etcd_01:
     command: >-
       etcd
@@ -15,10 +30,6 @@ services:
     image: quay.io/coreos/etcd:v3.4.9
     networks:
       - etcd
-    ports:
-      - 12379:2379
-      - 12380:2380
-      - 14001:4001
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
   etcd_02:
@@ -35,10 +46,6 @@ services:
     image: quay.io/coreos/etcd:v3.4.9
     networks:
       - etcd
-    ports:
-      - 22379:2379
-      - 22380:2380
-      - 24001:4001
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
   etcd_03:
@@ -55,10 +62,65 @@ services:
     image: quay.io/coreos/etcd:v3.4.9
     networks:
       - etcd
-    ports:
-      - 32379:2379
-      - 32380:2380
-      - 34001:4001
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
+  manager_01:
+    build:
+      context: .
+      dockerfile: cmd/manager/Dockerfile
+    command: >
+      manager
+      --config-dir="/config"
+      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
+      --verbose
+    depends_on:
+      - etcd_01
+      - etcd_02
+      - etcd_03
+    networks:
+      - etcd
+      - symphony
+    volumes:
+      - manager_01:/config
+  manager_02:
+    build:
+      context: .
+      dockerfile: cmd/manager/Dockerfile
+    command: >
+      manager
+      --config-dir="/config"
+      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
+      --verbose
+    depends_on:
+      - etcd_01
+      - etcd_02
+      - etcd_03
+    networks:
+      - etcd
+      - symphony
+    volumes:
+      - manager_02:/config
+  manager_03:
+    build:
+      context: .
+      dockerfile: cmd/manager/Dockerfile
+    command: >
+      manager
+      --config-dir="/config"
+      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
+      --verbose
+    depends_on:
+      - etcd_01
+      - etcd_02
+      - etcd_03
+    networks:
+      - etcd
+      - symphony
+    volumes:
+      - manager_03:/config
 version: "3.7"
+volumes:
+  block_01:
+  manager_01:
+  manager_02:
+  manager_03:
