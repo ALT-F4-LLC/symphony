@@ -84,10 +84,8 @@ services:
       - etcd_02
       - etcd_03
     networks:
-      etcd:
-      symphony:
-        aliases:
-          - manager
+      - etcd
+      - symphony
     volumes:
       - manager_01:/config
   manager_02:
@@ -104,10 +102,8 @@ services:
       - etcd_02
       - etcd_03
     networks:
-      etcd:
-      symphony:
-        aliases:
-          - manager
+      - etcd
+      - symphony
     volumes:
       - manager_02:/config
   manager_03:
@@ -124,10 +120,8 @@ services:
       - etcd_02
       - etcd_03
     networks:
-      etcd:
-      symphony:
-        aliases:
-          - manager
+      - etcd
+      - symphony
     volumes:
       - manager_03:/config
 version: "3.7"
