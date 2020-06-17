@@ -10,7 +10,7 @@ import (
 )
 
 // BlockInit : handles joining block node to an existing cluster
-func BlockInit(joinAddr *string, socket *string) {
+func BlockInit(serviceAddr *string, socket *string) {
 	conn := NewConnControl(socket)
 
 	defer conn.Close()
@@ -21,7 +21,7 @@ func BlockInit(joinAddr *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.BlockControlInitRequest{Addr: *joinAddr}
+	opts := &api.BlockControlInitRequest{ServiceAddr: *serviceAddr}
 
 	_, joinErr := c.Init(ctx, opts)
 
@@ -50,7 +50,7 @@ func BlockLvCreate(id *string, volumeGroupID *string, size *string, remoteAddr *
 
 	defer cancel()
 
-	opts := &api.BlockNewLvFields{ID: *id, VolumeGroupID: *volumeGroupID, Size: *size}
+	opts := &api.BlockRemoteNewLvRequest{ID: *id, VolumeGroupID: *volumeGroupID, Size: *size}
 
 	lv, err := c.NewLv(ctx, opts)
 
@@ -81,7 +81,7 @@ func BlockPvCreate(device *string, remoteAddr *string) {
 
 	defer cancel()
 
-	opts := &api.BlockPvFields{Device: *device}
+	opts := &api.BlockRemotePvRequest{Device: *device}
 
 	pv, err := c.NewPv(ctx, opts)
 
@@ -112,7 +112,7 @@ func BlockVgCreate(device *string, id *string, remoteAddr *string) {
 
 	defer cancel()
 
-	opts := &api.BlockNewVgFields{Device: *device, ID: *id}
+	opts := &api.BlockRemoteNewVgRequest{Device: *device, ID: *id}
 
 	vg, err := c.NewVg(ctx, opts)
 
@@ -143,7 +143,7 @@ func BlockLvGet(id *string, volumeGroupID *string, remoteAddr *string) {
 
 	defer cancel()
 
-	opts := &api.BlockLvFields{ID: *id, VolumeGroupID: *volumeGroupID}
+	opts := &api.BlockRemoteLvRequest{ID: *id, VolumeGroupID: *volumeGroupID}
 
 	lv, err := c.GetLv(ctx, opts)
 
@@ -174,7 +174,7 @@ func BlockPvGet(device *string, remoteAddr *string) {
 
 	defer cancel()
 
-	opts := &api.BlockPvFields{Device: *device}
+	opts := &api.BlockRemotePvRequest{Device: *device}
 
 	pv, err := c.GetPv(ctx, opts)
 
@@ -205,7 +205,7 @@ func BlockVgGet(id *string, remoteAddr *string) {
 
 	defer cancel()
 
-	opts := &api.BlockVgFields{ID: *id}
+	opts := &api.BlockRemoteVgRequest{ID: *id}
 
 	vg, err := c.GetVg(ctx, opts)
 
@@ -236,7 +236,7 @@ func BlockLvRemove(id *string, volumeGroupID *string, remoteAddr *string) {
 
 	defer cancel()
 
-	opts := &api.BlockLvFields{ID: *id, VolumeGroupID: *volumeGroupID}
+	opts := &api.BlockRemoteLvRequest{ID: *id, VolumeGroupID: *volumeGroupID}
 
 	lv, err := c.RemoveLv(ctx, opts)
 
@@ -267,7 +267,7 @@ func BlockPvRemove(device *string, remoteAddr *string) {
 
 	defer cancel()
 
-	opts := &api.BlockPvFields{Device: *device}
+	opts := &api.BlockRemotePvRequest{Device: *device}
 
 	pv, err := c.RemovePv(ctx, opts)
 
@@ -298,7 +298,7 @@ func BlockVgRemove(id *string, remoteAddr *string) {
 
 	defer cancel()
 
-	opts := &api.BlockVgFields{ID: *id}
+	opts := &api.BlockRemoteVgRequest{ID: *id}
 
 	vg, err := c.RemoveVg(ctx, opts)
 

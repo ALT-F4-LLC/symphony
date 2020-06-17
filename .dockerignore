@@ -1,0 +1,5 @@
+.config
+.git
+docker-compose.yml
+Dockerfile
+*.pb.go

@@ -1,72 +1,192 @@
 package block
 
 import (
-	"encoding/json"
+	"context"
+	"errors"
 	"fmt"
-	"io/ioutil"
-	"sync"
+	"net"
+	"os"
+	"time"
 
-	"github.com/google/uuid"
+	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/config"
+	"github.com/erkrnt/symphony/internal/pkg/gossip"
+	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 // Block : block node
 type Block struct {
-	Flags *flags
-	Key   *key
+	ErrorC chan string
 
-	mu sync.Mutex
+	flags      *flags
+	key        *config.Key
+	memberlist *memberlist.Memberlist
 }
 
-// SaveServiceID : sets the SERVICE_ID in key.json
-func (b *Block) SaveServiceID(id uuid.UUID) error {
-	b.Key.ServiceID = id
-
-	b.mu.Lock()
-
-	keyJSON, err := json.Marshal(b.Key)
+// Start : handles start of manager service
+func (b *Block) Start() {
+	key, err := b.key.Get(b.flags.configDir)
 
 	if err != nil {
-		return err
+		b.ErrorC <- err.Error()
 	}
 
-	path := fmt.Sprintf("%s/key.json", b.Flags.configDir)
+	if key.ClusterID != nil && key.ServiceID != nil {
+		restartErr := b.restart(key)
 
-	writeErr := ioutil.WriteFile(path, keyJSON, 0644)
-
-	if writeErr != nil {
-		return writeErr
+		if restartErr != nil {
+			b.ErrorC <- restartErr.Error()
+		}
 	}
 
-	defer b.mu.Unlock()
+	go b.listenControl()
 
-	fields := logrus.Fields{
-		"SERVICE_ID": id.String(),
+	go b.listenRemote()
+}
+
+func (b *Block) listenControl() {
+	socketPath := fmt.Sprintf("%s/control.sock", b.flags.configDir)
+
+	if err := os.RemoveAll(socketPath); err != nil {
+		b.ErrorC <- err.Error()
 	}
 
-	logrus.WithFields(fields).Info("Updated key.json file")
+	lis, err := net.Listen("unix", socketPath)
 
-	return nil
+	if err != nil {
+		b.ErrorC <- err.Error()
+	}
+
+	s := grpc.NewServer()
+
+	cs := &controlServer{
+		block: b,
+	}
+
+	api.RegisterBlockControlServer(s, cs)
+
+	logrus.Info("Started block control gRPC socket server.")
+
+	serveErr := s.Serve(lis)
+
+	if serveErr != nil {
+		b.ErrorC <- serveErr.Error()
+	}
+}
+
+func (b *Block) listenRemote() {
+	lis, err := net.Listen("tcp", b.flags.listenServiceAddr.String())
+
+	if err != nil {
+		b.ErrorC <- err.Error()
+	}
+
+	s := grpc.NewServer()
+
+	server := &remoteServer{
+		block: b,
+	}
+
+	api.RegisterBlockRemoteServer(s, server)
+
+	logrus.Info("Started block remote gRPC tcp server.")
+
+	serveErr := s.Serve(lis)
+
+	if serveErr != nil {
+		b.ErrorC <- err.Error()
+	}
+}
+
+func (b *Block) restart(key *config.Key) error {
+	managers := key.Endpoints
+
+	for _, manager := range managers {
+		joinAddr, err := net.ResolveTCPAddr("tcp", manager)
+
+		if err != nil {
+			return err
+		}
+
+		conn, err := grpc.Dial(joinAddr.String(), grpc.WithInsecure())
+
+		if err != nil {
+			logrus.Debug("Restart join failed to remote peer... skipping.")
+			continue
+		}
+
+		defer conn.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+		defer cancel()
+
+		r := api.NewManagerRemoteClient(conn)
+
+		opts := &api.ManagerRemoteJoinRequest{
+			ClusterID: key.ClusterID.String(),
+			ServiceID: key.ServiceID.String(),
+		}
+
+		join, err := r.Join(ctx, opts)
+
+		if err != nil {
+			logrus.Debug("Restart join failed to remote peer... skipping.")
+			continue
+		}
+
+		gossipMember := &gossip.Member{
+			ServiceAddr: b.flags.listenServiceAddr.String(),
+			ServiceID:   join.ServiceID,
+			ServiceType: api.ServiceType_BLOCK.String(),
+		}
+
+		listenGossipAddr := b.flags.listenGossipAddr
+
+		memberlist, err := gossip.NewMemberList(gossipMember, listenGossipAddr.Port)
+
+		if err != nil {
+			return err
+		}
+
+		b.memberlist = memberlist
+
+		_, joinErr := memberlist.Join([]string{join.GossipAddr})
+
+		if joinErr != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return errors.New("invalid_manager_endpoints")
 }
 
 // New : creates new block node
 func New() (*Block, error) {
+	errorC := make(chan string)
+
+	key := &config.Key{}
+
 	flags, err := getFlags()
 
 	if err != nil {
 		return nil, err
 	}
 
-	key, err := GetKey(flags.configDir)
-
-	if err != nil {
-		return nil, err
+	if flags.verbose {
+		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	b := &Block{
-		Flags: flags,
-		Key:   key,
+	block := &Block{
+		ErrorC: errorC,
+
+		flags: flags,
+		key:   key,
 	}
 
-	return b, nil
+	return block, nil
 }

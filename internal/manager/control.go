@@ -2,22 +2,25 @@ package manager
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"net"
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/config"
+	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/google/uuid"
 	"go.etcd.io/etcd/clientv3"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // controlServer : manager remote requests
 type controlServer struct {
-	Manager *Manager
+	manager *Manager
 }
 
+// NewEtcdClient : creates new etcd client
 func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 	etcd, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
@@ -33,9 +36,10 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 	return etcd, nil
 }
 
-func GetServiceByID(services []*api.Service, id string) *api.Service {
+// GetServiceByID : gets service from services
+func GetServiceByID(services []*api.Service, id uuid.UUID) *api.Service {
 	for _, service := range services {
-		if service.Id == id {
+		if service.ID == id.String() {
 			return service
 		}
 	}
@@ -44,7 +48,40 @@ func GetServiceByID(services []*api.Service, id string) *api.Service {
 }
 
 func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequest) (*api.ManagerControlInitResponse, error) {
-	etcd, err := NewEtcdClient(s.Manager.Flags.EtcdEndpoints)
+	defaultInitAddr := s.manager.flags.listenServiceAddr.String()
+
+	if in.ServiceAddr != "" {
+		defaultInitAddr = in.ServiceAddr
+	}
+
+	initAddr, err := net.ResolveTCPAddr("tcp", defaultInitAddr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(initAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	r := api.NewManagerRemoteClient(conn)
+
+	opts := &api.ManagerRemoteInitRequest{
+		ServiceAddr: s.manager.flags.listenServiceAddr.String(),
+		ServiceType: api.ServiceType_MANAGER,
+	}
+
+	init, err := r.Init(ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	clusterID, err := uuid.Parse(init.ClusterID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -52,13 +89,7 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 		return nil, st.Err()
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	services, err := s.Manager.GetServices()
+	serviceID, err := uuid.Parse(init.ServiceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -66,64 +97,57 @@ func (s *controlServer) Init(ctx context.Context, in *api.ManagerControlInitRequ
 		return nil, st.Err()
 	}
 
-	for _, service := range services {
-		if service.Addr == s.Manager.Flags.ListenAddr.String() {
-			st := status.New(codes.AlreadyExists, codes.AlreadyExists.String())
+	key := &config.Key{
+		ClusterID: &clusterID,
+		Endpoints: init.Endpoints,
+		ServiceID: &serviceID,
+	}
+
+	saveErr := key.Save(s.manager.flags.configDir)
+
+	if saveErr != nil {
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return nil, st.Err()
+	}
+
+	gossipMember := &gossip.Member{
+		ServiceAddr: opts.ServiceAddr,
+		ServiceID:   serviceID.String(),
+		ServiceType: opts.ServiceType.String(),
+	}
+
+	listenGossipAddr := s.manager.flags.listenGossipAddr
+
+	memberlist, err := gossip.NewMemberList(gossipMember, listenGossipAddr.Port)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if init.GossipAddr != listenGossipAddr.String() {
+		_, joinErr := memberlist.Join([]string{init.GossipAddr})
+
+		if joinErr != nil {
+			st := status.New(codes.Internal, joinErr.Error())
 
 			return nil, st.Err()
 		}
 	}
 
-	serviceID := uuid.New()
-
-	service := api.Service{
-		Addr: s.Manager.Flags.ListenAddr.String(),
-		Id:   serviceID.String(),
-		Type: api.ServiceType_MANAGER.String(),
-	}
-
-	serviceKey := fmt.Sprintf("/service/%s", service.Id)
-
-	serviceJSON, err := json.Marshal(service)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	_, putErr := etcd.Put(ctx, serviceKey, string(serviceJSON))
-
-	if putErr != nil {
-		st := status.New(codes.Internal, putErr.Error())
-
-		return nil, st.Err()
-	}
+	s.manager.memberlist = memberlist
 
 	res := &api.ManagerControlInitResponse{
-		Id: service.Id,
+		ServiceID: serviceID.String(),
 	}
 
 	return res, nil
-
 }
 
-func (s *controlServer) Remove(ctx context.Context, in *api.ManagerControlRemoveRequest) (*api.ManagerControlRemoveResponse, error) {
-	etcd, err := NewEtcdClient(s.Manager.Flags.EtcdEndpoints)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	serviceID, err := uuid.Parse(in.Id)
+func (s *controlServer) Remove(ctx context.Context, in *api.ManagerControlRemoveRequest) (*api.SuccessStatusResponse, error) {
+	serviceID, err := uuid.Parse(in.ServiceID)
 
 	if err != nil {
 		st := status.New(codes.InvalidArgument, err.Error())
@@ -131,33 +155,31 @@ func (s *controlServer) Remove(ctx context.Context, in *api.ManagerControlRemove
 		return nil, st.Err()
 	}
 
-	services, err := s.Manager.GetServices()
+	removeAddr, err := net.ResolveTCPAddr("tcp", s.manager.flags.listenServiceAddr.String())
 
 	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
+		return nil, err
 	}
 
-	service := GetServiceByID(services, serviceID.String())
+	conn, err := grpc.Dial(removeAddr.String(), grpc.WithInsecure())
 
-	if service == nil {
-		st := status.New(codes.NotFound, "service_not_found")
-
-		return nil, st.Err()
+	if err != nil {
+		return nil, err
 	}
 
-	serviceKey := fmt.Sprintf("/service/%s", service.Id)
+	defer conn.Close()
 
-	_, delErr := etcd.Delete(ctx, serviceKey)
+	remote := api.NewManagerRemoteClient(conn)
 
-	if delErr != nil {
-		st := status.New(codes.Internal, delErr.Error())
-
-		return nil, st.Err()
+	opts := &api.ManagerRemoteRemoveRequest{
+		ServiceID: serviceID.String(),
 	}
 
-	res := &api.ManagerControlRemoveResponse{}
+	res, err := remote.Remove(ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return res, nil
 }

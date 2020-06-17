@@ -44,25 +44,29 @@ Below shows a simple environment setup process.
 $ docker-compose up -d
 ```
 
-#### Initialize a manager:
+#### Initialize the managers:
 
 ```
-$ go run ./cmd/manager \
---config-dir=".config/manager-01" \
---etcd-endpoints="http://127.0.0.1:12379,http://127.0.0.1:22379,http://127.0.0.1:32379"
-$ go run ./cmd/cli --socket=".config/manager-01/control.sock" manager init
+$ docker-compose exec manager_01 cli --socket="/config/control.sock" manager init
+$ docker-compose exec manager_02 cli --socket="/config/control.sock" manager init manager_01:15760
+$ docker-compose exec manager_03 cli --socket="/config/control.sock" manager init manager_01:15760
 ```
 
-#### Initialize a cloud service:
+#### Initialize the block service:
 
 ```
-$ go run ./cmd/block \
---config-dir=".config/block-01" \
---listen-port 15761
-$ go run ./cmd/cli --socket=".config/block-01/control.sock" block init <manager-hostname | manager-ip>:15760
+$ docker-compose exec block_01 cli --socket="/config/control.sock" block init manager_01:15760
 ```
 
-#### Check etcd for state:
+#### Check etcd for cluster state:
+
+```
+docker-compose exec etcd_01 etcdctl \
+--endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379" \
+get /cluster
+```
+
+#### Check etcd for service state:
 
 ```
 docker-compose exec etcd_01 etcdctl \
@@ -73,5 +77,5 @@ get /service --prefix
 #### Remove a cloud service:
 
 ```
-go run ./cmd/cli --socket=".config/manager-01/control.sock" manager remove <service-id>
+docker-compose exec manager_01 cli --socket="/config/control.sock" manager remove <service-id>
 ```
