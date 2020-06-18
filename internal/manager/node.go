@@ -201,6 +201,63 @@ func (m *Manager) getServices() ([]*api.Service, error) {
 	return services, nil
 }
 
+func (m *Manager) getManagers(services []*api.Service) []*api.Service {
+	managers := make([]*api.Service, 0)
+
+	for _, s := range services {
+		if s.Type == api.ServiceType_MANAGER.String() {
+			managers = append(services, s)
+		}
+	}
+
+	return managers
+}
+
+func (m *Manager) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	results, err := etcd.Get(ctx, "/physicalvolume", clientv3.WithPrefix())
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	pvs := make([]*api.PhysicalVolume, 0)
+
+	for _, ev := range results.Kvs {
+		var s *api.PhysicalVolume
+
+		err := json.Unmarshal(ev.Value, &s)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		pvs = append(pvs, s)
+	}
+
+	return pvs, nil
+}
+
 func (m *Manager) restart(key *config.Key) error {
 	cluster, err := m.getCluster()
 

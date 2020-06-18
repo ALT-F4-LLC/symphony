@@ -11,10 +11,11 @@ service BlockControl {
 }
 
 service BlockRemote {
+  rpc Leave(BlockRemoteLeaveRequest) returns (SuccessStatusResponse) {}
+
   rpc GetLv(BlockRemoteLvRequest) returns (BlockRemoteLvResponse) {}
   rpc GetPv(BlockRemotePvRequest) returns (BlockRemotePvResponse) {}
   rpc GetVg(BlockRemoteVgRequest) returns (BlockRemoteVgResponse) {}
-  rpc Leave(BlockRemoteLeaveRequest) returns (SuccessStatusResponse) {}
   rpc NewLv(BlockRemoteNewLvRequest) returns (BlockRemoteLvResponse) {}
   rpc NewPv(BlockRemotePvRequest) returns (BlockRemotePvResponse) {}
   rpc NewVg(BlockRemoteNewVgRequest) returns (BlockRemoteVgResponse) {}
@@ -23,9 +24,7 @@ service BlockRemote {
   rpc RemoveVg(BlockRemoteVgRequest) returns (SuccessStatusResponse) {}
 }
 
-message BlockControlInitRequest {
-  string ServiceAddr = 1;
-}
+message BlockControlInitRequest { string ServiceAddr = 1; }
 message BlockControlInitResponse {
   string ClusterID = 1;
   string ServiceID = 2;
@@ -85,4 +84,19 @@ message BlockRemoteVgResponse {
   string VgAttr = 5;
   string VgSize = 6;
   string VgFree = 7;
+}
+
+message PhysicalVolume {
+  string DeviceName = 1;
+  PhysicalVolumeMetadata Metadata = 2;
+  string ServiceID = 3;
+}
+
+message PhysicalVolumeMetadata {
+  string PvName = 1;
+  string VgName = 2;
+  string PvFmt = 3;
+  string PvAttr = 4;
+  string PvSize = 5;
+  string PvFree = 6;
 }

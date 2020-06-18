@@ -327,3 +327,15 @@ func (s *remoteServer) Remove(ctx context.Context, in *api.ManagerRemoteRemoveRe
 
 	return res, nil
 }
+
+func (s *remoteServer) NewPv(ctx context.Context, in *api.ManagerRemoteNewPvRequest) (*api.ManagerRemotePvResponse, error) {
+	// TODO : verify Pv doesnt exist
+
+	// TODO : create Pv on service host
+
+	// TODO : create Pv in /physicalvolume/:id
+
+	res := &api.ManagerRemotePvResponse{}
+
+	return res, nil
+}

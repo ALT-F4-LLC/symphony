@@ -17,13 +17,21 @@ service ManagerRemote {
   rpc Join(ManagerRemoteJoinRequest) returns (ManagerRemoteInitResponse) {}
   rpc Leave(ManagerRemoteLeaveRequest) returns (SuccessStatusResponse) {}
   rpc Remove(ManagerRemoteRemoveRequest) returns (SuccessStatusResponse) {}
+
+  rpc GetLv(ManagerRemoteLvRequest) returns (ManagerRemoteLvResponse) {}
+  rpc GetPv(ManagerRemotePvRequest) returns (ManagerRemotePvResponse) {}
+  rpc GetVg(ManagerRemoteVgRequest) returns (ManagerRemoteVgResponse) {}
+  rpc NewLv(ManagerRemoteNewLvRequest) returns (ManagerRemoteLvResponse) {}
+  rpc NewPv(ManagerRemoteNewPvRequest) returns (ManagerRemotePvResponse) {}
+  rpc NewVg(ManagerRemoteNewVgRequest) returns (ManagerRemoteVgResponse) {}
+  rpc RemoveLv(ManagerRemoteLvRequest) returns (SuccessStatusResponse) {}
+  rpc RemovePv(ManagerRemotePvRequest) returns (SuccessStatusResponse) {}
+  rpc RemoveVg(ManagerRemoteVgRequest) returns (SuccessStatusResponse) {}
 }
 
 // -- CONTROL ENDPOINTS -- //
 
-message ManagerControlInitRequest {
-  string ServiceAddr = 1;
-}
+message ManagerControlInitRequest { string ServiceAddr = 1; }
 message ManagerControlInitResponse {
   string ClusterID = 1;
   string ServiceID = 2;
@@ -31,9 +39,7 @@ message ManagerControlInitResponse {
 
 message ManagerControlLeaveRequest {}
 
-message ManagerControlRemoveRequest {
-  string ServiceID = 1;
-}
+message ManagerControlRemoveRequest { string ServiceID = 1; }
 
 // -- REMOTE ENDPOINTS -- //
 
@@ -53,10 +59,44 @@ message ManagerRemoteJoinRequest {
   string ServiceID = 2;
 }
 
-message ManagerRemoteLeaveRequest {
-  string ServiceID = 1;
+message ManagerRemoteLeaveRequest { string ServiceID = 1; }
+
+message ManagerRemoteRemoveRequest { string ServiceID = 1; }
+
+message ManagerRemoteLvRequest { string ID = 1; }
+message ManagerRemoteLvResponse {
+  string ID = 1;
+  int64 Size = 2;
+  string ServiceID = 3;
+  string VolumeGroupID = 4;
 }
 
-message ManagerRemoteRemoveRequest {
+message ManagerRemotePvRequest { string ID = 1; }
+message ManagerRemotePvResponse {
+  string ID = 1;
+  int64 DeviceName = 2;
+  string ServiceID = 3;
+}
+
+message ManagerRemoteVgRequest { string ID = 1; }
+message ManagerRemoteVgResponse {
+  string ID = 1;
+  string PhysicalVolumeID = 2;
+  string ServiceID = 3;
+}
+
+message ManagerRemoteNewLvRequest {
   string ServiceID = 1;
+  int64 Size = 2;
+  string VolumeGroupID = 3;
+}
+
+message ManagerRemoteNewPvRequest {
+  string DeviceName = 1;
+  string ServiceID = 2;
+}
+
+message ManagerRemoteNewVgRequest {
+  string PhysicalVolumeID = 1;
+  string ServiceID = 2;
 }
