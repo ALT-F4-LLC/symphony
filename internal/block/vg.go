@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/erkrnt/symphony/internal/pkg/schema"
+	"github.com/erkrnt/symphony/api"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -14,11 +14,11 @@ import (
 // VolumeGroupReport : struct for VGDisplay output
 type VolumeGroupReport struct {
 	Report []struct {
-		Vg []schema.VolumeGroupMetadata `json:"vg"`
+		Vg []api.VolumeGroupMetadata `json:"vg"`
 	} `json:"report"`
 }
 
-func getVg(id uuid.UUID) (*schema.VolumeGroupMetadata, error) {
+func getVg(id uuid.UUID) (*api.VolumeGroupMetadata, error) {
 	cmd := exec.Command("vgdisplay", "--columns", "--reportformat", "json", id.String())
 
 	vgd, vgdErr := cmd.CombinedOutput()
@@ -39,7 +39,7 @@ func getVg(id uuid.UUID) (*schema.VolumeGroupMetadata, error) {
 		return nil, err
 	}
 
-	var metadata schema.VolumeGroupMetadata
+	var metadata api.VolumeGroupMetadata
 
 	if len(res.Report) == 1 && len(res.Report[0].Vg) == 1 {
 		vg := res.Report[0].Vg[0]
@@ -54,7 +54,7 @@ func getVg(id uuid.UUID) (*schema.VolumeGroupMetadata, error) {
 	return &metadata, nil
 }
 
-func newVg(device string, id uuid.UUID) (*schema.VolumeGroupMetadata, error) {
+func newVg(device string, id uuid.UUID) (*api.VolumeGroupMetadata, error) {
 	exists, _ := getVg(id)
 
 	if exists != nil {

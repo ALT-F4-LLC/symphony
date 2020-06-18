@@ -60,39 +60,39 @@ func ManagerRemove(id *string, socket *string) {
 }
 
 // ManagerLvCreate : handles creation of new logical volume
-func ManagerLvCreate(endpoint *string, serviceID *string, size *int64, volumeGroupID *string) {
-	if *endpoint == "" || *serviceID == "" || *size == 0 || *volumeGroupID == "" {
-		log.Fatal("invalid_parameters")
-	}
+// func ManagerLvCreate(endpoint *string, serviceID *string, size *int64, volumeGroupID *string) {
+// 	if *endpoint == "" || *serviceID == "" || *size == 0 || *volumeGroupID == "" {
+// 		log.Fatal("invalid_parameters")
+// 	}
 
-	conn, err := grpc.Dial(*endpoint, grpc.WithInsecure())
+// 	conn, err := grpc.Dial(*endpoint, grpc.WithInsecure())
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	defer conn.Close()
+// 	defer conn.Close()
 
-	c := api.NewManagerRemoteClient(conn)
+// 	c := api.NewManagerRemoteClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	defer cancel()
+// 	defer cancel()
 
-	opts := &api.ManagerRemoteNewLvRequest{
-		ServiceID:     *serviceID,
-		Size:          *size,
-		VolumeGroupID: *volumeGroupID,
-	}
+// 	opts := &api.ManagerRemoteNewLvRequest{
+// 		ServiceID:     *serviceID,
+// 		Size:          *size,
+// 		VolumeGroupID: *volumeGroupID,
+// 	}
 
-	lv, err := c.NewLv(ctx, opts)
+// 	lv, err := c.NewLv(ctx, opts)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	log.Print(*lv)
-}
+// 	log.Print(*lv)
+// }
 
 // ManagerPvCreate : handles creation of new physical volume
 func ManagerPvCreate(deviceName *string, endpoint *string, serviceID *string) {
@@ -129,221 +129,221 @@ func ManagerPvCreate(deviceName *string, endpoint *string, serviceID *string) {
 }
 
 // ManagerVgCreate : handles creation of new volume group
-func ManagerVgCreate(physicalVolumeID *string, remoteAddr *string, serviceID *string) {
-	if *physicalVolumeID == "" || *remoteAddr == "" {
-		log.Fatal("invalid_parameters")
-	}
+// func ManagerVgCreate(physicalVolumeID *string, remoteAddr *string, serviceID *string) {
+// 	if *physicalVolumeID == "" || *remoteAddr == "" {
+// 		log.Fatal("invalid_parameters")
+// 	}
 
-	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	defer conn.Close()
+// 	defer conn.Close()
 
-	c := api.NewManagerRemoteClient(conn)
+// 	c := api.NewManagerRemoteClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	defer cancel()
+// 	defer cancel()
 
-	opts := &api.ManagerRemoteNewVgRequest{
-		PhysicalVolumeID: *physicalVolumeID,
-		ServiceID:        *serviceID,
-	}
+// 	opts := &api.ManagerRemoteNewVgRequest{
+// 		PhysicalVolumeID: *physicalVolumeID,
+// 		ServiceID:        *serviceID,
+// 	}
 
-	vg, err := c.NewVg(ctx, opts)
+// 	vg, err := c.NewVg(ctx, opts)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	log.Print(*vg)
-}
+// 	log.Print(*vg)
+// }
 
 // ManagerLvGet : gets logical volume
-func ManagerLvGet(id *string, remoteAddr *string) {
-	if *id == "" {
-		log.Fatal("invalid_parameters")
-	}
+// func ManagerLvGet(id *string, remoteAddr *string) {
+// 	if *id == "" {
+// 		log.Fatal("invalid_parameters")
+// 	}
 
-	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	defer conn.Close()
+// 	defer conn.Close()
 
-	c := api.NewManagerRemoteClient(conn)
+// 	c := api.NewManagerRemoteClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	defer cancel()
+// 	defer cancel()
 
-	opts := &api.ManagerRemoteLvRequest{ID: *id}
+// 	opts := &api.ManagerRemoteLvRequest{ID: *id}
 
-	lv, err := c.GetLv(ctx, opts)
+// 	lv, err := c.GetLv(ctx, opts)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	log.Print(*lv)
-}
+// 	log.Print(*lv)
+// }
 
 // ManagerPvGet : gets physical volume
-func ManagerPvGet(id *string, remoteAddr *string) {
-	if *id == "" {
-		log.Fatal("invalid_device_parameter")
-	}
+// func ManagerPvGet(id *string, remoteAddr *string) {
+// 	if *id == "" {
+// 		log.Fatal("invalid_device_parameter")
+// 	}
 
-	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	defer conn.Close()
+// 	defer conn.Close()
 
-	c := api.NewManagerRemoteClient(conn)
+// 	c := api.NewManagerRemoteClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	defer cancel()
+// 	defer cancel()
 
-	opts := &api.ManagerRemotePvRequest{ID: *id}
+// 	opts := &api.ManagerRemotePvRequest{ID: *id}
 
-	pv, err := c.GetPv(ctx, opts)
+// 	pv, err := c.GetPv(ctx, opts)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	log.Print(*pv)
-}
+// 	log.Print(*pv)
+// }
 
 // ManagerVgGet : gets volume group
-func ManagerVgGet(id *string, remoteAddr *string) {
-	if *id == "" {
-		log.Fatal("invalid_parameters")
-	}
+// func ManagerVgGet(id *string, remoteAddr *string) {
+// 	if *id == "" {
+// 		log.Fatal("invalid_parameters")
+// 	}
 
-	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	defer conn.Close()
+// 	defer conn.Close()
 
-	c := api.NewManagerRemoteClient(conn)
+// 	c := api.NewManagerRemoteClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	defer cancel()
+// 	defer cancel()
 
-	opts := &api.ManagerRemoteVgRequest{ID: *id}
+// 	opts := &api.ManagerRemoteVgRequest{ID: *id}
 
-	vg, err := c.GetVg(ctx, opts)
+// 	vg, err := c.GetVg(ctx, opts)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	log.Print(*vg)
-}
+// 	log.Print(*vg)
+// }
 
 // ManagerLvRemove : removes logical volume
-func ManagerLvRemove(id *string, remoteAddr *string) {
-	if *id == "" {
-		log.Fatal("invalid_parameters")
-	}
+// func ManagerLvRemove(id *string, remoteAddr *string) {
+// 	if *id == "" {
+// 		log.Fatal("invalid_parameters")
+// 	}
 
-	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	defer conn.Close()
+// 	defer conn.Close()
 
-	c := api.NewManagerRemoteClient(conn)
+// 	c := api.NewManagerRemoteClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	defer cancel()
+// 	defer cancel()
 
-	opts := &api.ManagerRemoteLvRequest{ID: *id}
+// 	opts := &api.ManagerRemoteLvRequest{ID: *id}
 
-	lv, err := c.RemoveLv(ctx, opts)
+// 	lv, err := c.RemoveLv(ctx, opts)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	log.Print(*lv)
-}
+// 	log.Print(*lv)
+// }
 
 // ManagerPvRemove : removes physical volume
-func ManagerPvRemove(id *string, remoteAddr *string) {
-	if *id == "" {
-		log.Fatal("invalid_parameter")
-	}
+// func ManagerPvRemove(id *string, remoteAddr *string) {
+// 	if *id == "" {
+// 		log.Fatal("invalid_parameter")
+// 	}
 
-	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	defer conn.Close()
+// 	defer conn.Close()
 
-	c := api.NewManagerRemoteClient(conn)
+// 	c := api.NewManagerRemoteClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	defer cancel()
+// 	defer cancel()
 
-	opts := &api.ManagerRemotePvRequest{ID: *id}
+// 	opts := &api.ManagerRemotePvRequest{ID: *id}
 
-	pv, err := c.RemovePv(ctx, opts)
+// 	pv, err := c.RemovePv(ctx, opts)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	log.Print(*pv)
-}
+// 	log.Print(*pv)
+// }
 
 // ManagerVgRemove : removes volume group
-func ManagerVgRemove(id *string, remoteAddr *string) {
-	if *id == "" {
-		log.Fatal("invalid_parameter")
-	}
+// func ManagerVgRemove(id *string, remoteAddr *string) {
+// 	if *id == "" {
+// 		log.Fatal("invalid_parameter")
+// 	}
 
-	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	defer conn.Close()
+// 	defer conn.Close()
 
-	c := api.NewManagerRemoteClient(conn)
+// 	c := api.NewManagerRemoteClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	defer cancel()
+// 	defer cancel()
 
-	opts := &api.ManagerRemoteVgRequest{ID: *id}
+// 	opts := &api.ManagerRemoteVgRequest{ID: *id}
 
-	vg, err := c.RemoveVg(ctx, opts)
+// 	vg, err := c.RemoveVg(ctx, opts)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	log.Print(*vg)
-}
+// 	log.Print(*vg)
+// }

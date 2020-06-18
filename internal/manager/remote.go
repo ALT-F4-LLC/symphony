@@ -329,13 +329,98 @@ func (s *remoteServer) Remove(ctx context.Context, in *api.ManagerRemoteRemoveRe
 }
 
 func (s *remoteServer) NewPv(ctx context.Context, in *api.ManagerRemoteNewPvRequest) (*api.ManagerRemotePvResponse, error) {
-	// TODO : verify Pv doesnt exist
+	services, err := s.manager.getServices()
 
-	// TODO : create Pv on service host
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
 
-	// TODO : create Pv in /physicalvolume/:id
+		return nil, st.Err()
+	}
 
-	res := &api.ManagerRemotePvResponse{}
+	serviceID, err := uuid.Parse(in.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	service := GetServiceByID(services, serviceID)
+
+	if service == nil {
+		st := status.New(codes.NotFound, "invalid_service_id")
+
+		return nil, st.Err()
+	}
+
+	volumes, err := s.manager.getPhysicalVolumes()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	var volume *api.PhysicalVolume
+
+	for _, v := range volumes {
+		if in.DeviceName == v.DeviceName && service.ID == v.ServiceID {
+			volume = v
+		}
+	}
+
+	if volume != nil {
+		st := status.New(codes.AlreadyExists, "physical_volume_exists")
+
+		return nil, st.Err()
+	}
+
+	newPvAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(newPvAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	remote := api.NewBlockRemoteClient(conn)
+
+	opts := &api.BlockRemotePvRequest{
+		DeviceName: in.DeviceName,
+	}
+
+	newPvRes, err := remote.NewPv(ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	id := uuid.New()
+
+	v := &api.PhysicalVolume{
+		DeviceName: in.DeviceName,
+		ID:         id.String(),
+		ServiceID:  service.ID,
+	}
+
+	saveErr := s.manager.savePhysicalVolume(v)
+
+	if saveErr != nil {
+		return nil, saveErr
+	}
+
+	res := &api.ManagerRemotePvResponse{
+		DeviceName: v.DeviceName,
+		ID:         v.ID,
+		Metadata:   newPvRes,
+		ServiceID:  v.ServiceID,
+	}
 
 	return res, nil
 }

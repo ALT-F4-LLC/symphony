@@ -4,6 +4,7 @@ option go_package = "github.com/erkrnt/symphony/api";
 
 package api;
 
+import "api/block.proto";
 import "api/generic.proto";
 import "api/service.proto";
 
@@ -18,15 +19,15 @@ service ManagerRemote {
   rpc Leave(ManagerRemoteLeaveRequest) returns (SuccessStatusResponse) {}
   rpc Remove(ManagerRemoteRemoveRequest) returns (SuccessStatusResponse) {}
 
-  rpc GetLv(ManagerRemoteLvRequest) returns (ManagerRemoteLvResponse) {}
-  rpc GetPv(ManagerRemotePvRequest) returns (ManagerRemotePvResponse) {}
-  rpc GetVg(ManagerRemoteVgRequest) returns (ManagerRemoteVgResponse) {}
-  rpc NewLv(ManagerRemoteNewLvRequest) returns (ManagerRemoteLvResponse) {}
+  // rpc GetLv(ManagerRemoteLvRequest) returns (ManagerRemoteLvResponse) {}
+  // rpc GetPv(ManagerRemotePvRequest) returns (ManagerRemotePvResponse) {}
+  // rpc GetVg(ManagerRemoteVgRequest) returns (ManagerRemoteVgResponse) {}
+  // rpc NewLv(ManagerRemoteNewLvRequest) returns (ManagerRemoteLvResponse) {}
   rpc NewPv(ManagerRemoteNewPvRequest) returns (ManagerRemotePvResponse) {}
-  rpc NewVg(ManagerRemoteNewVgRequest) returns (ManagerRemoteVgResponse) {}
-  rpc RemoveLv(ManagerRemoteLvRequest) returns (SuccessStatusResponse) {}
-  rpc RemovePv(ManagerRemotePvRequest) returns (SuccessStatusResponse) {}
-  rpc RemoveVg(ManagerRemoteVgRequest) returns (SuccessStatusResponse) {}
+  // rpc NewVg(ManagerRemoteNewVgRequest) returns (ManagerRemoteVgResponse) {}
+  // rpc RemoveLv(ManagerRemoteLvRequest) returns (SuccessStatusResponse) {}
+  // rpc RemovePv(ManagerRemotePvRequest) returns (SuccessStatusResponse) {}
+  // rpc RemoveVg(ManagerRemoteVgRequest) returns (SuccessStatusResponse) {}
 }
 
 // -- CONTROL ENDPOINTS -- //
@@ -73,9 +74,10 @@ message ManagerRemoteLvResponse {
 
 message ManagerRemotePvRequest { string ID = 1; }
 message ManagerRemotePvResponse {
-  string ID = 1;
-  int64 DeviceName = 2;
-  string ServiceID = 3;
+  string DeviceName = 1;
+  string ID = 2;
+  PhysicalVolumeMetadata Metadata = 3;
+  string ServiceID = 4;
 }
 
 message ManagerRemoteVgRequest { string ID = 1; }

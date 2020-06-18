@@ -51,25 +51,25 @@ func main() {
 		cli.BlockInit(blockInitAddr, socket)
 	case managerInit.FullCommand():
 		cli.ManagerInit(managerInitAddr, socket)
-	case managerLvCreate.FullCommand():
-		cli.ManagerLvCreate(managerEndpoint, managerLvCreateServiceID, managerLvCreateSize, managerLvCreateVolumeGroupID)
-	case managerLvGet.FullCommand():
-		cli.ManagerLvGet(managerEndpoint, managerLvGetID)
-	case managerLvRemove.FullCommand():
-		cli.ManagerLvRemove(managerEndpoint, managerLvRemoveID)
+	// case managerLvCreate.FullCommand():
+	// 	cli.ManagerLvCreate(managerEndpoint, managerLvCreateServiceID, managerLvCreateSize, managerLvCreateVolumeGroupID)
+	// case managerLvGet.FullCommand():
+	// 	cli.ManagerLvGet(managerEndpoint, managerLvGetID)
+	// case managerLvRemove.FullCommand():
+	// 	cli.ManagerLvRemove(managerEndpoint, managerLvRemoveID)
 	case managerPvCreate.FullCommand():
 		cli.ManagerPvCreate(managerPvCreateDeviceName, managerEndpoint, managerPvCreateServiceID)
-	case managerPvGet.FullCommand():
-		cli.ManagerPvGet(managerPvGetDevice, managerEndpoint)
-	case managerPvRemove.FullCommand():
-		cli.ManagerPvRemove(managerPvRemoveDevice, managerEndpoint)
+	// case managerPvGet.FullCommand():
+	// 	cli.ManagerPvGet(managerPvGetDevice, managerEndpoint)
+	// case managerPvRemove.FullCommand():
+	// 	cli.ManagerPvRemove(managerPvRemoveDevice, managerEndpoint)
 	case managerRemove.FullCommand():
 		cli.ManagerRemove(managerRemoveMemberID, socket)
-	case managerVgCreate.FullCommand():
-		cli.ManagerVgCreate(managerVgCreateDevice, managerVgCreateID, managerEndpoint)
-	case managerVgGet.FullCommand():
-		cli.ManagerVgGet(managerVgGetID, managerEndpoint)
-	case managerVgRemove.FullCommand():
-		cli.ManagerVgRemove(managerVgRemoveID, managerEndpoint)
+		// case managerVgCreate.FullCommand():
+		// 	cli.ManagerVgCreate(managerVgCreateDevice, managerVgCreateID, managerEndpoint)
+		// case managerVgGet.FullCommand():
+		// 	cli.ManagerVgGet(managerVgGetID, managerEndpoint)
+		// case managerVgRemove.FullCommand():
+		// 	cli.ManagerVgRemove(managerVgRemoveID, managerEndpoint)
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/erkrnt/symphony/internal/pkg/schema"
+	"github.com/erkrnt/symphony/api"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -17,11 +17,11 @@ import (
 // LogicalVolumeReport : struct for LVDisplay output
 type LogicalVolumeReport struct {
 	Report []struct {
-		Lv []schema.LogicalVolumeMetadata `json:"lv"`
+		Lv []api.LogicalVolumeMetadata `json:"lv"`
 	} `json:"report"`
 }
 
-func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*schema.LogicalVolumeMetadata, error) {
+func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*api.LogicalVolumeMetadata, error) {
 	path := fmt.Sprintf("/dev/%s/%s", volumeGroupID.String(), id.String())
 
 	cmd := exec.Command("lvdisplay", "--columns", "--reportformat", "json", path)
@@ -46,7 +46,7 @@ func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*schema.LogicalVolumeMetadata
 		return nil, err
 	}
 
-	var metadata schema.LogicalVolumeMetadata
+	var metadata api.LogicalVolumeMetadata
 
 	if len(res.Report) == 1 && len(res.Report[0].Lv) == 1 {
 		lv := res.Report[0].Lv[0]
@@ -66,7 +66,7 @@ func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*schema.LogicalVolumeMetadata
 	return &metadata, nil
 }
 
-func newLv(volumeGroupID uuid.UUID, id uuid.UUID, size string) (*schema.LogicalVolumeMetadata, error) {
+func newLv(volumeGroupID uuid.UUID, id uuid.UUID, size string) (*api.LogicalVolumeMetadata, error) {
 	exists, _ := getLv(volumeGroupID, id)
 
 	if exists != nil {

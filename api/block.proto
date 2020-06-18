@@ -13,12 +13,12 @@ service BlockControl {
 service BlockRemote {
   rpc Leave(BlockRemoteLeaveRequest) returns (SuccessStatusResponse) {}
 
-  rpc GetLv(BlockRemoteLvRequest) returns (BlockRemoteLvResponse) {}
-  rpc GetPv(BlockRemotePvRequest) returns (BlockRemotePvResponse) {}
-  rpc GetVg(BlockRemoteVgRequest) returns (BlockRemoteVgResponse) {}
-  rpc NewLv(BlockRemoteNewLvRequest) returns (BlockRemoteLvResponse) {}
-  rpc NewPv(BlockRemotePvRequest) returns (BlockRemotePvResponse) {}
-  rpc NewVg(BlockRemoteNewVgRequest) returns (BlockRemoteVgResponse) {}
+  rpc GetLv(BlockRemoteLvRequest) returns (LogicalVolumeMetadata) {}
+  rpc GetPv(BlockRemotePvRequest) returns (PhysicalVolumeMetadata) {}
+  rpc GetVg(BlockRemoteVgRequest) returns (VolumeGroupMetadata) {}
+  rpc NewLv(BlockRemoteNewLvRequest) returns (LogicalVolumeMetadata) {}
+  rpc NewPv(BlockRemotePvRequest) returns (PhysicalVolumeMetadata) {}
+  rpc NewVg(BlockRemoteNewVgRequest) returns (VolumeGroupMetadata) {}
   rpc RemoveLv(BlockRemoteLvRequest) returns (SuccessStatusResponse) {}
   rpc RemovePv(BlockRemotePvRequest) returns (SuccessStatusResponse) {}
   rpc RemoveVg(BlockRemoteVgRequest) returns (SuccessStatusResponse) {}
@@ -37,7 +37,7 @@ message BlockRemoteLvRequest {
   string VolumeGroupID = 2;
 }
 
-message BlockRemotePvRequest { string Device = 1; }
+message BlockRemotePvRequest { string DeviceName = 1; }
 
 message BlockRemoteVgRequest { string ID = 1; }
 
@@ -48,11 +48,32 @@ message BlockRemoteNewLvRequest {
 }
 
 message BlockRemoteNewVgRequest {
-  string Device = 1;
+  string DeviceName = 1;
   string ID = 2;
 }
 
-message BlockRemoteLvResponse {
+message LogicalVolume {
+  string ID = 1;
+  LogicalVolumeMetadata Metadata = 2;
+  string ServiceID = 3;
+  string VolumeGroupID = 4;
+  int64 Size = 5;
+}
+
+message PhysicalVolume {
+  string DeviceName = 1;
+  string ID = 2;
+  PhysicalVolumeMetadata Metadata = 3;
+  string ServiceID = 4;
+}
+
+message VolumeGroup {
+  string ID = 2;
+  VolumeGroupMetadata Metadata = 3;
+  string ServiceID = 4;
+}
+
+message LogicalVolumeMetadata {
   string LvName = 1;
   string VgName = 2;
   string LvAttr = 3;
@@ -67,31 +88,6 @@ message BlockRemoteLvResponse {
   string ConvertLv = 12;
 }
 
-message BlockRemotePvResponse {
-  string PvName = 1;
-  string VgName = 2;
-  string PvFmt = 3;
-  string PvAttr = 4;
-  string PvSize = 5;
-  string PvFree = 6;
-}
-
-message BlockRemoteVgResponse {
-  string VgName = 1;
-  string PvCount = 2;
-  string LvCount = 3;
-  string SnapCount = 4;
-  string VgAttr = 5;
-  string VgSize = 6;
-  string VgFree = 7;
-}
-
-message PhysicalVolume {
-  string DeviceName = 1;
-  PhysicalVolumeMetadata Metadata = 2;
-  string ServiceID = 3;
-}
-
 message PhysicalVolumeMetadata {
   string PvName = 1;
   string VgName = 2;
@@ -99,4 +95,14 @@ message PhysicalVolumeMetadata {
   string PvAttr = 4;
   string PvSize = 5;
   string PvFree = 6;
+}
+
+message VolumeGroupMetadata {
+  string VgName = 1;
+  string PvCount = 2;
+  string LvCount = 3;
+  string SnapCount = 4;
+  string VgAttr = 5;
+  string VgSize = 6;
+  string VgFree = 7;
 }

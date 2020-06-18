@@ -6,18 +6,18 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/erkrnt/symphony/internal/pkg/schema"
+	"github.com/erkrnt/symphony/api"
 	"github.com/sirupsen/logrus"
 )
 
 // PhysicalVolumeReport : describes a series of physical volumes in LVM
 type PhysicalVolumeReport struct {
 	Report []struct {
-		Pv []schema.PhysicalVolumeMetadata `json:"pv"`
+		Pv []api.PhysicalVolumeMetadata `json:"pv"`
 	} `json:"report"`
 }
 
-func getPv(device string) (*schema.PhysicalVolumeMetadata, error) {
+func getPv(device string) (*api.PhysicalVolumeMetadata, error) {
 	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device)
 
 	pvd, pvdErr := cmd.CombinedOutput()
@@ -38,7 +38,7 @@ func getPv(device string) (*schema.PhysicalVolumeMetadata, error) {
 		return nil, err
 	}
 
-	var metadata schema.PhysicalVolumeMetadata
+	var metadata api.PhysicalVolumeMetadata
 
 	if len(res.Report) == 1 && len(res.Report[0].Pv) == 1 {
 		pv := res.Report[0].Pv[0]
@@ -53,7 +53,7 @@ func getPv(device string) (*schema.PhysicalVolumeMetadata, error) {
 	return &metadata, nil
 }
 
-func newPv(device string) (*schema.PhysicalVolumeMetadata, error) {
+func newPv(device string) (*api.PhysicalVolumeMetadata, error) {
 	exists, _ := getPv(device)
 
 	if exists != nil {
