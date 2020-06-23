@@ -17,6 +17,7 @@ services:
     networks:
       - etcd
       - symphony
+    privileged: true
     volumes:
       - block_01:/config
   etcd_01:

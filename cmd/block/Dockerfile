@@ -1,6 +1,6 @@
 FROM golang:1.14-alpine as base_block
 
-RUN apk add --no-cache git lvm2 protobuf
+RUN apk add --no-cache git protobuf
 
 WORKDIR /go/src/github.com/erkrnt/symphony
 
@@ -33,6 +33,8 @@ RUN go install -v ./...
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
+
+RUN apk add --no-cache lvm2
 
 WORKDIR /usr/local/bin
 
