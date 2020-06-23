@@ -11,6 +11,7 @@ import (
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/erkrnt/symphony/internal/pkg/gossip"
+	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/clientv3"
@@ -246,6 +247,105 @@ func (m *Manager) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
 	return pvs, nil
 }
 
+func (m *Manager) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, error) {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	etcdKey := fmt.Sprintf("/physicalvolume/%s", id.String())
+
+	results, err := etcd.Get(ctx, etcdKey)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	var volume *api.PhysicalVolume
+
+	for _, ev := range results.Kvs {
+		var s *api.PhysicalVolume
+
+		err := json.Unmarshal(ev.Value, &s)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		if s.ID == id.String() {
+			volume = s
+		}
+	}
+
+	return volume, nil
+
+}
+
+func (m *Manager) getServiceByID(id uuid.UUID) (*api.Service, error) {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	etcdKey := fmt.Sprintf("/service/%s", id.String())
+
+	results, err := etcd.Get(ctx, etcdKey)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	var service *api.Service
+
+	for _, ev := range results.Kvs {
+		var s *api.Service
+
+		err := json.Unmarshal(ev.Value, &s)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		if s.ID == id.String() {
+			service = s
+		}
+	}
+
+	return service, nil
+}
+
 func (m *Manager) restart(key *config.Key) error {
 	cluster, err := m.getCluster()
 
@@ -301,7 +401,7 @@ func (m *Manager) restart(key *config.Key) error {
 
 					defer conn.Close()
 
-					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 					defer cancel()
 

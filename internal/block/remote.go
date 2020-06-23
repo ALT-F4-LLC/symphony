@@ -67,25 +67,16 @@ func (s *remoteServer) GetLv(ctx context.Context, in *api.BlockRemoteLvRequest) 
 
 // GetPv : gets physical volume
 func (s *remoteServer) GetPv(ctx context.Context, in *api.BlockRemotePvRequest) (*api.PhysicalVolumeMetadata, error) {
-	pv, pvErr := getPv(in.DeviceName)
+	metadata, pvErr := getPv(in.DeviceName)
 
 	if pvErr != nil {
 		return nil, api.ProtoError(pvErr)
 	}
 
-	if pv == nil {
+	if metadata == nil {
 		err := status.Error(codes.NotFound, "invalid_physical_volume")
 
 		return nil, api.ProtoError(err)
-	}
-
-	metadata := &api.PhysicalVolumeMetadata{
-		PvName: pv.PvName,
-		VgName: pv.VgName,
-		PvFmt:  pv.PvFmt,
-		PvAttr: pv.PvAttr,
-		PvSize: pv.PvSize,
-		PvFree: pv.PvFree,
 	}
 
 	logrus.WithFields(logrus.Fields{"DeviceName": in.DeviceName}).Info("GetPv")
@@ -145,7 +136,7 @@ func (s *remoteServer) Leave(ctx context.Context, in *api.BlockRemoteLeaveReques
 		return nil, st.Err()
 	}
 
-	leaveErr := s.block.memberlist.Leave(time.Second)
+	leaveErr := s.block.memberlist.Leave(5 * time.Second)
 
 	if leaveErr != nil {
 		st := status.New(codes.Internal, leaveErr.Error())

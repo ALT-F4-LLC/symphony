@@ -110,7 +110,7 @@ func ManagerPvCreate(deviceName *string, endpoint *string, serviceID *string) {
 
 	c := api.NewManagerRemoteClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	defer cancel()
 
@@ -194,35 +194,35 @@ func ManagerPvCreate(deviceName *string, endpoint *string, serviceID *string) {
 // }
 
 // ManagerPvGet : gets physical volume
-// func ManagerPvGet(id *string, remoteAddr *string) {
-// 	if *id == "" {
-// 		log.Fatal("invalid_device_parameter")
-// 	}
+func ManagerPvGet(endpoint *string, id *string) {
+	if *id == "" {
+		log.Fatal("invalid_device_parameter")
+	}
 
-// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*endpoint, grpc.WithInsecure())
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	defer conn.Close()
+	defer conn.Close()
 
-// 	c := api.NewManagerRemoteClient(conn)
+	c := api.NewManagerRemoteClient(conn)
 
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-// 	defer cancel()
+	defer cancel()
 
-// 	opts := &api.ManagerRemotePvRequest{ID: *id}
+	opts := &api.ManagerRemotePvRequest{ID: *id}
 
-// 	pv, err := c.GetPv(ctx, opts)
+	pv, err := c.GetPv(ctx, opts)
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	log.Print(*pv)
-// }
+	log.Print(pv)
+}
 
 // ManagerVgGet : gets volume group
 // func ManagerVgGet(id *string, remoteAddr *string) {

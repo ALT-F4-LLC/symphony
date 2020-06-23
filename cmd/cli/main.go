@@ -29,7 +29,7 @@ var (
 	managerPvCreateDeviceName    = managerPvCreate.Arg("device-name", "Specific physical volume to create.").Required().String()
 	managerPvCreateServiceID     = managerPvCreate.Arg("service-id", "Specific service to create physical volume.").Required().String()
 	managerPvGet                 = managerPv.Command("get", "Gets a physical volume's metadata.")
-	managerPvGetDevice           = managerPvGet.Arg("device", "Specific physical volume to retrieve.").Required().String()
+	managerPvGetArgID            = managerPvGet.Arg("id", "Specific physical volume to retrieve.").Required().String()
 	managerPvRemove              = managerPv.Command("remove", "Remove a physical volume.")
 	managerPvRemoveDevice        = managerPvRemove.Arg("device", "Specific physical volume to remove.").Required().String()
 	managerRemove                = manager.Command("remove", "Removes a service from the cluster.")
@@ -59,8 +59,8 @@ func main() {
 	// 	cli.ManagerLvRemove(managerEndpoint, managerLvRemoveID)
 	case managerPvCreate.FullCommand():
 		cli.ManagerPvCreate(managerPvCreateDeviceName, managerEndpoint, managerPvCreateServiceID)
-	// case managerPvGet.FullCommand():
-	// 	cli.ManagerPvGet(managerPvGetDevice, managerEndpoint)
+	case managerPvGet.FullCommand():
+		cli.ManagerPvGet(managerEndpoint, managerPvGetArgID)
 	// case managerPvRemove.FullCommand():
 	// 	cli.ManagerPvRemove(managerPvRemoveDevice, managerEndpoint)
 	case managerRemove.FullCommand():

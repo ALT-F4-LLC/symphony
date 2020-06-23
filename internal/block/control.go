@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/config"
@@ -41,6 +42,10 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 		ServiceAddr: serviceAddr,
 		ServiceType: api.ServiceType_BLOCK,
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
 
 	init, err := r.Init(ctx, opts)
 

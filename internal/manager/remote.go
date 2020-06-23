@@ -199,7 +199,7 @@ func (s *remoteServer) Leave(ctx context.Context, in *api.ManagerRemoteLeaveRequ
 		return nil, st.Err()
 	}
 
-	leaveErr := s.manager.memberlist.Leave(time.Second)
+	leaveErr := s.manager.memberlist.Leave(5 * time.Second)
 
 	if leaveErr != nil {
 		st := status.New(codes.Internal, leaveErr.Error())
@@ -324,6 +324,91 @@ func (s *remoteServer) Remove(ctx context.Context, in *api.ManagerRemoteRemoveRe
 	}
 
 	res := &api.SuccessStatusResponse{Success: true}
+
+	return res, nil
+}
+
+func (s *remoteServer) GetPv(ctx context.Context, in *api.ManagerRemotePvRequest) (*api.ManagerRemotePvResponse, error) {
+	volumeID, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	volume, err := s.manager.getPhysicalVolumeByID(volumeID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if volume == nil {
+		st := status.New(codes.NotFound, "invalid_physical_volume_id")
+
+		return nil, st.Err()
+	}
+
+	serviceID, err := uuid.Parse(volume.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	service, err := s.manager.getServiceByID(serviceID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(blockAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	remote := api.NewBlockRemoteClient(conn)
+
+	opts := &api.BlockRemotePvRequest{
+		DeviceName: volume.DeviceName,
+	}
+
+	metadata, err := remote.GetPv(ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if metadata == nil {
+		st := status.New(codes.Internal, "invalid_metadata")
+
+		return nil, st.Err()
+	}
+
+	res := &api.ManagerRemotePvResponse{
+		DeviceName: volume.DeviceName,
+		ID:         volume.ID,
+		Metadata:   metadata,
+		ServiceID:  volume.ServiceID,
+	}
 
 	return res, nil
 }

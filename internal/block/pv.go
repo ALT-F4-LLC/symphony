@@ -10,15 +10,25 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// PhysicalVolumeReport : describes a series of physical volumes in LVM
+// PhysicalVolumeReport : Output for "pvdisplay" command from LVM
 type PhysicalVolumeReport struct {
 	Report []struct {
-		Pv []api.PhysicalVolumeMetadata `json:"pv"`
+		Pv []*PhysicalVolumeReportResult `json:"pv"`
 	} `json:"report"`
 }
 
-func getPv(device string) (*api.PhysicalVolumeMetadata, error) {
-	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", device)
+// PhysicalVolumeReportResult : Output for individual pv from "pvdisplay" command from LVM
+type PhysicalVolumeReportResult struct {
+	PvName string `json:"pv_name"`
+	VgName string `json:"vg_name"`
+	PvFmt  string `json:"pv_fmt"`
+	PvAttr string `json:"pv_attr"`
+	PvSize string `json:"pv_size"`
+	PvFree string `json:"pv_free"`
+}
+
+func getPv(deviceName string) (*api.PhysicalVolumeMetadata, error) {
+	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", deviceName)
 
 	pvd, pvdErr := cmd.CombinedOutput()
 
@@ -38,19 +48,28 @@ func getPv(device string) (*api.PhysicalVolumeMetadata, error) {
 		return nil, err
 	}
 
-	var metadata api.PhysicalVolumeMetadata
+	var result *PhysicalVolumeReportResult
 
 	if len(res.Report) == 1 && len(res.Report[0].Pv) == 1 {
 		pv := res.Report[0].Pv[0]
 
-		if pv.PvName == device {
-			metadata = pv
+		if pv.PvName == deviceName {
+			result = pv
 
-			logrus.WithFields(logrus.Fields{"Device": device}).Debug("Physical volume successfully discovered.")
+			logrus.WithFields(logrus.Fields{"DeviceName": deviceName}).Debug("Physical volume successfully discovered.")
 		}
 	}
 
-	return &metadata, nil
+	metadata := &api.PhysicalVolumeMetadata{
+		PvName: result.PvName,
+		VgName: result.VgName,
+		PvFmt:  result.PvFmt,
+		PvAttr: result.PvAttr,
+		PvSize: result.PvSize,
+		PvFree: result.PvFree,
+	}
+
+	return metadata, nil
 }
 
 func newPv(device string) (*api.PhysicalVolumeMetadata, error) {
