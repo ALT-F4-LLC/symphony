@@ -161,35 +161,35 @@ func ManagerVgCreate(endpoint *string, physicalVolumeID *string) {
 }
 
 // ManagerLvGet : gets logical volume
-// func ManagerLvGet(id *string, remoteAddr *string) {
-// 	if *id == "" {
-// 		log.Fatal("invalid_parameters")
-// 	}
+func ManagerLvGet(endpoint *string, id *string) {
+	if *endpoint == "" || *id == "" {
+		log.Fatal("invalid_parameters")
+	}
 
-// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*endpoint, grpc.WithInsecure())
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	defer conn.Close()
+	defer conn.Close()
 
-// 	c := api.NewManagerRemoteClient(conn)
+	c := api.NewManagerRemoteClient(conn)
 
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-// 	defer cancel()
+	defer cancel()
 
-// 	opts := &api.ManagerRemoteLvRequest{ID: *id}
+	opts := &api.ManagerRemoteLvRequest{ID: *id}
 
-// 	lv, err := c.GetLv(ctx, opts)
+	lv, err := c.GetLv(ctx, opts)
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	log.Print(*lv)
-// }
+	log.Print(*lv)
+}
 
 // ManagerPvGet : gets physical volume
 func ManagerPvGet(endpoint *string, id *string) {

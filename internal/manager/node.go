@@ -184,6 +184,38 @@ func (m *Manager) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
 	return pvs, nil
 }
 
+func (m *Manager) getLogicalVolumeByID(id uuid.UUID) (*api.LogicalVolume, error) {
+	etcdKey := fmt.Sprintf("/logicalvolume/%s", id.String())
+
+	results, err := m.getStateByKey(etcdKey)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	var lv *api.LogicalVolume
+
+	for _, ev := range results.Kvs {
+		var v *api.LogicalVolume
+
+		err := json.Unmarshal(ev.Value, &v)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		if v.ID == id.String() {
+			lv = v
+		}
+	}
+
+	return lv, nil
+}
+
 func (m *Manager) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, error) {
 	etcdKey := fmt.Sprintf("/physicalvolume/%s", id.String())
 

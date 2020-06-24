@@ -19,7 +19,7 @@ service ManagerRemote {
   rpc Leave(ManagerRemoteLeaveRequest) returns (SuccessStatusResponse) {}
   rpc Remove(ManagerRemoteRemoveRequest) returns (SuccessStatusResponse) {}
 
-  // rpc GetLv(ManagerRemoteLvRequest) returns (LogicalVolume) {}
+  rpc GetLv(ManagerRemoteLvRequest) returns (LogicalVolume) {}
   rpc GetPv(ManagerRemotePvRequest) returns (PhysicalVolume) {}
   rpc GetVg(ManagerRemoteVgRequest) returns (VolumeGroup) {}
   rpc NewLv(ManagerRemoteNewLvRequest) returns (LogicalVolume) {}

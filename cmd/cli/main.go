@@ -19,10 +19,8 @@ var (
 	managerLvCreateVolumeGroupID    = managerLvCreate.Arg("volume-group-id", "Sets logical volume group id.").Required().String()
 	managerLvGet                    = managerLv.Command("get", "Gets a logical volume.")
 	managerLvGetID                  = managerLvGet.Arg("id", "Sets logical volume id.").Required().String()
-	managerLvGetVolumeGroupID       = managerLvGet.Arg("volume-group-id", "Set logical volume group id.").Required().String()
 	managerLvRemove                 = managerLv.Command("remove", "Removes a logical volume.")
 	managerLvRemoveID               = managerLvRemove.Arg("id", "Sets logical volume id.").Required().String()
-	managerLvRemoveVolumeGroupID    = managerLvRemove.Arg("volume-group-id", "Set logical volume group id.").Required().String()
 	managerPv                       = manager.Command("pv", "manager service physical volume commands.")
 	managerPvCreate                 = managerPv.Command("create", "Creates a physical volume.")
 	managerPvCreateDeviceName       = managerPvCreate.Arg("device-name", "Specific physical volume to create.").Required().String()
@@ -51,8 +49,8 @@ func main() {
 		cli.ManagerInit(managerInitAddr, socket)
 	case managerLvCreate.FullCommand():
 		cli.ManagerLvCreate(managerEndpoint, managerLvCreateSize, managerLvCreateVolumeGroupID)
-	// case managerLvGet.FullCommand():
-	// 	cli.ManagerLvGet(managerEndpoint, managerLvGetID)
+	case managerLvGet.FullCommand():
+		cli.ManagerLvGet(managerEndpoint, managerLvGetID)
 	// case managerLvRemove.FullCommand():
 	// 	cli.ManagerLvRemove(managerEndpoint, managerLvRemoveID)
 	case managerPvCreate.FullCommand():
