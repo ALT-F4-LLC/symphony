@@ -7,47 +7,48 @@ package api;
 import "api/generic.proto";
 
 service BlockControl {
-  rpc Init(BlockControlInitRequest) returns (BlockControlInitResponse) {}
+  rpc ServiceInit(BlockServiceInitRequest) returns (BlockServiceInitResponse) {}
 }
 
 service BlockRemote {
-  rpc Leave(BlockRemoteLeaveRequest) returns (SuccessStatusResponse) {}
+  rpc GetLogicalVolume(BlockLogicalVolumeRequest) returns (LogicalVolumeMetadata) {}
+  rpc GetPhysicalVolume(BlockPhysicalVolumeRequest) returns (PhysicalVolumeMetadata) {}
+  rpc GetVolumeGroup(BlockVolumeGroupRequest) returns (VolumeGroupMetadata) {}
 
-  rpc GetLv(BlockRemoteLvRequest) returns (LogicalVolumeMetadata) {}
-  rpc GetPv(BlockRemotePvRequest) returns (PhysicalVolumeMetadata) {}
-  rpc GetVg(BlockRemoteVgRequest) returns (VolumeGroupMetadata) {}
-  rpc NewLv(BlockRemoteNewLvRequest) returns (LogicalVolumeMetadata) {}
-  rpc NewPv(BlockRemotePvRequest) returns (PhysicalVolumeMetadata) {}
-  rpc NewVg(BlockRemoteNewVgRequest) returns (VolumeGroupMetadata) {}
-  rpc RemoveLv(BlockRemoteLvRequest) returns (SuccessStatusResponse) {}
-  rpc RemovePv(BlockRemotePvRequest) returns (SuccessStatusResponse) {}
-  rpc RemoveVg(BlockRemoteVgRequest) returns (SuccessStatusResponse) {}
+  rpc NewLogicalVolume(BlockNewLogicalVolumeRequest) returns (LogicalVolumeMetadata) {}
+  rpc NewPhysicalVolume(BlockPhysicalVolumeRequest) returns (PhysicalVolumeMetadata) {}
+  rpc NewVolumeGroup(BlockNewVolumeGroupRequest) returns (VolumeGroupMetadata) {}
+  
+  rpc RemoveLogicalVolume(BlockLogicalVolumeRequest) returns (SuccessStatusResponse) {}
+  rpc RemovePhysicalVolume(BlockPhysicalVolumeRequest) returns (SuccessStatusResponse) {}
+  rpc RemoveVolumeGroup(BlockVolumeGroupRequest) returns (SuccessStatusResponse) {}
+
+  rpc ServiceLeave(BlockServiceLeaveRequest) returns (SuccessStatusResponse) {}
 }
 
-message BlockControlInitRequest { string ServiceAddr = 1; }
-message BlockControlInitResponse {
+message BlockServiceInitRequest { string ServiceAddr = 1; }
+
+message BlockServiceInitResponse {
   string ClusterID = 1;
   string ServiceID = 2;
 }
 
-message BlockRemoteLeaveRequest { string ServiceID = 1; }
-
-message BlockRemoteLvRequest {
+message BlockLogicalVolumeRequest {
   string ID = 1;
   string VolumeGroupID = 2;
 }
 
-message BlockRemotePvRequest { string DeviceName = 1; }
+message BlockPhysicalVolumeRequest { string DeviceName = 1; }
 
-message BlockRemoteVgRequest { string ID = 1; }
+message BlockVolumeGroupRequest { string ID = 1; }
 
-message BlockRemoteNewLvRequest {
+message BlockNewLogicalVolumeRequest {
   string ID = 1;
   int64 Size = 2;
   string VolumeGroupID = 3;
 }
 
-message BlockRemoteNewVgRequest {
+message BlockNewVolumeGroupRequest {
   string DeviceName = 1;
   string ID = 2;
 }
@@ -105,3 +106,5 @@ message VolumeGroupMetadata {
   string VgSize = 6;
   string VgFree = 7;
 }
+
+message BlockServiceLeaveRequest { string ServiceID = 1; }

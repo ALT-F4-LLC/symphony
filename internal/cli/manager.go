@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-// ManagerInit : handle the "init" command
-func ManagerInit(serviceAddr *string, socket *string) {
+// ManagerServiceInit : handle the "init" command
+func ManagerServiceInit(serviceAddr *string, socket *string) {
 	conn := NewConnControl(socket)
 
 	defer conn.Close()
@@ -21,19 +21,19 @@ func ManagerInit(serviceAddr *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerControlInitRequest{
+	opts := &api.ManagerControlServiceInitRequest{
 		ServiceAddr: *serviceAddr,
 	}
 
-	_, initErr := c.Init(ctx, opts)
+	_, initErr := c.ServiceInit(ctx, opts)
 
 	if initErr != nil {
 		log.Fatal(initErr)
 	}
 }
 
-// ManagerRemove : handle the "remove" command
-func ManagerRemove(id *string, socket *string) {
+// ManagerServiceRemove : handle the "remove" command
+func ManagerServiceRemove(id *string, socket *string) {
 	if *id == "" {
 		log.Fatal("invalid_service_id")
 	}
@@ -48,19 +48,19 @@ func ManagerRemove(id *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerControlRemoveRequest{
+	opts := &api.ManagerControlServiceRemoveRequest{
 		ServiceID: *id,
 	}
 
-	_, removeErr := c.Remove(ctx, opts)
+	_, removeErr := c.ServiceRemove(ctx, opts)
 
 	if removeErr != nil {
 		log.Fatal(removeErr)
 	}
 }
 
-// ManagerLvCreate : handles creation of new logical volume
-func ManagerLvCreate(endpoint *string, size *int64, volumeGroupID *string) {
+// ManagerNewLogicalVolume : handles creation of new logical volume
+func ManagerNewLogicalVolume(endpoint *string, size *int64, volumeGroupID *string) {
 	if *endpoint == "" || *size == 0 || *volumeGroupID == "" {
 		log.Fatal("invalid_parameters")
 	}
@@ -79,12 +79,12 @@ func ManagerLvCreate(endpoint *string, size *int64, volumeGroupID *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerRemoteNewLvRequest{
+	opts := &api.ManagerNewLogicalVolumeRequest{
 		Size:          *size,
 		VolumeGroupID: *volumeGroupID,
 	}
 
-	lv, err := c.NewLv(ctx, opts)
+	lv, err := c.NewLogicalVolume(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
@@ -93,8 +93,8 @@ func ManagerLvCreate(endpoint *string, size *int64, volumeGroupID *string) {
 	log.Print(*lv)
 }
 
-// ManagerPvCreate : handles creation of new physical volume
-func ManagerPvCreate(deviceName *string, endpoint *string, serviceID *string) {
+// ManagerNewPhysicalVolume : handles creation of new physical volume
+func ManagerNewPhysicalVolume(deviceName *string, endpoint *string, serviceID *string) {
 	if *deviceName == "" || *endpoint == "" || *serviceID == "" {
 		log.Fatal("invalid_device_parameter")
 	}
@@ -113,12 +113,12 @@ func ManagerPvCreate(deviceName *string, endpoint *string, serviceID *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerRemoteNewPvRequest{
+	opts := &api.ManagerNewPhysicalVolumeRequest{
 		DeviceName: *deviceName,
 		ServiceID:  *serviceID,
 	}
 
-	pv, err := c.NewPv(ctx, opts)
+	pv, err := c.NewPhysicalVolume(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
@@ -127,8 +127,8 @@ func ManagerPvCreate(deviceName *string, endpoint *string, serviceID *string) {
 	log.Print(*pv)
 }
 
-// ManagerVgCreate : handles creation of new volume group
-func ManagerVgCreate(endpoint *string, physicalVolumeID *string) {
+// ManagerNewVolumeGroup : handles creation of new volume group
+func ManagerNewVolumeGroup(endpoint *string, physicalVolumeID *string) {
 	if *endpoint == "" || *physicalVolumeID == "" {
 		log.Fatal("invalid_parameters")
 	}
@@ -147,11 +147,11 @@ func ManagerVgCreate(endpoint *string, physicalVolumeID *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerRemoteNewVgRequest{
+	opts := &api.ManagerNewVolumeGroupRequest{
 		PhysicalVolumeID: *physicalVolumeID,
 	}
 
-	vg, err := c.NewVg(ctx, opts)
+	vg, err := c.NewVolumeGroup(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
@@ -160,8 +160,8 @@ func ManagerVgCreate(endpoint *string, physicalVolumeID *string) {
 	log.Print(*vg)
 }
 
-// ManagerLvGet : gets logical volume
-func ManagerLvGet(endpoint *string, id *string) {
+// ManagerGetLogicalVolume : gets logical volume
+func ManagerGetLogicalVolume(endpoint *string, id *string) {
 	if *endpoint == "" || *id == "" {
 		log.Fatal("invalid_parameters")
 	}
@@ -180,9 +180,9 @@ func ManagerLvGet(endpoint *string, id *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerRemoteLvRequest{ID: *id}
+	opts := &api.ManagerLogicalVolumeRequest{ID: *id}
 
-	lv, err := c.GetLv(ctx, opts)
+	lv, err := c.GetLogicalVolume(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
@@ -191,8 +191,8 @@ func ManagerLvGet(endpoint *string, id *string) {
 	log.Print(*lv)
 }
 
-// ManagerPvGet : gets physical volume
-func ManagerPvGet(endpoint *string, id *string) {
+// ManagerGetPhysicalVolume : gets physical volume
+func ManagerGetPhysicalVolume(endpoint *string, id *string) {
 	if *id == "" {
 		log.Fatal("invalid_device_parameter")
 	}
@@ -211,9 +211,9 @@ func ManagerPvGet(endpoint *string, id *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerRemotePvRequest{ID: *id}
+	opts := &api.ManagerPhysicalVolumeRequest{ID: *id}
 
-	pv, err := c.GetPv(ctx, opts)
+	pv, err := c.GetPhysicalVolume(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
@@ -222,8 +222,8 @@ func ManagerPvGet(endpoint *string, id *string) {
 	log.Print(pv)
 }
 
-// ManagerVgGet : gets volume group
-func ManagerVgGet(endpoint *string, id *string) {
+// ManagerGetVolumeGroup : gets volume group
+func ManagerGetVolumeGroup(endpoint *string, id *string) {
 	if *endpoint == "" || *id == "" {
 		log.Fatal("invalid_parameters")
 	}
@@ -242,9 +242,9 @@ func ManagerVgGet(endpoint *string, id *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerRemoteVgRequest{ID: *id}
+	opts := &api.ManagerVolumeGroupRequest{ID: *id}
 
-	vg, err := c.GetVg(ctx, opts)
+	vg, err := c.GetVolumeGroup(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
@@ -253,8 +253,8 @@ func ManagerVgGet(endpoint *string, id *string) {
 	log.Print(*vg)
 }
 
-// ManagerLvRemove : removes logical volume
-func ManagerLvRemove(endpoint *string, id *string) {
+// ManagerRemoveLogicalVolume : removes logical volume
+func ManagerRemoveLogicalVolume(endpoint *string, id *string) {
 	if *endpoint == "" || *id == "" {
 		log.Fatal("invalid_parameters")
 	}
@@ -273,9 +273,9 @@ func ManagerLvRemove(endpoint *string, id *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerRemoteLvRequest{ID: *id}
+	opts := &api.ManagerLogicalVolumeRequest{ID: *id}
 
-	lv, err := c.RemoveLv(ctx, opts)
+	lv, err := c.RemoveLogicalVolume(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
@@ -284,8 +284,8 @@ func ManagerLvRemove(endpoint *string, id *string) {
 	log.Print(*lv)
 }
 
-// ManagerPvRemove : removes physical volume
-func ManagerPvRemove(endpoint *string, id *string) {
+// ManagerRemovePhysicalVolume : removes physical volume
+func ManagerRemovePhysicalVolume(endpoint *string, id *string) {
 	if *endpoint == "" || *id == "" {
 		log.Fatal("invalid_parameter")
 	}
@@ -304,9 +304,9 @@ func ManagerPvRemove(endpoint *string, id *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerRemotePvRequest{ID: *id}
+	opts := &api.ManagerPhysicalVolumeRequest{ID: *id}
 
-	pv, err := c.RemovePv(ctx, opts)
+	pv, err := c.RemovePhysicalVolume(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)
@@ -315,8 +315,8 @@ func ManagerPvRemove(endpoint *string, id *string) {
 	log.Print(*pv)
 }
 
-// ManagerVgRemove : removes volume group
-func ManagerVgRemove(endpoint *string, id *string) {
+// ManagerRemoveVolumeGroup : removes volume group
+func ManagerRemoveVolumeGroup(endpoint *string, id *string) {
 	if *endpoint == "" || *id == "" {
 		log.Fatal("invalid_parameter")
 	}
@@ -335,9 +335,9 @@ func ManagerVgRemove(endpoint *string, id *string) {
 
 	defer cancel()
 
-	opts := &api.ManagerRemoteVgRequest{ID: *id}
+	opts := &api.ManagerVolumeGroupRequest{ID: *id}
 
-	vg, err := c.RemoveVg(ctx, opts)
+	vg, err := c.RemoveVolumeGroup(ctx, opts)
 
 	if err != nil {
 		log.Fatal(err)

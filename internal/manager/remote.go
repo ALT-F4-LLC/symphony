@@ -19,317 +19,7 @@ type remoteServer struct {
 	manager *Manager
 }
 
-func (s *remoteServer) Init(ctx context.Context, in *api.ManagerRemoteInitRequest) (*api.ManagerRemoteInitResponse, error) {
-	cluster, err := s.manager.getCluster()
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	isLocalInit := in.ServiceAddr == s.manager.flags.listenServiceAddr.String()
-
-	if cluster != nil && isLocalInit {
-		st := status.New(codes.AlreadyExists, "cluster_already_initialized")
-
-		return nil, st.Err()
-	}
-
-	if cluster == nil && !isLocalInit {
-		st := status.New(codes.InvalidArgument, "cluster_not_initialized")
-
-		return nil, st.Err()
-	}
-
-	if cluster == nil && isLocalInit {
-		clusterID := uuid.New()
-
-		cluster = &api.Cluster{
-			ID: clusterID.String(),
-		}
-
-		err := s.manager.saveCluster(cluster)
-
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-	}
-
-	services, err := s.manager.getServices()
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	for _, service := range services {
-		if service.Addr == in.ServiceAddr {
-			st := status.New(codes.AlreadyExists, codes.AlreadyExists.String())
-
-			return nil, st.Err()
-		}
-	}
-
-	serviceID := uuid.New()
-
-	service := &api.Service{
-		Addr: in.ServiceAddr,
-		ID:   serviceID.String(),
-		Type: in.ServiceType.String(),
-	}
-
-	saveErr := s.manager.saveService(service)
-
-	if saveErr != nil {
-		st := status.New(codes.Internal, saveErr.Error())
-
-		return nil, st.Err()
-	}
-
-	endpoints := make([]string, 0)
-
-	for _, service := range services {
-		if service.Type == api.ServiceType_MANAGER.String() {
-			endpoints = append(endpoints, service.Addr)
-		}
-	}
-
-	gossipAddr := s.manager.flags.listenGossipAddr
-
-	res := &api.ManagerRemoteInitResponse{
-		ClusterID:  cluster.ID,
-		Endpoints:  endpoints,
-		GossipAddr: gossipAddr.String(),
-		ServiceID:  service.ID,
-	}
-
-	return res, nil
-}
-
-func (s *remoteServer) Join(ctx context.Context, in *api.ManagerRemoteJoinRequest) (*api.ManagerRemoteInitResponse, error) {
-	cluster, err := s.manager.getCluster()
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	clusterID, err := uuid.Parse(in.ClusterID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if cluster.ID != clusterID.String() {
-		st := status.New(codes.InvalidArgument, "invalid_cluster_id")
-
-		return nil, st.Err()
-	}
-
-	serviceID, err := uuid.Parse(in.ServiceID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	services, err := s.manager.getServices()
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	service := GetServiceByID(services, serviceID)
-
-	if service == nil {
-		st := status.New(codes.InvalidArgument, "invalid_service_id")
-
-		return nil, st.Err()
-	}
-
-	endpoints := make([]string, 0)
-
-	for _, service := range services {
-		if service.Type == api.ServiceType_MANAGER.String() {
-			endpoints = append(endpoints, service.Addr)
-		}
-	}
-
-	gossipAddr := s.manager.flags.listenGossipAddr
-
-	res := &api.ManagerRemoteInitResponse{
-		ClusterID:  cluster.ID,
-		Endpoints:  endpoints,
-		GossipAddr: gossipAddr.String(),
-		ServiceID:  service.ID,
-	}
-
-	return res, nil
-}
-
-func (s *remoteServer) Leave(ctx context.Context, in *api.ManagerRemoteLeaveRequest) (*api.SuccessStatusResponse, error) {
-	serviceID, err := uuid.Parse(in.ServiceID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	key, err := s.manager.key.Get(s.manager.flags.configDir)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if serviceID != *key.ServiceID {
-		st := status.New(codes.PermissionDenied, err.Error())
-
-		return nil, st.Err()
-	}
-
-	leaveErr := s.manager.memberlist.Leave(5 * time.Second)
-
-	if leaveErr != nil {
-		st := status.New(codes.Internal, leaveErr.Error())
-
-		return nil, st.Err()
-	}
-
-	shutdownErr := s.manager.memberlist.Shutdown()
-
-	if shutdownErr != nil {
-		st := status.New(codes.Internal, shutdownErr.Error())
-
-		return nil, st.Err()
-	}
-
-	logrus.Debug("Manager service has left the cluster.")
-
-	res := &api.SuccessStatusResponse{Success: true}
-
-	return res, nil
-}
-
-func (s *remoteServer) Remove(ctx context.Context, in *api.ManagerRemoteRemoveRequest) (*api.SuccessStatusResponse, error) {
-	serviceID, err := uuid.Parse(in.ServiceID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	cluster, err := s.manager.getCluster()
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if cluster == nil {
-		st := status.New(codes.NotFound, "cluster_not_initialized")
-
-		return nil, st.Err()
-	}
-
-	services, err := s.manager.getServices()
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	service := GetServiceByID(services, serviceID)
-
-	if service == nil {
-		st := status.New(codes.NotFound, "service_not_found")
-
-		return nil, st.Err()
-	}
-
-	leaveAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
-
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := grpc.Dial(leaveAddr.String(), grpc.WithInsecure())
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer conn.Close()
-
-	if service.Type == api.ServiceType_BLOCK.String() {
-		remote := api.NewBlockRemoteClient(conn)
-
-		opts := &api.BlockRemoteLeaveRequest{
-			ServiceID: service.ID,
-		}
-
-		_, err := remote.Leave(ctx, opts)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if service.Type == api.ServiceType_MANAGER.String() {
-		remote := api.NewManagerRemoteClient(conn)
-
-		opts := &api.ManagerRemoteLeaveRequest{
-			ServiceID: service.ID,
-		}
-
-		_, err := remote.Leave(ctx, opts)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	serviceKey := fmt.Sprintf("/service/%s", service.ID)
-
-	etcd, err := NewEtcdClient(s.manager.flags.etcdEndpoints)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	defer etcd.Close()
-
-	_, delErr := etcd.Delete(ctx, serviceKey)
-
-	if delErr != nil {
-		st := status.New(codes.Internal, delErr.Error())
-
-		return nil, st.Err()
-	}
-
-	res := &api.SuccessStatusResponse{Success: true}
-
-	return res, nil
-}
-
-func (s *remoteServer) GetLv(ctx context.Context, in *api.ManagerRemoteLvRequest) (*api.LogicalVolume, error) {
+func (s *remoteServer) GetLogicalVolume(ctx context.Context, in *api.ManagerLogicalVolumeRequest) (*api.LogicalVolume, error) {
 	lvID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -438,12 +128,12 @@ func (s *remoteServer) GetLv(ctx context.Context, in *api.ManagerRemoteLvRequest
 
 	remote := api.NewBlockRemoteClient(conn)
 
-	opts := &api.BlockRemoteLvRequest{
+	opts := &api.BlockLogicalVolumeRequest{
 		ID:            lv.ID,
 		VolumeGroupID: lv.VolumeGroupID,
 	}
 
-	metadata, err := remote.GetLv(ctx, opts)
+	metadata, err := remote.GetLogicalVolume(ctx, opts)
 
 	if err != nil {
 		return nil, err
@@ -460,7 +150,7 @@ func (s *remoteServer) GetLv(ctx context.Context, in *api.ManagerRemoteLvRequest
 	return lv, nil
 }
 
-func (s *remoteServer) GetPv(ctx context.Context, in *api.ManagerRemotePvRequest) (*api.PhysicalVolume, error) {
+func (s *remoteServer) GetPhysicalVolume(ctx context.Context, in *api.ManagerPhysicalVolumeRequest) (*api.PhysicalVolume, error) {
 	pvID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -519,11 +209,11 @@ func (s *remoteServer) GetPv(ctx context.Context, in *api.ManagerRemotePvRequest
 
 	remote := api.NewBlockRemoteClient(conn)
 
-	opts := &api.BlockRemotePvRequest{
+	opts := &api.BlockPhysicalVolumeRequest{
 		DeviceName: pv.DeviceName,
 	}
 
-	metadata, err := remote.GetPv(ctx, opts)
+	metadata, err := remote.GetPhysicalVolume(ctx, opts)
 
 	if err != nil {
 		return nil, err
@@ -540,7 +230,7 @@ func (s *remoteServer) GetPv(ctx context.Context, in *api.ManagerRemotePvRequest
 	return pv, nil
 }
 
-func (s *remoteServer) GetVg(ctx context.Context, in *api.ManagerRemoteVgRequest) (*api.VolumeGroup, error) {
+func (s *remoteServer) GetVolumeGroup(ctx context.Context, in *api.ManagerVolumeGroupRequest) (*api.VolumeGroup, error) {
 	vgID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -627,11 +317,11 @@ func (s *remoteServer) GetVg(ctx context.Context, in *api.ManagerRemoteVgRequest
 
 	remote := api.NewBlockRemoteClient(conn)
 
-	opts := &api.BlockRemoteVgRequest{
+	opts := &api.BlockVolumeGroupRequest{
 		ID: vg.ID,
 	}
 
-	metadata, err := remote.GetVg(ctx, opts)
+	metadata, err := remote.GetVolumeGroup(ctx, opts)
 
 	if err != nil {
 		return nil, err
@@ -648,7 +338,7 @@ func (s *remoteServer) GetVg(ctx context.Context, in *api.ManagerRemoteVgRequest
 	return vg, nil
 }
 
-func (s *remoteServer) NewLv(ctx context.Context, in *api.ManagerRemoteNewLvRequest) (*api.LogicalVolume, error) {
+func (s *remoteServer) NewLogicalVolume(ctx context.Context, in *api.ManagerNewLogicalVolumeRequest) (*api.LogicalVolume, error) {
 	vgID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -727,13 +417,13 @@ func (s *remoteServer) NewLv(ctx context.Context, in *api.ManagerRemoteNewLvRequ
 
 	lvID := uuid.New()
 
-	opts := &api.BlockRemoteNewLvRequest{
+	opts := &api.BlockNewLogicalVolumeRequest{
 		ID:            lvID.String(),
 		Size:          in.Size,
 		VolumeGroupID: vg.ID,
 	}
 
-	metadata, err := remote.NewLv(ctx, opts)
+	metadata, err := remote.NewLogicalVolume(ctx, opts)
 
 	if err != nil {
 		return nil, err
@@ -762,7 +452,7 @@ func (s *remoteServer) NewLv(ctx context.Context, in *api.ManagerRemoteNewLvRequ
 	return lv, nil
 }
 
-func (s *remoteServer) NewPv(ctx context.Context, in *api.ManagerRemoteNewPvRequest) (*api.PhysicalVolume, error) {
+func (s *remoteServer) NewPhysicalVolume(ctx context.Context, in *api.ManagerNewPhysicalVolumeRequest) (*api.PhysicalVolume, error) {
 	serviceID, err := uuid.Parse(in.ServiceID)
 
 	if err != nil {
@@ -817,11 +507,11 @@ func (s *remoteServer) NewPv(ctx context.Context, in *api.ManagerRemoteNewPvRequ
 
 	remote := api.NewBlockRemoteClient(conn)
 
-	opts := &api.BlockRemotePvRequest{
+	opts := &api.BlockPhysicalVolumeRequest{
 		DeviceName: in.DeviceName,
 	}
 
-	metadata, err := remote.NewPv(ctx, opts)
+	metadata, err := remote.NewPhysicalVolume(ctx, opts)
 
 	if err != nil {
 		return nil, err
@@ -852,7 +542,7 @@ func (s *remoteServer) NewPv(ctx context.Context, in *api.ManagerRemoteNewPvRequ
 	return pv, nil
 }
 
-func (s *remoteServer) NewVg(ctx context.Context, in *api.ManagerRemoteNewVgRequest) (*api.VolumeGroup, error) {
+func (s *remoteServer) NewVolumeGroup(ctx context.Context, in *api.ManagerNewVolumeGroupRequest) (*api.VolumeGroup, error) {
 	physicalVolumeID, err := uuid.Parse(in.PhysicalVolumeID)
 
 	if err != nil {
@@ -909,12 +599,12 @@ func (s *remoteServer) NewVg(ctx context.Context, in *api.ManagerRemoteNewVgRequ
 
 	volumeGroupID := uuid.New()
 
-	opts := &api.BlockRemoteNewVgRequest{
+	opts := &api.BlockNewVolumeGroupRequest{
 		DeviceName: physicalVolume.DeviceName,
 		ID:         volumeGroupID.String(),
 	}
 
-	metadata, err := remote.NewVg(ctx, opts)
+	metadata, err := remote.NewVolumeGroup(ctx, opts)
 
 	if err != nil {
 		return nil, err
@@ -942,7 +632,7 @@ func (s *remoteServer) NewVg(ctx context.Context, in *api.ManagerRemoteNewVgRequ
 	return vg, nil
 }
 
-func (s *remoteServer) RemoveLv(ctx context.Context, in *api.ManagerRemoteLvRequest) (*api.SuccessStatusResponse, error) {
+func (s *remoteServer) RemoveLogicalVolume(ctx context.Context, in *api.ManagerLogicalVolumeRequest) (*api.SuccessStatusResponse, error) {
 	lvID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -1051,12 +741,12 @@ func (s *remoteServer) RemoveLv(ctx context.Context, in *api.ManagerRemoteLvRequ
 
 	remote := api.NewBlockRemoteClient(conn)
 
-	opts := &api.BlockRemoteLvRequest{
+	opts := &api.BlockLogicalVolumeRequest{
 		ID:            lv.ID,
 		VolumeGroupID: lv.VolumeGroupID,
 	}
 
-	_, removeErr := remote.RemoveLv(removeCtx, opts)
+	_, removeErr := remote.RemoveLogicalVolume(removeCtx, opts)
 
 	if removeErr != nil {
 		return nil, removeErr
@@ -1094,7 +784,7 @@ func (s *remoteServer) RemoveLv(ctx context.Context, in *api.ManagerRemoteLvRequ
 	return res, nil
 }
 
-func (s *remoteServer) RemovePv(ctx context.Context, in *api.ManagerRemotePvRequest) (*api.SuccessStatusResponse, error) {
+func (s *remoteServer) RemovePhysicalVolume(ctx context.Context, in *api.ManagerPhysicalVolumeRequest) (*api.SuccessStatusResponse, error) {
 	volumeID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -1153,11 +843,11 @@ func (s *remoteServer) RemovePv(ctx context.Context, in *api.ManagerRemotePvRequ
 
 	remote := api.NewBlockRemoteClient(conn)
 
-	opts := &api.BlockRemotePvRequest{
+	opts := &api.BlockPhysicalVolumeRequest{
 		DeviceName: volume.DeviceName,
 	}
 
-	_, removeErr := remote.RemovePv(removeCtx, opts)
+	_, removeErr := remote.RemovePhysicalVolume(removeCtx, opts)
 
 	if removeErr != nil {
 		return nil, removeErr
@@ -1195,7 +885,7 @@ func (s *remoteServer) RemovePv(ctx context.Context, in *api.ManagerRemotePvRequ
 	return res, nil
 }
 
-func (s *remoteServer) RemoveVg(ctx context.Context, in *api.ManagerRemoteVgRequest) (*api.SuccessStatusResponse, error) {
+func (s *remoteServer) RemoveVolumeGroup(ctx context.Context, in *api.ManagerVolumeGroupRequest) (*api.SuccessStatusResponse, error) {
 	volumeGroupID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -1276,11 +966,11 @@ func (s *remoteServer) RemoveVg(ctx context.Context, in *api.ManagerRemoteVgRequ
 
 	remote := api.NewBlockRemoteClient(conn)
 
-	opts := &api.BlockRemoteVgRequest{
+	opts := &api.BlockVolumeGroupRequest{
 		ID: volumeGroup.ID,
 	}
 
-	_, removeErr := remote.RemoveVg(removeCtx, opts)
+	_, removeErr := remote.RemoveVolumeGroup(removeCtx, opts)
 
 	if removeErr != nil {
 		return nil, removeErr
@@ -1309,6 +999,316 @@ func (s *remoteServer) RemoveVg(ctx context.Context, in *api.ManagerRemoteVgRequ
 
 	if delRes != nil {
 		st := status.New(codes.Internal, delRes.Error())
+
+		return nil, st.Err()
+	}
+
+	res := &api.SuccessStatusResponse{Success: true}
+
+	return res, nil
+}
+
+func (s *remoteServer) ServiceInit(ctx context.Context, in *api.ManagerServiceInitRequest) (*api.ManagerServiceInitResponse, error) {
+	cluster, err := s.manager.getCluster()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	isLocalInit := in.ServiceAddr == s.manager.flags.listenServiceAddr.String()
+
+	if cluster != nil && isLocalInit {
+		st := status.New(codes.AlreadyExists, "cluster_already_initialized")
+
+		return nil, st.Err()
+	}
+
+	if cluster == nil && !isLocalInit {
+		st := status.New(codes.InvalidArgument, "cluster_not_initialized")
+
+		return nil, st.Err()
+	}
+
+	if cluster == nil && isLocalInit {
+		clusterID := uuid.New()
+
+		cluster = &api.Cluster{
+			ID: clusterID.String(),
+		}
+
+		err := s.manager.saveCluster(cluster)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+	}
+
+	services, err := s.manager.getServices()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	for _, service := range services {
+		if service.Addr == in.ServiceAddr {
+			st := status.New(codes.AlreadyExists, codes.AlreadyExists.String())
+
+			return nil, st.Err()
+		}
+	}
+
+	serviceID := uuid.New()
+
+	service := &api.Service{
+		Addr: in.ServiceAddr,
+		ID:   serviceID.String(),
+		Type: in.ServiceType.String(),
+	}
+
+	saveErr := s.manager.saveService(service)
+
+	if saveErr != nil {
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return nil, st.Err()
+	}
+
+	endpoints := make([]string, 0)
+
+	for _, service := range services {
+		if service.Type == api.ServiceType_MANAGER.String() {
+			endpoints = append(endpoints, service.Addr)
+		}
+	}
+
+	gossipAddr := s.manager.flags.listenGossipAddr
+
+	res := &api.ManagerServiceInitResponse{
+		ClusterID:  cluster.ID,
+		Endpoints:  endpoints,
+		GossipAddr: gossipAddr.String(),
+		ServiceID:  service.ID,
+	}
+
+	return res, nil
+}
+
+func (s *remoteServer) ServiceJoin(ctx context.Context, in *api.ManagerServiceJoinRequest) (*api.ManagerServiceInitResponse, error) {
+	cluster, err := s.manager.getCluster()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	clusterID, err := uuid.Parse(in.ClusterID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if cluster.ID != clusterID.String() {
+		st := status.New(codes.InvalidArgument, "invalid_cluster_id")
+
+		return nil, st.Err()
+	}
+
+	serviceID, err := uuid.Parse(in.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	service, err := s.manager.getServiceByID(serviceID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if service == nil {
+		st := status.New(codes.InvalidArgument, "invalid_service_id")
+
+		return nil, st.Err()
+	}
+
+	endpoints := make([]string, 0)
+
+	services, err := s.manager.getServices()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	for _, service := range services {
+		if service.Type == api.ServiceType_MANAGER.String() {
+			endpoints = append(endpoints, service.Addr)
+		}
+	}
+
+	gossipAddr := s.manager.flags.listenGossipAddr
+
+	res := &api.ManagerServiceInitResponse{
+		ClusterID:  cluster.ID,
+		Endpoints:  endpoints,
+		GossipAddr: gossipAddr.String(),
+		ServiceID:  service.ID,
+	}
+
+	return res, nil
+}
+
+func (s *remoteServer) ServiceLeave(ctx context.Context, in *api.ManagerServiceLeaveRequest) (*api.SuccessStatusResponse, error) {
+	serviceID, err := uuid.Parse(in.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	key, err := s.manager.key.Get(s.manager.flags.configDir)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if serviceID != *key.ServiceID {
+		st := status.New(codes.PermissionDenied, err.Error())
+
+		return nil, st.Err()
+	}
+
+	leaveErr := s.manager.memberlist.Leave(5 * time.Second)
+
+	if leaveErr != nil {
+		st := status.New(codes.Internal, leaveErr.Error())
+
+		return nil, st.Err()
+	}
+
+	shutdownErr := s.manager.memberlist.Shutdown()
+
+	if shutdownErr != nil {
+		st := status.New(codes.Internal, shutdownErr.Error())
+
+		return nil, st.Err()
+	}
+
+	logrus.Debug("Manager service has left the cluster.")
+
+	res := &api.SuccessStatusResponse{Success: true}
+
+	return res, nil
+}
+
+func (s *remoteServer) ServiceRemove(ctx context.Context, in *api.ManagerServiceRemoveRequest) (*api.SuccessStatusResponse, error) {
+	serviceID, err := uuid.Parse(in.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	cluster, err := s.manager.getCluster()
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if cluster == nil {
+		st := status.New(codes.NotFound, "cluster_not_initialized")
+
+		return nil, st.Err()
+	}
+
+	service, err := s.manager.getServiceByID(serviceID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	leaveAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(leaveAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	if service.Type == api.ServiceType_BLOCK.String() {
+		remote := api.NewBlockRemoteClient(conn)
+
+		opts := &api.BlockServiceLeaveRequest{
+			ServiceID: service.ID,
+		}
+
+		_, err := remote.ServiceLeave(ctx, opts)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if service.Type == api.ServiceType_MANAGER.String() {
+		remote := api.NewManagerRemoteClient(conn)
+
+		opts := &api.ManagerServiceLeaveRequest{
+			ServiceID: service.ID,
+		}
+
+		_, err := remote.ServiceLeave(ctx, opts)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	serviceKey := fmt.Sprintf("/service/%s", service.ID)
+
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   s.manager.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+	defer etcd.Close()
+
+	_, delErr := etcd.Delete(ctx, serviceKey)
+
+	if delErr != nil {
+		st := status.New(codes.Internal, delErr.Error())
 
 		return nil, st.Err()
 	}

@@ -44,28 +44,28 @@ var (
 func main() {
 	switch kingpin.Parse() {
 	case blockInit.FullCommand():
-		cli.BlockInit(blockInitAddr, socket)
+		cli.BlockServiceInit(blockInitAddr, socket)
 	case managerInit.FullCommand():
-		cli.ManagerInit(managerInitAddr, socket)
+		cli.ManagerServiceInit(managerInitAddr, socket)
 	case managerRemove.FullCommand():
-		cli.ManagerRemove(managerRemoveMemberID, socket)
+		cli.ManagerServiceRemove(managerRemoveMemberID, socket)
 	case managerLvCreate.FullCommand():
-		cli.ManagerLvCreate(managerEndpoint, managerLvCreateSize, managerLvCreateVolumeGroupID)
+		cli.ManagerNewLogicalVolume(managerEndpoint, managerLvCreateSize, managerLvCreateVolumeGroupID)
 	case managerLvGet.FullCommand():
-		cli.ManagerLvGet(managerEndpoint, managerLvGetID)
+		cli.ManagerGetLogicalVolume(managerEndpoint, managerLvGetID)
 	case managerLvRemove.FullCommand():
-		cli.ManagerLvRemove(managerEndpoint, managerLvRemoveID)
+		cli.ManagerRemoveLogicalVolume(managerEndpoint, managerLvRemoveID)
 	case managerPvCreate.FullCommand():
-		cli.ManagerPvCreate(managerPvCreateDeviceName, managerEndpoint, managerPvCreateServiceID)
+		cli.ManagerNewPhysicalVolume(managerPvCreateDeviceName, managerEndpoint, managerPvCreateServiceID)
 	case managerPvGet.FullCommand():
-		cli.ManagerPvGet(managerEndpoint, managerPvGetID)
+		cli.ManagerGetPhysicalVolume(managerEndpoint, managerPvGetID)
 	case managerPvRemove.FullCommand():
-		cli.ManagerPvRemove(managerEndpoint, managerPvRemoveID)
+		cli.ManagerRemovePhysicalVolume(managerEndpoint, managerPvRemoveID)
 	case managerVgCreate.FullCommand():
-		cli.ManagerVgCreate(managerEndpoint, managerVgCreatePhysicalVolumeID)
+		cli.ManagerNewVolumeGroup(managerEndpoint, managerVgCreatePhysicalVolumeID)
 	case managerVgGet.FullCommand():
-		cli.ManagerVgGet(managerEndpoint, managerVgGetID)
+		cli.ManagerGetVolumeGroup(managerEndpoint, managerVgGetID)
 	case managerVgRemove.FullCommand():
-		cli.ManagerVgRemove(managerEndpoint, managerVgRemoveID)
+		cli.ManagerRemoveVolumeGroup(managerEndpoint, managerVgRemoveID)
 	}
 }

@@ -8,8 +8,8 @@ import (
 	"github.com/erkrnt/symphony/api"
 )
 
-// BlockInit : handles joining block node to an existing cluster
-func BlockInit(serviceAddr *string, socket *string) {
+// BlockServiceInit : handles joining block node to an existing cluster
+func BlockServiceInit(serviceAddr *string, socket *string) {
 	conn := NewConnControl(socket)
 
 	defer conn.Close()
@@ -20,9 +20,9 @@ func BlockInit(serviceAddr *string, socket *string) {
 
 	defer cancel()
 
-	opts := &api.BlockControlInitRequest{ServiceAddr: *serviceAddr}
+	opts := &api.BlockServiceInitRequest{ServiceAddr: *serviceAddr}
 
-	_, joinErr := c.Init(ctx, opts)
+	_, joinErr := c.ServiceInit(ctx, opts)
 
 	if joinErr != nil {
 		log.Fatal(joinErr)

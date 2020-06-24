@@ -9,75 +9,74 @@ import "api/generic.proto";
 import "api/service.proto";
 
 service ManagerControl {
-  rpc Init(ManagerControlInitRequest) returns (ManagerControlInitResponse) {}
-  rpc Remove(ManagerControlRemoveRequest) returns (SuccessStatusResponse) {}
+  rpc ServiceInit(ManagerControlServiceInitRequest) returns (ManagerControlServiceInitResponse) {}
+  rpc ServiceRemove(ManagerControlServiceRemoveRequest) returns (SuccessStatusResponse) {}
 }
 
 service ManagerRemote {
-  rpc Init(ManagerRemoteInitRequest) returns (ManagerRemoteInitResponse) {}
-  rpc Join(ManagerRemoteJoinRequest) returns (ManagerRemoteInitResponse) {}
-  rpc Leave(ManagerRemoteLeaveRequest) returns (SuccessStatusResponse) {}
-  rpc Remove(ManagerRemoteRemoveRequest) returns (SuccessStatusResponse) {}
-
-  rpc GetLv(ManagerRemoteLvRequest) returns (LogicalVolume) {}
-  rpc GetPv(ManagerRemotePvRequest) returns (PhysicalVolume) {}
-  rpc GetVg(ManagerRemoteVgRequest) returns (VolumeGroup) {}
+  rpc GetLogicalVolume(ManagerLogicalVolumeRequest) returns (LogicalVolume) {}
+  rpc GetPhysicalVolume(ManagerPhysicalVolumeRequest) returns (PhysicalVolume) {}
+  rpc GetVolumeGroup(ManagerVolumeGroupRequest) returns (VolumeGroup) {}
   
-  rpc NewLv(ManagerRemoteNewLvRequest) returns (LogicalVolume) {}
-  rpc NewPv(ManagerRemoteNewPvRequest) returns (PhysicalVolume) {}
-  rpc NewVg(ManagerRemoteNewVgRequest) returns (VolumeGroup) {}
+  rpc NewLogicalVolume(ManagerNewLogicalVolumeRequest) returns (LogicalVolume) {}
+  rpc NewPhysicalVolume(ManagerNewPhysicalVolumeRequest) returns (PhysicalVolume) {}
+  rpc NewVolumeGroup(ManagerNewVolumeGroupRequest) returns (VolumeGroup) {}
 
-  rpc RemoveLv(ManagerRemoteLvRequest) returns (SuccessStatusResponse) {}
-  rpc RemovePv(ManagerRemotePvRequest) returns (SuccessStatusResponse) {}
-  rpc RemoveVg(ManagerRemoteVgRequest) returns (SuccessStatusResponse) {}
+  rpc RemoveLogicalVolume(ManagerLogicalVolumeRequest) returns (SuccessStatusResponse) {}
+  rpc RemovePhysicalVolume(ManagerPhysicalVolumeRequest) returns (SuccessStatusResponse) {}
+  rpc RemoveVolumeGroup(ManagerVolumeGroupRequest) returns (SuccessStatusResponse) {}
+
+  rpc ServiceInit(ManagerServiceInitRequest) returns (ManagerServiceInitResponse) {}
+  rpc ServiceJoin(ManagerServiceJoinRequest) returns (ManagerServiceInitResponse) {}
+  rpc ServiceLeave(ManagerServiceLeaveRequest) returns (SuccessStatusResponse) {}
+  rpc ServiceRemove(ManagerServiceRemoveRequest) returns (SuccessStatusResponse) {}
 }
 
-// -- CONTROL ENDPOINTS -- //
+message ManagerControlServiceInitRequest { string ServiceAddr = 1; }
 
-message ManagerControlInitRequest { string ServiceAddr = 1; }
-message ManagerControlInitResponse {
+message ManagerControlServiceInitResponse {
   string ClusterID = 1;
   string ServiceID = 2;
 }
 
 message ManagerControlLeaveRequest {}
 
-message ManagerControlRemoveRequest { string ServiceID = 1; }
+message ManagerControlServiceRemoveRequest { string ServiceID = 1; }
 
-// -- REMOTE ENDPOINTS -- //
-
-message ManagerRemoteInitRequest {
+message ManagerServiceInitRequest {
   string ServiceAddr = 1;
   ServiceType ServiceType = 2;
 }
-message ManagerRemoteInitResponse {
+message ManagerServiceInitResponse {
   string ClusterID = 1;
   repeated string Endpoints = 3;
   string GossipAddr = 2;
   string ServiceID = 4;
 }
 
-message ManagerRemoteJoinRequest {
+message ManagerServiceJoinRequest {
   string ClusterID = 1;
   string ServiceID = 2;
 }
 
-message ManagerRemoteLeaveRequest { string ServiceID = 1; }
+message ManagerServiceLeaveRequest { string ServiceID = 1; }
 
-message ManagerRemoteRemoveRequest { string ServiceID = 1; }
+message ManagerServiceRemoveRequest { string ServiceID = 1; }
 
-message ManagerRemoteLvRequest { string ID = 1; }
-message ManagerRemotePvRequest { string ID = 1; }
-message ManagerRemoteVgRequest { string ID = 1; }
+message ManagerLogicalVolumeRequest { string ID = 1; }
 
-message ManagerRemoteNewLvRequest {
+message ManagerPhysicalVolumeRequest { string ID = 1; }
+
+message ManagerVolumeGroupRequest { string ID = 1; }
+
+message ManagerNewLogicalVolumeRequest {
   int64 Size = 1;
   string VolumeGroupID = 2;
 }
-message ManagerRemoteNewPvRequest {
+message ManagerNewPhysicalVolumeRequest {
   string DeviceName = 1;
   string ServiceID = 2;
 }
-message ManagerRemoteNewVgRequest {
+message ManagerNewVolumeGroupRequest {
   string PhysicalVolumeID = 1;
 }

@@ -410,12 +410,12 @@ func (m *Manager) restart(key *config.Key) error {
 
 					r := api.NewManagerRemoteClient(conn)
 
-					opts := &api.ManagerRemoteJoinRequest{
+					opts := &api.ManagerServiceJoinRequest{
 						ClusterID: cluster.ID,
 						ServiceID: service.ID,
 					}
 
-					join, err := r.Join(ctx, opts)
+					join, err := r.ServiceJoin(ctx, opts)
 
 					if err != nil {
 						logrus.Debug("Restart join failed to remote peer... skipping.")

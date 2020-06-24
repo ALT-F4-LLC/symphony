@@ -19,7 +19,7 @@ type controlServer struct {
 	block *Block
 }
 
-func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitRequest) (*api.BlockControlInitResponse, error) {
+func (s *controlServer) ServiceInit(ctx context.Context, in *api.BlockServiceInitRequest) (*api.BlockServiceInitResponse, error) {
 	initAddr, err := net.ResolveTCPAddr("tcp", in.ServiceAddr)
 
 	if err != nil {
@@ -38,7 +38,7 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 
 	serviceAddr := fmt.Sprintf("%s", s.block.flags.listenServiceAddr.String())
 
-	opts := &api.ManagerRemoteInitRequest{
+	opts := &api.ManagerServiceInitRequest{
 		ServiceAddr: serviceAddr,
 		ServiceType: api.ServiceType_BLOCK,
 	}
@@ -47,7 +47,7 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 
 	defer cancel()
 
-	init, err := r.Init(ctx, opts)
+	init, err := r.ServiceInit(ctx, opts)
 
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func (s *controlServer) Init(ctx context.Context, in *api.BlockControlInitReques
 
 	s.block.memberlist = memberlist
 
-	res := &api.BlockControlInitResponse{
+	res := &api.BlockServiceInitResponse{
 		ClusterID: clusterID.String(),
 		ServiceID: serviceID.String(),
 	}

@@ -15,8 +15,8 @@ type remoteServer struct {
 	block *Block
 }
 
-// GetLv : gets logical volume metadata from block host
-func (s *remoteServer) GetLv(ctx context.Context, in *api.BlockRemoteLvRequest) (*api.LogicalVolumeMetadata, error) {
+// GetLogicalVolume : gets logical volume metadata from block host
+func (s *remoteServer) GetLogicalVolume(ctx context.Context, in *api.BlockLogicalVolumeRequest) (*api.LogicalVolumeMetadata, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -65,8 +65,8 @@ func (s *remoteServer) GetLv(ctx context.Context, in *api.BlockRemoteLvRequest) 
 	return metadata, nil
 }
 
-// GetPv : gets physical volume
-func (s *remoteServer) GetPv(ctx context.Context, in *api.BlockRemotePvRequest) (*api.PhysicalVolumeMetadata, error) {
+// GetPhysicalVolume : gets physical volume
+func (s *remoteServer) GetPhysicalVolume(ctx context.Context, in *api.BlockPhysicalVolumeRequest) (*api.PhysicalVolumeMetadata, error) {
 	metadata, pvErr := getPv(in.DeviceName)
 
 	if pvErr != nil {
@@ -84,8 +84,8 @@ func (s *remoteServer) GetPv(ctx context.Context, in *api.BlockRemotePvRequest) 
 	return metadata, nil
 }
 
-// GetVg : gets volume group
-func (s *remoteServer) GetVg(ctx context.Context, in *api.BlockRemoteVgRequest) (*api.VolumeGroupMetadata, error) {
+// GetVolumeGroup : gets volume group
+func (s *remoteServer) GetVolumeGroup(ctx context.Context, in *api.BlockVolumeGroupRequest) (*api.VolumeGroupMetadata, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -113,54 +113,8 @@ func (s *remoteServer) GetVg(ctx context.Context, in *api.BlockRemoteVgRequest) 
 	return metadata, nil
 }
 
-func (s *remoteServer) Leave(ctx context.Context, in *api.BlockRemoteLeaveRequest) (*api.SuccessStatusResponse, error) {
-	serviceID, err := uuid.Parse(in.ServiceID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	key, err := s.block.key.Get(s.block.flags.configDir)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if serviceID != *key.ServiceID {
-		st := status.New(codes.PermissionDenied, err.Error())
-
-		return nil, st.Err()
-	}
-
-	leaveErr := s.block.memberlist.Leave(5 * time.Second)
-
-	if leaveErr != nil {
-		st := status.New(codes.Internal, leaveErr.Error())
-
-		return nil, st.Err()
-	}
-
-	shutdownErr := s.block.memberlist.Shutdown()
-
-	if shutdownErr != nil {
-		st := status.New(codes.Internal, shutdownErr.Error())
-
-		return nil, st.Err()
-	}
-
-	logrus.Debug("Block service has left the cluster.")
-
-	res := &api.SuccessStatusResponse{}
-
-	return res, nil
-}
-
-// NewLv : creates logical volume
-func (s *remoteServer) NewLv(ctx context.Context, in *api.BlockRemoteNewLvRequest) (*api.LogicalVolumeMetadata, error) {
+// NewLogicalVolume : creates logical volume
+func (s *remoteServer) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogicalVolumeRequest) (*api.LogicalVolumeMetadata, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -205,8 +159,8 @@ func (s *remoteServer) NewLv(ctx context.Context, in *api.BlockRemoteNewLvReques
 	return metadata, nil
 }
 
-// NewPv : creates physical volume
-func (s *remoteServer) NewPv(ctx context.Context, in *api.BlockRemotePvRequest) (*api.PhysicalVolumeMetadata, error) {
+// NewPhysicalVolume : creates physical volume
+func (s *remoteServer) NewPhysicalVolume(ctx context.Context, in *api.BlockPhysicalVolumeRequest) (*api.PhysicalVolumeMetadata, error) {
 	pv, err := newPv(in.DeviceName)
 
 	if err != nil {
@@ -227,8 +181,8 @@ func (s *remoteServer) NewPv(ctx context.Context, in *api.BlockRemotePvRequest) 
 	return metadata, nil
 }
 
-// NewVg : creates volume group
-func (s *remoteServer) NewVg(ctx context.Context, in *api.BlockRemoteNewVgRequest) (*api.VolumeGroupMetadata, error) {
+// NewVolumeGroup : creates volume group
+func (s *remoteServer) NewVolumeGroup(ctx context.Context, in *api.BlockNewVolumeGroupRequest) (*api.VolumeGroupMetadata, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -256,8 +210,8 @@ func (s *remoteServer) NewVg(ctx context.Context, in *api.BlockRemoteNewVgReques
 	return metadata, nil
 }
 
-// RemoveLv : removes logical volume
-func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockRemoteLvRequest) (*api.SuccessStatusResponse, error) {
+// RemoveLogicalVolume : removes logical volume
+func (s *remoteServer) RemoveLogicalVolume(ctx context.Context, in *api.BlockLogicalVolumeRequest) (*api.SuccessStatusResponse, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -283,8 +237,8 @@ func (s *remoteServer) RemoveLv(ctx context.Context, in *api.BlockRemoteLvReques
 	return status, nil
 }
 
-// RemovePv : removes physical volume
-func (s *remoteServer) RemovePv(ctx context.Context, in *api.BlockRemotePvRequest) (*api.SuccessStatusResponse, error) {
+// RemovePhysicalVolume : removes physical volume
+func (s *remoteServer) RemovePhysicalVolume(ctx context.Context, in *api.BlockPhysicalVolumeRequest) (*api.SuccessStatusResponse, error) {
 	err := removePv(in.DeviceName)
 
 	if err != nil {
@@ -298,8 +252,8 @@ func (s *remoteServer) RemovePv(ctx context.Context, in *api.BlockRemotePvReques
 	return status, nil
 }
 
-// RemoveVg : removes volume group
-func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockRemoteVgRequest) (*api.SuccessStatusResponse, error) {
+// RemoveVolumeGroup : removes volume group
+func (s *remoteServer) RemoveVolumeGroup(ctx context.Context, in *api.BlockVolumeGroupRequest) (*api.SuccessStatusResponse, error) {
 	id, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -317,4 +271,50 @@ func (s *remoteServer) RemoveVg(ctx context.Context, in *api.BlockRemoteVgReques
 	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveVg")
 
 	return status, nil
+}
+
+func (s *remoteServer) ServiceLeave(ctx context.Context, in *api.BlockServiceLeaveRequest) (*api.SuccessStatusResponse, error) {
+	serviceID, err := uuid.Parse(in.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	key, err := s.block.key.Get(s.block.flags.configDir)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if serviceID != *key.ServiceID {
+		st := status.New(codes.PermissionDenied, err.Error())
+
+		return nil, st.Err()
+	}
+
+	leaveErr := s.block.memberlist.Leave(5 * time.Second)
+
+	if leaveErr != nil {
+		st := status.New(codes.Internal, leaveErr.Error())
+
+		return nil, st.Err()
+	}
+
+	shutdownErr := s.block.memberlist.Shutdown()
+
+	if shutdownErr != nil {
+		st := status.New(codes.Internal, shutdownErr.Error())
+
+		return nil, st.Err()
+	}
+
+	logrus.Debug("Block service has left the cluster.")
+
+	res := &api.SuccessStatusResponse{}
+
+	return res, nil
 }
