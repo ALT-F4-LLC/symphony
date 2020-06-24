@@ -942,6 +942,158 @@ func (s *remoteServer) NewVg(ctx context.Context, in *api.ManagerRemoteNewVgRequ
 	return vg, nil
 }
 
+func (s *remoteServer) RemoveLv(ctx context.Context, in *api.ManagerRemoteLvRequest) (*api.SuccessStatusResponse, error) {
+	lvID, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	lv, err := s.manager.getLogicalVolumeByID(lvID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if lv == nil {
+		st := status.New(codes.NotFound, "invalid_logical_volume_id")
+
+		return nil, st.Err()
+	}
+
+	vgID, err := uuid.Parse(lv.VolumeGroupID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	vg, err := s.manager.getVolumeGroupByID(vgID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if vg == nil {
+		st := status.New(codes.NotFound, "invalid_volume_group_id")
+
+		return nil, st.Err()
+	}
+
+	pvID, err := uuid.Parse(vg.PhysicalVolumeID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	pv, err := s.manager.getPhysicalVolumeByID(pvID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if pv == nil {
+		st := status.New(codes.NotFound, "invalid_physical_volume_id")
+
+		return nil, st.Err()
+	}
+
+	serviceID, err := uuid.Parse(pv.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	service, err := s.manager.getServiceByID(serviceID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if service == nil {
+		st := status.New(codes.NotFound, "invalid_service_id")
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(blockAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	removeCtx, removeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer removeCancel()
+
+	remote := api.NewBlockRemoteClient(conn)
+
+	opts := &api.BlockRemoteLvRequest{
+		ID:            lv.ID,
+		VolumeGroupID: lv.VolumeGroupID,
+	}
+
+	_, removeErr := remote.RemoveLv(removeCtx, opts)
+
+	if removeErr != nil {
+		return nil, removeErr
+	}
+
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   s.manager.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	etcdCtx, etcdCancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer etcdCancel()
+
+	etcdKey := fmt.Sprintf("/logicalvolume/%s", lv.ID)
+
+	_, delRes := etcd.Delete(etcdCtx, etcdKey)
+
+	if delRes != nil {
+		st := status.New(codes.Internal, delRes.Error())
+
+		return nil, st.Err()
+	}
+
+	res := &api.SuccessStatusResponse{Success: true}
+
+	return res, nil
+}
+
 func (s *remoteServer) RemovePv(ctx context.Context, in *api.ManagerRemotePvRequest) (*api.SuccessStatusResponse, error) {
 	volumeID, err := uuid.Parse(in.ID)
 

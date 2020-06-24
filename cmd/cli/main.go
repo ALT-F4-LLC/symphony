@@ -13,6 +13,8 @@ var (
 	managerEndpoint                 = manager.Flag("endpoint", "Endpoint for manager service.").Default("127.0.0.1:15760").String()
 	managerInit                     = manager.Command("init", "Initializes new cluster.")
 	managerInitAddr                 = managerInit.Arg("addr", "Initializes in an existing cluster.").String()
+	managerRemove                   = manager.Command("remove", "Removes a service from the cluster.")
+	managerRemoveMemberID           = managerRemove.Arg("service-id", "Service to be removed from the cluster.").Required().String()
 	managerLv                       = manager.Command("lv", "Block service logical volume commands.")
 	managerLvCreate                 = managerLv.Command("create", "Creates a logical volume.")
 	managerLvCreateSize             = managerLvCreate.Arg("size", "Sets logical volume size.").Required().Int64()
@@ -29,8 +31,6 @@ var (
 	managerPvGetID                  = managerPvGet.Arg("id", "Specific physical volume to retrieve.").Required().String()
 	managerPvRemove                 = managerPv.Command("remove", "Remove a physical volume.")
 	managerPvRemoveID               = managerPvRemove.Arg("id", "Specific physical volume to remove.").Required().String()
-	managerRemove                   = manager.Command("remove", "Removes a service from the cluster.")
-	managerRemoveMemberID           = managerRemove.Arg("service-id", "Service to be removed from the cluster.").Required().String()
 	managerVg                       = manager.Command("vg", "manager service volume group commands.")
 	managerVgCreate                 = managerVg.Command("create", "Creates a volume group.")
 	managerVgCreatePhysicalVolumeID = managerVgCreate.Arg("physical-volume-id", "Sets physical volume for group.").Required().String()
@@ -47,20 +47,20 @@ func main() {
 		cli.BlockInit(blockInitAddr, socket)
 	case managerInit.FullCommand():
 		cli.ManagerInit(managerInitAddr, socket)
+	case managerRemove.FullCommand():
+		cli.ManagerRemove(managerRemoveMemberID, socket)
 	case managerLvCreate.FullCommand():
 		cli.ManagerLvCreate(managerEndpoint, managerLvCreateSize, managerLvCreateVolumeGroupID)
 	case managerLvGet.FullCommand():
 		cli.ManagerLvGet(managerEndpoint, managerLvGetID)
-	// case managerLvRemove.FullCommand():
-	// 	cli.ManagerLvRemove(managerEndpoint, managerLvRemoveID)
+	case managerLvRemove.FullCommand():
+		cli.ManagerLvRemove(managerEndpoint, managerLvRemoveID)
 	case managerPvCreate.FullCommand():
 		cli.ManagerPvCreate(managerPvCreateDeviceName, managerEndpoint, managerPvCreateServiceID)
 	case managerPvGet.FullCommand():
 		cli.ManagerPvGet(managerEndpoint, managerPvGetID)
 	case managerPvRemove.FullCommand():
 		cli.ManagerPvRemove(managerEndpoint, managerPvRemoveID)
-	case managerRemove.FullCommand():
-		cli.ManagerRemove(managerRemoveMemberID, socket)
 	case managerVgCreate.FullCommand():
 		cli.ManagerVgCreate(managerEndpoint, managerVgCreatePhysicalVolumeID)
 	case managerVgGet.FullCommand():

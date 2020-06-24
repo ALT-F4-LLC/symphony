@@ -22,10 +22,12 @@ service ManagerRemote {
   rpc GetLv(ManagerRemoteLvRequest) returns (LogicalVolume) {}
   rpc GetPv(ManagerRemotePvRequest) returns (PhysicalVolume) {}
   rpc GetVg(ManagerRemoteVgRequest) returns (VolumeGroup) {}
+  
   rpc NewLv(ManagerRemoteNewLvRequest) returns (LogicalVolume) {}
   rpc NewPv(ManagerRemoteNewPvRequest) returns (PhysicalVolume) {}
   rpc NewVg(ManagerRemoteNewVgRequest) returns (VolumeGroup) {}
-  // rpc RemoveLv(ManagerRemoteLvRequest) returns (SuccessStatusResponse) {}
+
+  rpc RemoveLv(ManagerRemoteLvRequest) returns (SuccessStatusResponse) {}
   rpc RemovePv(ManagerRemotePvRequest) returns (SuccessStatusResponse) {}
   rpc RemoveVg(ManagerRemoteVgRequest) returns (SuccessStatusResponse) {}
 }
