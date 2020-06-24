@@ -11,14 +11,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// VolumeGroupReport : Output for "vgdisplay" command from LVM
+// VolumeGroupReport : output for "vgdisplay" command from LVM
 type VolumeGroupReport struct {
 	Report []struct {
 		Vg []VolumeGroupReportResult `json:"vg"`
 	} `json:"report"`
 }
 
-// VolumeGroupReportResult : Output for individual pv from "pvdisplay" command from LVM
+// VolumeGroupReportResult : output for individual entry from "vgdisplay" command from LVM
 type VolumeGroupReportResult struct {
 	VgName    string `json:"vg_name"`
 	PvCount   string `json:"pv_count"`

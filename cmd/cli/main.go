@@ -15,9 +15,8 @@ var (
 	managerInitAddr                 = managerInit.Arg("addr", "Initializes in an existing cluster.").String()
 	managerLv                       = manager.Command("lv", "Block service logical volume commands.")
 	managerLvCreate                 = managerLv.Command("create", "Creates a logical volume.")
-	managerLvCreateServiceID        = managerLvCreate.Arg("service-id", "Set logical volume service id.").Required().String()
-	managerLvCreateVolumeGroupID    = managerLvCreate.Arg("volume-group-id", "Set logical volume group id.").Required().String()
-	managerLvCreateSize             = managerLvCreate.Arg("size", "Set logical volume size.").Required().Int64()
+	managerLvCreateSize             = managerLvCreate.Arg("size", "Sets logical volume size.").Required().Int64()
+	managerLvCreateVolumeGroupID    = managerLvCreate.Arg("volume-group-id", "Sets logical volume group id.").Required().String()
 	managerLvGet                    = managerLv.Command("get", "Gets a logical volume.")
 	managerLvGetID                  = managerLvGet.Arg("id", "Sets logical volume id.").Required().String()
 	managerLvGetVolumeGroupID       = managerLvGet.Arg("volume-group-id", "Set logical volume group id.").Required().String()
@@ -50,8 +49,8 @@ func main() {
 		cli.BlockInit(blockInitAddr, socket)
 	case managerInit.FullCommand():
 		cli.ManagerInit(managerInitAddr, socket)
-	// case managerLvCreate.FullCommand():
-	// 	cli.ManagerLvCreate(managerEndpoint, managerLvCreateServiceID, managerLvCreateSize, managerLvCreateVolumeGroupID)
+	case managerLvCreate.FullCommand():
+		cli.ManagerLvCreate(managerEndpoint, managerLvCreateSize, managerLvCreateVolumeGroupID)
 	// case managerLvGet.FullCommand():
 	// 	cli.ManagerLvGet(managerEndpoint, managerLvGetID)
 	// case managerLvRemove.FullCommand():

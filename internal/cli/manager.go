@@ -60,39 +60,38 @@ func ManagerRemove(id *string, socket *string) {
 }
 
 // ManagerLvCreate : handles creation of new logical volume
-// func ManagerLvCreate(endpoint *string, serviceID *string, size *int64, volumeGroupID *string) {
-// 	if *endpoint == "" || *serviceID == "" || *size == 0 || *volumeGroupID == "" {
-// 		log.Fatal("invalid_parameters")
-// 	}
+func ManagerLvCreate(endpoint *string, size *int64, volumeGroupID *string) {
+	if *endpoint == "" || *size == 0 || *volumeGroupID == "" {
+		log.Fatal("invalid_parameters")
+	}
 
-// 	conn, err := grpc.Dial(*endpoint, grpc.WithInsecure())
+	conn, err := grpc.Dial(*endpoint, grpc.WithInsecure())
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	defer conn.Close()
+	defer conn.Close()
 
-// 	c := api.NewManagerRemoteClient(conn)
+	c := api.NewManagerRemoteClient(conn)
 
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-// 	defer cancel()
+	defer cancel()
 
-// 	opts := &api.ManagerRemoteNewLvRequest{
-// 		ServiceID:     *serviceID,
-// 		Size:          *size,
-// 		VolumeGroupID: *volumeGroupID,
-// 	}
+	opts := &api.ManagerRemoteNewLvRequest{
+		Size:          *size,
+		VolumeGroupID: *volumeGroupID,
+	}
 
-// 	lv, err := c.NewLv(ctx, opts)
+	lv, err := c.NewLv(ctx, opts)
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	log.Print(*lv)
-// }
+	log.Print(*lv)
+}
 
 // ManagerPvCreate : handles creation of new physical volume
 func ManagerPvCreate(deviceName *string, endpoint *string, serviceID *string) {

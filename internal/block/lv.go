@@ -14,11 +14,27 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// LogicalVolumeReport : struct for LVDisplay output
+// LogicalVolumeReport : output for "lvdisplay" command from LVM
 type LogicalVolumeReport struct {
 	Report []struct {
-		Lv []api.LogicalVolumeMetadata `json:"lv"`
+		Lv []LogicalVolumeReportResult `json:"lv"`
 	} `json:"report"`
+}
+
+// LogicalVolumeReportResult : output for individual entry from "lvdisplay" command from LVM
+type LogicalVolumeReportResult struct {
+	LvName          string `json:"lv_name"`
+	VgName          string `json:"vg_name"`
+	LvAttr          string `json:"lv_attr"`
+	LvSize          string `json:"lv_size"`
+	PoolLv          string `json:"pool_lv"`
+	Origin          string `json:"origin"`
+	DataPercent     string `json:"data_percent"`
+	MetadataPercent string `json:"metadata_percent"`
+	MovePv          string `json:"move_pv"`
+	MirrorLog       string `json:"mirror_log"`
+	CopyPercent     string `json:"copy_percent"`
+	ConvertLv       string `json:"convert_lv"`
 }
 
 func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*api.LogicalVolumeMetadata, error) {
@@ -46,13 +62,13 @@ func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*api.LogicalVolumeMetadata, e
 		return nil, err
 	}
 
-	var metadata api.LogicalVolumeMetadata
+	var result LogicalVolumeReportResult
 
 	if len(res.Report) == 1 && len(res.Report[0].Lv) == 1 {
 		lv := res.Report[0].Lv[0]
 
 		if lv.VgName == volumeGroupID.String() && lv.LvName == id.String() {
-			metadata = lv
+			result = lv
 
 			logFields := logrus.Fields{
 				"ID":            id.String(),
@@ -63,17 +79,34 @@ func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*api.LogicalVolumeMetadata, e
 		}
 	}
 
-	return &metadata, nil
+	metadata := &api.LogicalVolumeMetadata{
+		LvName:          result.LvName,
+		VgName:          result.VgName,
+		LvAttr:          result.LvAttr,
+		LvSize:          result.LvSize,
+		PoolLv:          result.PoolLv,
+		Origin:          result.Origin,
+		DataPercent:     result.DataPercent,
+		MetadataPercent: result.MetadataPercent,
+		MovePv:          result.MovePv,
+		MirrorLog:       result.MirrorLog,
+		CopyPercent:     result.CopyPercent,
+		ConvertLv:       result.ConvertLv,
+	}
+
+	return metadata, nil
 }
 
-func newLv(volumeGroupID uuid.UUID, id uuid.UUID, size string) (*api.LogicalVolumeMetadata, error) {
+func newLv(volumeGroupID uuid.UUID, id uuid.UUID, size int64) (*api.LogicalVolumeMetadata, error) {
 	exists, _ := getLv(volumeGroupID, id)
 
 	if exists != nil {
 		return nil, errors.New("invalid_logical_volume")
 	}
 
-	_, lvErr := exec.Command("lvcreate", "-n", id.String(), "-L", size, volumeGroupID.String()).Output()
+	sizeG := fmt.Sprintf("%dG", size)
+
+	_, lvErr := exec.Command("lvcreate", "-n", id.String(), "-L", sizeG, volumeGroupID.String()).Output()
 
 	if lvErr != nil {
 		return nil, lvErr

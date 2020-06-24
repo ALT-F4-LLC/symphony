@@ -436,7 +436,7 @@ func (m *Manager) saveCluster(cluster *api.Cluster) error {
 	return nil
 }
 
-func (m *Manager) savePhysicalVolume(volume *api.PhysicalVolume) error {
+func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
 	etcd, err := clientv3.New(clientv3.Config{
 		Endpoints:   m.flags.etcdEndpoints,
 		DialTimeout: 5 * time.Second,
@@ -452,15 +452,15 @@ func (m *Manager) savePhysicalVolume(volume *api.PhysicalVolume) error {
 
 	defer cancel()
 
-	volumeJSON, err := json.Marshal(volume)
+	lvJSON, err := json.Marshal(lv)
 
 	if err != nil {
 		return err
 	}
 
-	volumeKey := fmt.Sprintf("/physicalvolume/%s", volume.ID)
+	lvKey := fmt.Sprintf("/logicalvolume/%s", lv.ID)
 
-	_, putErr := etcd.Put(ctx, volumeKey, string(volumeJSON))
+	_, putErr := etcd.Put(ctx, lvKey, string(lvJSON))
 
 	if putErr != nil {
 		return err
@@ -469,7 +469,7 @@ func (m *Manager) savePhysicalVolume(volume *api.PhysicalVolume) error {
 	return nil
 }
 
-func (m *Manager) saveVolumeGroup(volume *api.VolumeGroup) error {
+func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
 	etcd, err := clientv3.New(clientv3.Config{
 		Endpoints:   m.flags.etcdEndpoints,
 		DialTimeout: 5 * time.Second,
@@ -485,15 +485,48 @@ func (m *Manager) saveVolumeGroup(volume *api.VolumeGroup) error {
 
 	defer cancel()
 
-	volumeJSON, err := json.Marshal(volume)
+	pvJSON, err := json.Marshal(pv)
 
 	if err != nil {
 		return err
 	}
 
-	volumeKey := fmt.Sprintf("/volumegroup/%s", volume.ID)
+	volumeKey := fmt.Sprintf("/physicalvolume/%s", pv.ID)
 
-	_, putErr := etcd.Put(ctx, volumeKey, string(volumeJSON))
+	_, putErr := etcd.Put(ctx, volumeKey, string(pvJSON))
+
+	if putErr != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	vgJSON, err := json.Marshal(vg)
+
+	if err != nil {
+		return err
+	}
+
+	volumeKey := fmt.Sprintf("/volumegroup/%s", vg.ID)
+
+	_, putErr := etcd.Put(ctx, volumeKey, string(vgJSON))
 
 	if putErr != nil {
 		return err

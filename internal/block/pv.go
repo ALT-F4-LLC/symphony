@@ -10,14 +10,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// PhysicalVolumeReport : Output for "pvdisplay" command from LVM
+// PhysicalVolumeReport : output for "pvdisplay" command from LVM
 type PhysicalVolumeReport struct {
 	Report []struct {
 		Pv []*PhysicalVolumeReportResult `json:"pv"`
 	} `json:"report"`
 }
 
-// PhysicalVolumeReportResult : Output for individual pv from "pvdisplay" command from LVM
+// PhysicalVolumeReportResult : output for individual entry from "pvdisplay" command from LVM
 type PhysicalVolumeReportResult struct {
 	PvName string `json:"pv_name"`
 	VgName string `json:"vg_name"`
@@ -72,14 +72,14 @@ func getPv(deviceName string) (*api.PhysicalVolumeMetadata, error) {
 	return metadata, nil
 }
 
-func newPv(device string) (*api.PhysicalVolumeMetadata, error) {
-	exists, _ := getPv(device)
+func newPv(deviceName string) (*api.PhysicalVolumeMetadata, error) {
+	exists, _ := getPv(deviceName)
 
 	if exists != nil {
 		return nil, errors.New("pv_already_exists")
 	}
 
-	cmd := exec.Command("pvcreate", device)
+	cmd := exec.Command("pvcreate", deviceName)
 
 	pvc, pvcErr := cmd.CombinedOutput()
 
@@ -87,13 +87,13 @@ func newPv(device string) (*api.PhysicalVolumeMetadata, error) {
 		return nil, errors.New(strings.TrimSpace(string(pvc)))
 	}
 
-	pv, err := getPv(device)
+	pv, err := getPv(deviceName)
 
 	if err != nil {
 		return nil, err
 	}
 
-	logrus.WithFields(logrus.Fields{"Device": device}).Debug("Physical volume successfully created.")
+	logrus.WithFields(logrus.Fields{"DeviceName": deviceName}).Debug("Physical volume successfully created.")
 
 	return pv, nil
 }

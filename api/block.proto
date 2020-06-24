@@ -43,8 +43,8 @@ message BlockRemoteVgRequest { string ID = 1; }
 
 message BlockRemoteNewLvRequest {
   string ID = 1;
-  string VolumeGroupID = 2;
-  string Size = 3;
+  int64 Size = 2;
+  string VolumeGroupID = 3;
 }
 
 message BlockRemoteNewVgRequest {
@@ -55,9 +55,8 @@ message BlockRemoteNewVgRequest {
 message LogicalVolume {
   string ID = 1;
   LogicalVolumeMetadata Metadata = 2;
-  string ServiceID = 3;
+  int64 Size = 3;
   string VolumeGroupID = 4;
-  int64 Size = 5;
 }
 
 message PhysicalVolume {
