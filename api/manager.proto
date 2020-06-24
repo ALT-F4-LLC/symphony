@@ -39,29 +39,7 @@ message ManagerControlServiceInitResponse {
   string ServiceID = 2;
 }
 
-message ManagerControlLeaveRequest {}
-
 message ManagerControlServiceRemoveRequest { string ServiceID = 1; }
-
-message ManagerServiceInitRequest {
-  string ServiceAddr = 1;
-  ServiceType ServiceType = 2;
-}
-message ManagerServiceInitResponse {
-  string ClusterID = 1;
-  repeated string Endpoints = 3;
-  string GossipAddr = 2;
-  string ServiceID = 4;
-}
-
-message ManagerServiceJoinRequest {
-  string ClusterID = 1;
-  string ServiceID = 2;
-}
-
-message ManagerServiceLeaveRequest { string ServiceID = 1; }
-
-message ManagerServiceRemoveRequest { string ServiceID = 1; }
 
 message ManagerLogicalVolumeRequest { string ID = 1; }
 
@@ -80,3 +58,24 @@ message ManagerNewPhysicalVolumeRequest {
 message ManagerNewVolumeGroupRequest {
   string PhysicalVolumeID = 1;
 }
+
+message ManagerServiceInitRequest {
+  string ServiceAddr = 1;
+  ServiceType ServiceType = 2;
+}
+
+message ManagerServiceInitResponse {
+  string ClusterID = 1;
+  repeated string Endpoints = 3;
+  string GossipAddr = 2;
+  string ServiceID = 4;
+}
+
+message ManagerServiceJoinRequest {
+  string ClusterID = 1;
+  string ServiceID = 2;
+}
+
+message ManagerServiceLeaveRequest { string ServiceID = 1; }
+
+message ManagerServiceRemoveRequest { string ServiceID = 1; }
