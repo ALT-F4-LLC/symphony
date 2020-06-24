@@ -9,6 +9,7 @@ import (
 	"github.com/erkrnt/symphony/api"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -506,6 +507,107 @@ func (s *remoteServer) NewPv(ctx context.Context, in *api.ManagerRemoteNewPvRequ
 		Metadata:   newPvRes,
 		ServiceID:  v.ServiceID,
 	}
+
+	return res, nil
+}
+
+func (s *remoteServer) RemovePv(ctx context.Context, in *api.ManagerRemotePvRequest) (*api.SuccessStatusResponse, error) {
+	volumeID, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	volume, err := s.manager.getPhysicalVolumeByID(volumeID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if volume == nil {
+		st := status.New(codes.NotFound, "invalid_physical_volume_id")
+
+		return nil, st.Err()
+	}
+
+	serviceID, err := uuid.Parse(volume.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	service, err := s.manager.getServiceByID(serviceID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(blockAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	removeCtx, removeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer removeCancel()
+
+	remote := api.NewBlockRemoteClient(conn)
+
+	opts := &api.BlockRemotePvRequest{
+		DeviceName: volume.DeviceName,
+	}
+
+	_, removeErr := remote.RemovePv(removeCtx, opts)
+
+	if removeErr != nil {
+		return nil, removeErr
+	}
+
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   s.manager.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	etcdCtx, etcdCancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer etcdCancel()
+
+	etcdKey := fmt.Sprintf("/physicalvolume/%s", volume.ID)
+
+	_, delRes := etcd.Delete(etcdCtx, etcdKey)
+
+	if delRes != nil {
+		st := status.New(codes.Internal, delRes.Error())
+
+		return nil, st.Err()
+	}
+
+	res := &api.SuccessStatusResponse{Success: true}
 
 	return res, nil
 }

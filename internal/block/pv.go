@@ -98,15 +98,15 @@ func newPv(device string) (*api.PhysicalVolumeMetadata, error) {
 	return pv, nil
 }
 
-func removePv(device string) error {
-	exists, _ := getPv(device)
+func removePv(deviceName string) error {
+	exists, _ := getPv(deviceName)
 
 	if exists == nil {
 		err := errors.New("pv_not_found")
 		return err
 	}
 
-	cmd := exec.Command("pvremove", "--force", device)
+	cmd := exec.Command("pvremove", "--force", deviceName)
 
 	_, pvrErr := cmd.CombinedOutput()
 
@@ -114,7 +114,7 @@ func removePv(device string) error {
 		return pvrErr
 	}
 
-	logrus.WithFields(logrus.Fields{"Device": device}).Debug("Physical volume successfully removed.")
+	logrus.WithFields(logrus.Fields{"DeviceName": deviceName}).Debug("Physical volume successfully removed.")
 
 	return nil
 }

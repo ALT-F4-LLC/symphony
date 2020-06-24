@@ -26,7 +26,7 @@ service ManagerRemote {
   rpc NewPv(ManagerRemoteNewPvRequest) returns (ManagerRemotePvResponse) {}
   // rpc NewVg(ManagerRemoteNewVgRequest) returns (ManagerRemoteVgResponse) {}
   // rpc RemoveLv(ManagerRemoteLvRequest) returns (SuccessStatusResponse) {}
-  // rpc RemovePv(ManagerRemotePvRequest) returns (SuccessStatusResponse) {}
+  rpc RemovePv(ManagerRemotePvRequest) returns (SuccessStatusResponse) {}
   // rpc RemoveVg(ManagerRemoteVgRequest) returns (SuccessStatusResponse) {}
 }
 
