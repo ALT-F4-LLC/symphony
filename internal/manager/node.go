@@ -498,6 +498,39 @@ func (m *Manager) savePhysicalVolume(volume *api.PhysicalVolume) error {
 	return nil
 }
 
+func (m *Manager) saveVolumeGroup(volume *api.VolumeGroup) error {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	volumeJSON, err := json.Marshal(volume)
+
+	if err != nil {
+		return err
+	}
+
+	volumeKey := fmt.Sprintf("/volumegroup/%s", volume.ID)
+
+	_, putErr := etcd.Put(ctx, volumeKey, string(volumeJSON))
+
+	if putErr != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (m *Manager) saveService(service *api.Service) error {
 	etcd, err := clientv3.New(clientv3.Config{
 		Endpoints:   m.flags.etcdEndpoints,

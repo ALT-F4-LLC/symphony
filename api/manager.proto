@@ -24,7 +24,7 @@ service ManagerRemote {
   // rpc GetVg(ManagerRemoteVgRequest) returns (ManagerRemoteVgResponse) {}
   // rpc NewLv(ManagerRemoteNewLvRequest) returns (ManagerRemoteLvResponse) {}
   rpc NewPv(ManagerRemoteNewPvRequest) returns (ManagerRemotePvResponse) {}
-  // rpc NewVg(ManagerRemoteNewVgRequest) returns (ManagerRemoteVgResponse) {}
+  rpc NewVg(ManagerRemoteNewVgRequest) returns (ManagerRemoteVgResponse) {}
   // rpc RemoveLv(ManagerRemoteLvRequest) returns (SuccessStatusResponse) {}
   rpc RemovePv(ManagerRemotePvRequest) returns (SuccessStatusResponse) {}
   // rpc RemoveVg(ManagerRemoteVgRequest) returns (SuccessStatusResponse) {}
@@ -83,8 +83,8 @@ message ManagerRemotePvResponse {
 message ManagerRemoteVgRequest { string ID = 1; }
 message ManagerRemoteVgResponse {
   string ID = 1;
-  string PhysicalVolumeID = 2;
-  string ServiceID = 3;
+  VolumeGroupMetadata Metadata = 2;
+  string PhysicalVolumeID = 3;
 }
 
 message ManagerRemoteNewLvRequest {
@@ -100,5 +100,4 @@ message ManagerRemoteNewPvRequest {
 
 message ManagerRemoteNewVgRequest {
   string PhysicalVolumeID = 1;
-  string ServiceID = 2;
 }

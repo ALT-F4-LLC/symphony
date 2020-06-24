@@ -414,6 +414,94 @@ func (s *remoteServer) GetPv(ctx context.Context, in *api.ManagerRemotePvRequest
 	return res, nil
 }
 
+func (s *remoteServer) NewVg(ctx context.Context, in *api.ManagerRemoteNewVgRequest) (*api.ManagerRemoteVgResponse, error) {
+	physicalVolumeID, err := uuid.Parse(in.PhysicalVolumeID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	physicalVolume, err := s.manager.getPhysicalVolumeByID(physicalVolumeID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if physicalVolume == nil {
+		st := status.New(codes.NotFound, "invalid_physical_volume_id")
+
+		return nil, st.Err()
+	}
+
+	physicalVolumeServiceID, err := uuid.Parse(physicalVolume.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, "invalid_service_id")
+
+		return nil, st.Err()
+	}
+
+	service, err := s.manager.getServiceByID(physicalVolumeServiceID)
+
+	if service == nil {
+		st := status.New(codes.NotFound, "invalid_service_id")
+
+		return nil, st.Err()
+	}
+
+	newVgAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(newVgAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	remote := api.NewBlockRemoteClient(conn)
+
+	volumeGroupID := uuid.New()
+
+	opts := &api.BlockRemoteNewVgRequest{
+		DeviceName: physicalVolume.DeviceName,
+		ID:         volumeGroupID.String(),
+	}
+
+	newVgRes, err := remote.NewVg(ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	vg := &api.VolumeGroup{
+		ID:               volumeGroupID.String(),
+		PhysicalVolumeID: physicalVolume.ID,
+	}
+
+	saveErr := s.manager.saveVolumeGroup(vg)
+
+	if saveErr != nil {
+		return nil, saveErr
+	}
+
+	res := &api.ManagerRemoteVgResponse{
+		ID:               vg.ID,
+		Metadata:         newVgRes,
+		PhysicalVolumeID: vg.PhysicalVolumeID,
+	}
+
+	return res, nil
+}
+
 func (s *remoteServer) NewPv(ctx context.Context, in *api.ManagerRemoteNewPvRequest) (*api.ManagerRemotePvResponse, error) {
 	services, err := s.manager.getServices()
 

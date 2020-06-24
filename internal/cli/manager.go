@@ -129,38 +129,37 @@ func ManagerPvCreate(deviceName *string, endpoint *string, serviceID *string) {
 }
 
 // ManagerVgCreate : handles creation of new volume group
-// func ManagerVgCreate(physicalVolumeID *string, remoteAddr *string, serviceID *string) {
-// 	if *physicalVolumeID == "" || *remoteAddr == "" {
-// 		log.Fatal("invalid_parameters")
-// 	}
+func ManagerVgCreate(endpoint *string, physicalVolumeID *string) {
+	if *endpoint == "" || *physicalVolumeID == "" {
+		log.Fatal("invalid_parameters")
+	}
 
-// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*endpoint, grpc.WithInsecure())
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	defer conn.Close()
+	defer conn.Close()
 
-// 	c := api.NewManagerRemoteClient(conn)
+	c := api.NewManagerRemoteClient(conn)
 
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-// 	defer cancel()
+	defer cancel()
 
-// 	opts := &api.ManagerRemoteNewVgRequest{
-// 		PhysicalVolumeID: *physicalVolumeID,
-// 		ServiceID:        *serviceID,
-// 	}
+	opts := &api.ManagerRemoteNewVgRequest{
+		PhysicalVolumeID: *physicalVolumeID,
+	}
 
-// 	vg, err := c.NewVg(ctx, opts)
+	vg, err := c.NewVg(ctx, opts)
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	log.Print(*vg)
-// }
+	log.Print(*vg)
+}
 
 // ManagerLvGet : gets logical volume
 // func ManagerLvGet(id *string, remoteAddr *string) {

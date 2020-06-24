@@ -68,9 +68,9 @@ message PhysicalVolume {
 }
 
 message VolumeGroup {
-  string ID = 2;
-  VolumeGroupMetadata Metadata = 3;
-  string ServiceID = 4;
+  string ID = 1;
+  VolumeGroupMetadata Metadata = 2;
+  string PhysicalVolumeID = 3;
 }
 
 message LogicalVolumeMetadata {
