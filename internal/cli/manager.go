@@ -317,32 +317,32 @@ func ManagerPvRemove(endpoint *string, id *string) {
 }
 
 // ManagerVgRemove : removes volume group
-// func ManagerVgRemove(id *string, remoteAddr *string) {
-// 	if *id == "" {
-// 		log.Fatal("invalid_parameter")
-// 	}
+func ManagerVgRemove(endpoint *string, id *string) {
+	if *endpoint == "" || *id == "" {
+		log.Fatal("invalid_parameter")
+	}
 
-// 	conn, err := grpc.Dial(*remoteAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*endpoint, grpc.WithInsecure())
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	defer conn.Close()
+	defer conn.Close()
 
-// 	c := api.NewManagerRemoteClient(conn)
+	c := api.NewManagerRemoteClient(conn)
 
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-// 	defer cancel()
+	defer cancel()
 
-// 	opts := &api.ManagerRemoteVgRequest{ID: *id}
+	opts := &api.ManagerRemoteVgRequest{ID: *id}
 
-// 	vg, err := c.RemoveVg(ctx, opts)
+	vg, err := c.RemoveVg(ctx, opts)
 
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	log.Print(*vg)
-// }
+	log.Print(*vg)
+}

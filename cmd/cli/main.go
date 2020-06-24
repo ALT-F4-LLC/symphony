@@ -68,7 +68,7 @@ func main() {
 		cli.ManagerVgCreate(managerEndpoint, managerVgCreatePhysicalVolumeID)
 	case managerVgGet.FullCommand():
 		cli.ManagerVgGet(managerEndpoint, managerVgGetID)
-		// case managerVgRemove.FullCommand():
-		// 	cli.ManagerVgRemove(managerVgRemoveID, managerEndpoint)
+	case managerVgRemove.FullCommand():
+		cli.ManagerVgRemove(managerEndpoint, managerVgRemoveID)
 	}
 }
