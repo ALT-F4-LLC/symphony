@@ -414,6 +414,118 @@ func (s *remoteServer) GetPv(ctx context.Context, in *api.ManagerRemotePvRequest
 	return res, nil
 }
 
+func (s *remoteServer) GetVg(ctx context.Context, in *api.ManagerRemoteVgRequest) (*api.ManagerRemoteVgResponse, error) {
+	volumeGroupID, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	volumeGroup, err := s.manager.getVolumeGroupByID(volumeGroupID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if volumeGroup == nil {
+		st := status.New(codes.NotFound, "invalid_volume_group_id")
+
+		return nil, st.Err()
+	}
+
+	physicalVolumeID, err := uuid.Parse(volumeGroup.PhysicalVolumeID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	physicalVolume, err := s.manager.getPhysicalVolumeByID(physicalVolumeID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if physicalVolume == nil {
+		st := status.New(codes.NotFound, "invalid_physical_volume_id")
+
+		return nil, st.Err()
+	}
+
+	serviceID, err := uuid.Parse(physicalVolume.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	service, err := s.manager.getServiceByID(serviceID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if service == nil {
+		st := status.New(codes.NotFound, "invalid_service_id")
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(blockAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	remote := api.NewBlockRemoteClient(conn)
+
+	opts := &api.BlockRemoteVgRequest{
+		ID: volumeGroup.ID,
+	}
+
+	metadata, err := remote.GetVg(ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if metadata == nil {
+		st := status.New(codes.NotFound, "invalid_metadata")
+
+		return nil, st.Err()
+	}
+
+	res := &api.ManagerRemoteVgResponse{
+		ID:               volumeGroup.ID,
+		Metadata:         metadata,
+		PhysicalVolumeID: physicalVolume.ID,
+	}
+
+	return res, nil
+}
+
 func (s *remoteServer) NewVg(ctx context.Context, in *api.ManagerRemoteNewVgRequest) (*api.ManagerRemoteVgResponse, error) {
 	physicalVolumeID, err := uuid.Parse(in.PhysicalVolumeID)
 

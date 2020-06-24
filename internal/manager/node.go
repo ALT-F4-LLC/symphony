@@ -105,24 +105,7 @@ func (m *Manager) listenRemote() {
 }
 
 func (m *Manager) getCluster() (*api.Cluster, error) {
-	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	results, err := etcd.Get(ctx, "/cluster")
+	results, err := m.getStateByKey("/cluster")
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -145,37 +128,8 @@ func (m *Manager) getCluster() (*api.Cluster, error) {
 	return cluster, nil
 }
 
-func (m *Manager) getManagers(services []*api.Service) []*api.Service {
-	managers := make([]*api.Service, 0)
-
-	for _, s := range services {
-		if s.Type == api.ServiceType_MANAGER.String() {
-			managers = append(services, s)
-		}
-	}
-
-	return managers
-}
-
 func (m *Manager) getServices() ([]*api.Service, error) {
-	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	results, err := etcd.Get(ctx, "/service", clientv3.WithPrefix())
+	results, err := m.getStateByKey("/service", clientv3.WithPrefix())
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -203,24 +157,7 @@ func (m *Manager) getServices() ([]*api.Service, error) {
 }
 
 func (m *Manager) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
-	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	results, err := etcd.Get(ctx, "/physicalvolume", clientv3.WithPrefix())
+	results, err := m.getStateByKey("/physicalvolume", clientv3.WithPrefix())
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -248,26 +185,9 @@ func (m *Manager) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
 }
 
 func (m *Manager) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, error) {
-	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
 	etcdKey := fmt.Sprintf("/physicalvolume/%s", id.String())
 
-	results, err := etcd.Get(ctx, etcdKey)
+	results, err := m.getStateByKey(etcdKey)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -294,30 +214,12 @@ func (m *Manager) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, erro
 	}
 
 	return volume, nil
-
 }
 
 func (m *Manager) getServiceByID(id uuid.UUID) (*api.Service, error) {
-	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
 	etcdKey := fmt.Sprintf("/service/%s", id.String())
 
-	results, err := etcd.Get(ctx, etcdKey)
+	results, err := m.getStateByKey(etcdKey)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -346,6 +248,63 @@ func (m *Manager) getServiceByID(id uuid.UUID) (*api.Service, error) {
 	return service, nil
 }
 
+func (m *Manager) getStateByKey(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer etcd.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	results, err := etcd.Get(ctx, key, opts...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func (m *Manager) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, error) {
+	etcdKey := fmt.Sprintf("/volumegroup/%s", id.String())
+
+	results, err := m.getStateByKey(etcdKey)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	var volumeGroup *api.VolumeGroup
+
+	for _, ev := range results.Kvs {
+		var vg *api.VolumeGroup
+
+		err := json.Unmarshal(ev.Value, &vg)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		if vg.ID == id.String() {
+			volumeGroup = vg
+		}
+	}
+
+	return volumeGroup, nil
+}
+
 func (m *Manager) restart(key *config.Key) error {
 	cluster, err := m.getCluster()
 
@@ -354,17 +313,15 @@ func (m *Manager) restart(key *config.Key) error {
 	}
 
 	if cluster != nil {
-		services, err := m.getServices()
+		service, err := m.getServiceByID(*key.ServiceID)
 
 		if err != nil {
 			return err
 		}
 
-		service := GetServiceByID(services, *key.ServiceID)
+		managerServiceType := api.ServiceType_MANAGER.String()
 
-		managerType := api.ServiceType_MANAGER.String()
-
-		if service != nil && service.Type == managerType {
+		if service != nil && service.Type == managerServiceType {
 			gossipMember := &gossip.Member{
 				ServiceAddr: m.flags.listenServiceAddr.String(),
 				ServiceID:   service.ID,
@@ -381,7 +338,21 @@ func (m *Manager) restart(key *config.Key) error {
 
 			m.memberlist = memberlist
 
-			managers := m.getManagers(services)
+			managers := make([]*api.Service, 0)
+
+			services, err := m.getServices()
+
+			if err != nil {
+				return err
+			}
+
+			for _, s := range services {
+
+				if s.Type == managerServiceType {
+					managers = append(services, s)
+				}
+
+			}
 
 			for _, manager := range managers {
 

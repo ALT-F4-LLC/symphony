@@ -21,7 +21,7 @@ service ManagerRemote {
 
   // rpc GetLv(ManagerRemoteLvRequest) returns (ManagerRemoteLvResponse) {}
   rpc GetPv(ManagerRemotePvRequest) returns (ManagerRemotePvResponse) {}
-  // rpc GetVg(ManagerRemoteVgRequest) returns (ManagerRemoteVgResponse) {}
+  rpc GetVg(ManagerRemoteVgRequest) returns (ManagerRemoteVgResponse) {}
   // rpc NewLv(ManagerRemoteNewLvRequest) returns (ManagerRemoteLvResponse) {}
   rpc NewPv(ManagerRemoteNewPvRequest) returns (ManagerRemotePvResponse) {}
   rpc NewVg(ManagerRemoteNewVgRequest) returns (ManagerRemoteVgResponse) {}
