@@ -61,11 +61,11 @@ func (b *Block) listenControl() {
 
 	s := grpc.NewServer()
 
-	cs := &controlServer{
+	cs := &endpoints{
 		block: b,
 	}
 
-	api.RegisterBlockControlServer(s, cs)
+	api.RegisterBlockServer(s, cs)
 
 	logrus.Info("Started block control gRPC socket server.")
 
@@ -85,11 +85,11 @@ func (b *Block) listenRemote() {
 
 	s := grpc.NewServer()
 
-	server := &remoteServer{
+	server := &endpoints{
 		block: b,
 	}
 
-	api.RegisterBlockRemoteServer(s, server)
+	api.RegisterBlockServer(s, server)
 
 	logrus.Info("Started block remote gRPC tcp server.")
 
@@ -123,7 +123,7 @@ func (b *Block) restart(key *config.Key) error {
 
 		defer cancel()
 
-		r := api.NewManagerRemoteClient(conn)
+		r := api.NewManagerClient(conn)
 
 		opts := &api.ManagerServiceJoinRequest{
 			ClusterID: key.ClusterID.String(),

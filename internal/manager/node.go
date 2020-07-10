@@ -65,13 +65,18 @@ func (m *Manager) listenControl() {
 
 	server := grpc.NewServer()
 
-	control := &controlServer{
+	endpoints := &endpoints{
 		manager: m,
 	}
 
-	api.RegisterManagerControlServer(server, control)
+	control := &control{
+		endpoints: endpoints,
+		manager:   m,
+	}
 
-	logrus.Info("Started manager control gRPC socket server.")
+	api.RegisterManagerServer(server, control)
+
+	logrus.Info("Started control gRPC socket server.")
 
 	serveErr := server.Serve(listen)
 
@@ -87,15 +92,22 @@ func (m *Manager) listenRemote() {
 		m.ErrorC <- err.Error()
 	}
 
-	remote := &remoteServer{
+	endpoints := &endpoints{
 		manager: m,
 	}
 
+	remote := &remote{
+		endpoints: endpoints,
+		manager:   m,
+	}
+
+	// TODO : start the peers server with authentication
+
 	server := grpc.NewServer()
 
-	api.RegisterManagerRemoteServer(server, remote)
+	api.RegisterManagerServer(server, remote)
 
-	logrus.Info("Started manager remote gRPC tcp server.")
+	logrus.Info("Started manager gRPC tcp server.")
 
 	serveErr := server.Serve(listen)
 
@@ -128,8 +140,8 @@ func (m *Manager) getCluster() (*api.Cluster, error) {
 	return cluster, nil
 }
 
-func (m *Manager) getServices() ([]*api.Service, error) {
-	results, err := m.getStateByKey("/service", clientv3.WithPrefix())
+func (m *Manager) getLogicalVolumes() ([]*api.LogicalVolume, error) {
+	results, err := m.getStateByKey("/logicalvolume", clientv3.WithPrefix())
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -137,12 +149,12 @@ func (m *Manager) getServices() ([]*api.Service, error) {
 		return nil, st.Err()
 	}
 
-	services := make([]*api.Service, 0)
+	lvs := make([]*api.LogicalVolume, 0)
 
 	for _, ev := range results.Kvs {
-		var s *api.Service
+		var lv *api.LogicalVolume
 
-		err := json.Unmarshal(ev.Value, &s)
+		err := json.Unmarshal(ev.Value, &lv)
 
 		if err != nil {
 			st := status.New(codes.Internal, err.Error())
@@ -150,10 +162,10 @@ func (m *Manager) getServices() ([]*api.Service, error) {
 			return nil, st.Err()
 		}
 
-		services = append(services, s)
+		lvs = append(lvs, lv)
 	}
 
-	return services, nil
+	return lvs, nil
 }
 
 func (m *Manager) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
@@ -182,6 +194,62 @@ func (m *Manager) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
 	}
 
 	return pvs, nil
+}
+
+func (m *Manager) getVolumeGroups() ([]*api.VolumeGroup, error) {
+	results, err := m.getStateByKey("/volumegroup", clientv3.WithPrefix())
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	vgs := make([]*api.VolumeGroup, 0)
+
+	for _, ev := range results.Kvs {
+		var s *api.VolumeGroup
+
+		err := json.Unmarshal(ev.Value, &s)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		vgs = append(vgs, s)
+	}
+
+	return vgs, nil
+}
+
+func (m *Manager) getServices() ([]*api.Service, error) {
+	results, err := m.getStateByKey("/service", clientv3.WithPrefix())
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	services := make([]*api.Service, 0)
+
+	for _, ev := range results.Kvs {
+		var s *api.Service
+
+		err := json.Unmarshal(ev.Value, &s)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		services = append(services, s)
+	}
+
+	return services, nil
 }
 
 func (m *Manager) getLogicalVolumeByID(id uuid.UUID) (*api.LogicalVolume, error) {
@@ -337,6 +405,196 @@ func (m *Manager) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, error) {
 	return volumeGroup, nil
 }
 
+func (m *Manager) newService(serviceAddr string, serviceType api.ServiceType) (*api.ManagerServiceInitResponse, error) {
+	cluster, err := m.getCluster()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	isLocalInit := serviceAddr == m.flags.listenServiceAddr.String()
+
+	if cluster == nil && !isLocalInit {
+		st := status.New(codes.InvalidArgument, "cluster_not_initialized")
+
+		return nil, st.Err()
+	}
+
+	if cluster == nil && isLocalInit {
+		clusterID := uuid.New()
+
+		cluster = &api.Cluster{
+			ID: clusterID.String(),
+		}
+
+		err := m.saveCluster(cluster)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+	}
+
+	services, err := m.getServices()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	for _, service := range services {
+		if service.Addr == serviceAddr {
+			st := status.New(codes.AlreadyExists, codes.AlreadyExists.String())
+
+			return nil, st.Err()
+		}
+	}
+
+	serviceID := uuid.New()
+
+	service := &api.Service{
+		Addr: serviceAddr,
+		ID:   serviceID.String(),
+		Type: serviceType.String(),
+	}
+
+	saveErr := m.saveService(service)
+
+	if saveErr != nil {
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return nil, st.Err()
+	}
+
+	endpoints := make([]string, 0)
+
+	for _, service := range services {
+		if service.Type == api.ServiceType_MANAGER.String() {
+			endpoints = append(endpoints, service.Addr)
+		}
+	}
+
+	gossipAddr := m.flags.listenGossipAddr
+
+	res := &api.ManagerServiceInitResponse{
+		ClusterID:  cluster.ID,
+		Endpoints:  endpoints,
+		GossipAddr: gossipAddr.String(),
+		ServiceID:  service.ID,
+	}
+
+	return res, nil
+}
+
+func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
+	serviceID, err := uuid.Parse(id)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	cluster, err := m.getCluster()
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if cluster == nil {
+		st := status.New(codes.NotFound, "cluster_not_initialized")
+
+		return nil, st.Err()
+	}
+
+	service, err := m.getServiceByID(serviceID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	leaveAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(leaveAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	if service.Type == api.ServiceType_BLOCK.String() {
+		peer := api.NewBlockClient(conn)
+
+		opts := &api.BlockServiceLeaveRequest{
+			ServiceID: service.ID,
+		}
+
+		_, err := peer.ServiceLeave(ctx, opts)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if service.Type == api.ServiceType_MANAGER.String() {
+		peer := api.NewManagerClient(conn)
+
+		opts := &api.ManagerServiceLeaveRequest{
+			ServiceID: service.ID,
+		}
+
+		_, err := peer.ServiceLeave(ctx, opts)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	serviceKey := fmt.Sprintf("/service/%s", service.ID)
+
+	etcd, err := clientv3.New(clientv3.Config{
+		Endpoints:   m.flags.etcdEndpoints,
+		DialTimeout: 5 * time.Second,
+	})
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	defer etcd.Close()
+
+	_, delErr := etcd.Delete(ctx, serviceKey)
+
+	if delErr != nil {
+		st := status.New(codes.Internal, delErr.Error())
+
+		return nil, st.Err()
+	}
+
+	res := &api.SuccessStatusResponse{Success: true}
+
+	return res, nil
+}
+
 func (m *Manager) restart(key *config.Key) error {
 	cluster, err := m.getCluster()
 
@@ -381,7 +639,7 @@ func (m *Manager) restart(key *config.Key) error {
 			for _, s := range services {
 
 				if s.Type == managerServiceType {
-					managers = append(services, s)
+					managers = append(managers, s)
 				}
 
 			}
@@ -397,18 +655,25 @@ func (m *Manager) restart(key *config.Key) error {
 
 					conn, err := grpc.Dial(joinAddr.String(), grpc.WithInsecure())
 
+					defer conn.Close()
+
 					if err != nil {
-						logrus.Debug("Restart join failed to remote peer... skipping.")
+						fields := logrus.Fields{
+							"error": err.Error(),
+						}
+
+						logrus.WithFields(fields).Debug("Restart dial failed... waiting for next attempt.")
+
+						time.Sleep(5 * time.Second)
+
 						continue
 					}
-
-					defer conn.Close()
 
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 					defer cancel()
 
-					r := api.NewManagerRemoteClient(conn)
+					r := api.NewManagerClient(conn)
 
 					opts := &api.ManagerServiceJoinRequest{
 						ClusterID: cluster.ID,
@@ -418,7 +683,14 @@ func (m *Manager) restart(key *config.Key) error {
 					join, err := r.ServiceJoin(ctx, opts)
 
 					if err != nil {
-						logrus.Debug("Restart join failed to remote peer... skipping.")
+						fields := logrus.Fields{
+							"error": err.Error(),
+						}
+
+						logrus.WithFields(fields).Debug("Restart join failed... waiting for next attempt.")
+
+						time.Sleep(5 * time.Second)
+
 						continue
 					}
 

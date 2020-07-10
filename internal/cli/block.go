@@ -14,7 +14,7 @@ func BlockServiceInit(serviceAddr *string, socket *string) {
 
 	defer conn.Close()
 
-	c := api.NewBlockControlClient(conn)
+	c := api.NewBlockClient(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 

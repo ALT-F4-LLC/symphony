@@ -8,55 +8,77 @@ import "api/block.proto";
 import "api/generic.proto";
 import "api/service.proto";
 
-service ManagerControl {
-  rpc ServiceInit(ManagerControlServiceInitRequest) returns (ManagerControlServiceInitResponse) {}
-  rpc ServiceRemove(ManagerControlServiceRemoveRequest) returns (SuccessStatusResponse) {}
-}
-
-service ManagerRemote {
+service Manager { 
   rpc GetLogicalVolume(ManagerLogicalVolumeRequest) returns (LogicalVolume) {}
   rpc GetPhysicalVolume(ManagerPhysicalVolumeRequest) returns (PhysicalVolume) {}
+  rpc GetService(ManagerServiceRequest) returns (Service) {}
   rpc GetVolumeGroup(ManagerVolumeGroupRequest) returns (VolumeGroup) {}
-  
+
+  rpc GetLogicalVolumes(ManagerLogicalVolumesRequest) returns (ManagerLogicalVolumesResponse) {}
+  rpc GetPhysicalVolumes(ManagerPhysicalVolumesRequest) returns (ManagerPhysicalVolumesResponse) {}
+  rpc GetServices(ManagerServicesRequest) returns (ManagerServicesResponse) {}
+  rpc GetVolumeGroups(ManagerVolumeGroupsRequest) returns (ManagerVolumeGroupsResponse) {}
+
   rpc NewLogicalVolume(ManagerNewLogicalVolumeRequest) returns (LogicalVolume) {}
   rpc NewPhysicalVolume(ManagerNewPhysicalVolumeRequest) returns (PhysicalVolume) {}
   rpc NewVolumeGroup(ManagerNewVolumeGroupRequest) returns (VolumeGroup) {}
 
   rpc RemoveLogicalVolume(ManagerLogicalVolumeRequest) returns (SuccessStatusResponse) {}
   rpc RemovePhysicalVolume(ManagerPhysicalVolumeRequest) returns (SuccessStatusResponse) {}
+  rpc RemoveService(ManagerServiceRequest) returns (SuccessStatusResponse) {}
   rpc RemoveVolumeGroup(ManagerVolumeGroupRequest) returns (SuccessStatusResponse) {}
 
   rpc ServiceInit(ManagerServiceInitRequest) returns (ManagerServiceInitResponse) {}
   rpc ServiceJoin(ManagerServiceJoinRequest) returns (ManagerServiceInitResponse) {}
   rpc ServiceLeave(ManagerServiceLeaveRequest) returns (SuccessStatusResponse) {}
-  rpc ServiceRemove(ManagerServiceRemoveRequest) returns (SuccessStatusResponse) {}
 }
-
-message ManagerControlServiceInitRequest { string ServiceAddr = 1; }
-
-message ManagerControlServiceInitResponse {
-  string ClusterID = 1;
-  string ServiceID = 2;
-}
-
-message ManagerControlServiceRemoveRequest { string ServiceID = 1; }
 
 message ManagerLogicalVolumeRequest { string ID = 1; }
 
+message ManagerLogicalVolumesRequest {}
+
+message ManagerLogicalVolumesResponse {
+  repeated LogicalVolume Results = 1;
+}
+
 message ManagerPhysicalVolumeRequest { string ID = 1; }
 
+message ManagerPhysicalVolumesRequest {}
+
+message ManagerPhysicalVolumesResponse {
+  repeated PhysicalVolume Results = 1;
+}
+
 message ManagerVolumeGroupRequest { string ID = 1; }
+
+message ManagerVolumeGroupsRequest {}
+
+message ManagerVolumeGroupsResponse {
+  repeated VolumeGroup Results = 1;
+}
 
 message ManagerNewLogicalVolumeRequest {
   int64 Size = 1;
   string VolumeGroupID = 2;
 }
+
 message ManagerNewPhysicalVolumeRequest {
   string DeviceName = 1;
   string ServiceID = 2;
 }
+
 message ManagerNewVolumeGroupRequest {
   string PhysicalVolumeID = 1;
+}
+
+message ManagerServiceRequest {
+  string ServiceID = 1;
+}
+
+message ManagerServicesRequest {}
+
+message ManagerServicesResponse {
+  repeated Service Results = 1;
 }
 
 message ManagerServiceInitRequest {
@@ -77,5 +99,3 @@ message ManagerServiceJoinRequest {
 }
 
 message ManagerServiceLeaveRequest { string ServiceID = 1; }
-
-message ManagerServiceRemoveRequest { string ServiceID = 1; }

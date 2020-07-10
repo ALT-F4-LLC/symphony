@@ -6,11 +6,7 @@ package api;
 
 import "api/generic.proto";
 
-service BlockControl {
-  rpc ServiceInit(BlockServiceInitRequest) returns (BlockServiceInitResponse) {}
-}
-
-service BlockRemote {
+service Block {
   rpc GetLogicalVolume(BlockLogicalVolumeRequest) returns (LogicalVolumeMetadata) {}
   rpc GetPhysicalVolume(BlockPhysicalVolumeRequest) returns (PhysicalVolumeMetadata) {}
   rpc GetVolumeGroup(BlockVolumeGroupRequest) returns (VolumeGroupMetadata) {}
@@ -23,6 +19,7 @@ service BlockRemote {
   rpc RemovePhysicalVolume(BlockPhysicalVolumeRequest) returns (SuccessStatusResponse) {}
   rpc RemoveVolumeGroup(BlockVolumeGroupRequest) returns (SuccessStatusResponse) {}
 
+  rpc ServiceInit(BlockServiceInitRequest) returns (BlockServiceInitResponse) {}
   rpc ServiceLeave(BlockServiceLeaveRequest) returns (SuccessStatusResponse) {}
 }
 
