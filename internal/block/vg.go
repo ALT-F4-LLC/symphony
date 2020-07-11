@@ -6,19 +6,30 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/erkrnt/symphony/internal/pkg/schema"
+	"github.com/erkrnt/symphony/api"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
-// VolumeGroupReport : struct for VGDisplay output
+// VolumeGroupReport : output for "vgdisplay" command from LVM
 type VolumeGroupReport struct {
 	Report []struct {
-		Vg []schema.VolumeGroupMetadata `json:"vg"`
+		Vg []VolumeGroupReportResult `json:"vg"`
 	} `json:"report"`
 }
 
-func getVg(id uuid.UUID) (*schema.VolumeGroupMetadata, error) {
+// VolumeGroupReportResult : output for individual entry from "vgdisplay" command from LVM
+type VolumeGroupReportResult struct {
+	VgName    string `json:"vg_name"`
+	PvCount   string `json:"pv_count"`
+	LvCount   string `json:"lv_count"`
+	SnapCount string `json:"snap_count"`
+	VgAttr    string `json:"vg_attr"`
+	VgSize    string `json:"vg_size"`
+	VgFree    string `json:"vg_free"`
+}
+
+func getVg(id uuid.UUID) (*api.VolumeGroupMetadata, error) {
 	cmd := exec.Command("vgdisplay", "--columns", "--reportformat", "json", id.String())
 
 	vgd, vgdErr := cmd.CombinedOutput()
@@ -33,28 +44,38 @@ func getVg(id uuid.UUID) (*schema.VolumeGroupMetadata, error) {
 		return nil, vgdErr
 	}
 
-	res := &VolumeGroupReport{}
+	response := &VolumeGroupReport{}
 
-	if err := json.Unmarshal(vgd, &res); err != nil {
+	if err := json.Unmarshal(vgd, &response); err != nil {
 		return nil, err
 	}
 
-	var metadata schema.VolumeGroupMetadata
+	var result VolumeGroupReportResult
 
-	if len(res.Report) == 1 && len(res.Report[0].Vg) == 1 {
-		vg := res.Report[0].Vg[0]
+	if len(response.Report) == 1 && len(response.Report[0].Vg) == 1 {
+		vg := response.Report[0].Vg[0]
 
 		if vg.VgName == id.String() {
-			metadata = vg
+			result = vg
 
 			logrus.WithFields(logrus.Fields{"ID": id.String()}).Debug("Volume group successfully discovered.")
 		}
 	}
 
-	return &metadata, nil
+	metadata := &api.VolumeGroupMetadata{
+		VgName:    result.VgName,
+		PvCount:   result.PvCount,
+		LvCount:   result.LvCount,
+		SnapCount: result.SnapCount,
+		VgAttr:    result.VgAttr,
+		VgSize:    result.VgSize,
+		VgFree:    result.VgFree,
+	}
+
+	return metadata, nil
 }
 
-func newVg(device string, id uuid.UUID) (*schema.VolumeGroupMetadata, error) {
+func newVg(device string, id uuid.UUID) (*api.VolumeGroupMetadata, error) {
 	exists, _ := getVg(id)
 
 	if exists != nil {

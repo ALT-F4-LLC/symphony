@@ -2,23 +2,6 @@ networks:
   etcd:
   symphony:
 services:
-  block_01:
-    build:
-      context: .
-      dockerfile: cmd/block/Dockerfile
-    command: >
-      block
-      --config-dir="/config"
-      --verbose
-    depends_on:
-      - manager_01
-      - manager_02
-      - manager_03
-    networks:
-      - etcd
-      - symphony
-    volumes:
-      - block_01:/config
   etcd_01:
     command: >-
       etcd
@@ -86,6 +69,8 @@ services:
     networks:
       - etcd
       - symphony
+    ports:
+      - 15760:15760
     volumes:
       - manager_01:/config
   manager_02:
@@ -104,6 +89,8 @@ services:
     networks:
       - etcd
       - symphony
+    ports:
+      - 15761:15760
     volumes:
       - manager_02:/config
   manager_03:
@@ -122,11 +109,12 @@ services:
     networks:
       - etcd
       - symphony
+    ports:
+      - 15762:15760
     volumes:
       - manager_03:/config
 version: "3.7"
 volumes:
-  block_01:
   etcd_01:
   etcd_02:
   etcd_03:

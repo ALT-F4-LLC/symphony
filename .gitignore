@@ -1,6 +1,7 @@
 ### symphony ###
 .config
 .raft
+.vscode
 *.db
 *.pb.go
 *.tmp

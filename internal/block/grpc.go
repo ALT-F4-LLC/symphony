@@ -1,0 +1,400 @@
+package block
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"time"
+
+	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/config"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+type endpoints struct {
+	block *Block
+}
+
+// GetLogicalVolume : gets logical volume metadata from block host
+func (e *endpoints) GetLogicalVolume(ctx context.Context, in *api.BlockLogicalVolumeRequest) (*api.LogicalVolumeMetadata, error) {
+	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	id, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	lv, lvErr := getLv(volumeGroupID, id)
+
+	if lvErr != nil {
+		return nil, api.ProtoError(lvErr)
+	}
+
+	if lv == nil {
+		err := status.Error(codes.NotFound, "invalid_physical_volume")
+		return nil, api.ProtoError(err)
+	}
+
+	metadata := &api.LogicalVolumeMetadata{
+		LvName:          lv.LvName,
+		VgName:          lv.VgName,
+		LvAttr:          lv.LvAttr,
+		LvSize:          lv.LvSize,
+		PoolLv:          lv.PoolLv,
+		Origin:          lv.Origin,
+		DataPercent:     lv.DataPercent,
+		MetadataPercent: lv.MetadataPercent,
+		MovePv:          lv.MovePv,
+		MirrorLog:       lv.MirrorLog,
+		CopyPercent:     lv.CopyPercent,
+		ConvertLv:       lv.ConvertLv,
+	}
+
+	logFields := logrus.Fields{
+		"ID":            id.String(),
+		"VolumeGroupID": volumeGroupID.String(),
+	}
+
+	logrus.WithFields(logFields).Info("GetLv")
+
+	return metadata, nil
+}
+
+// GetPhysicalVolume : gets physical volume
+func (e *endpoints) GetPhysicalVolume(ctx context.Context, in *api.BlockPhysicalVolumeRequest) (*api.PhysicalVolumeMetadata, error) {
+	metadata, pvErr := getPv(in.DeviceName)
+
+	if pvErr != nil {
+		return nil, api.ProtoError(pvErr)
+	}
+
+	if metadata == nil {
+		err := status.Error(codes.NotFound, "invalid_physical_volume")
+
+		return nil, api.ProtoError(err)
+	}
+
+	logrus.WithFields(logrus.Fields{"DeviceName": in.DeviceName}).Info("GetPv")
+
+	return metadata, nil
+}
+
+// GetVolumeGroup : gets volume group
+func (e *endpoints) GetVolumeGroup(ctx context.Context, in *api.BlockVolumeGroupRequest) (*api.VolumeGroupMetadata, error) {
+	id, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	vg, err := getVg(id)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	metadata := &api.VolumeGroupMetadata{
+		VgName:    vg.VgName,
+		PvCount:   vg.PvCount,
+		LvCount:   vg.LvCount,
+		SnapCount: vg.SnapCount,
+		VgAttr:    vg.VgAttr,
+		VgSize:    vg.VgSize,
+		VgFree:    vg.VgFree,
+	}
+
+	logrus.WithFields(logrus.Fields{"ID": id.String()}).Info("GetVg")
+
+	return metadata, nil
+}
+
+// NewLogicalVolume : creates logical volume
+func (e *endpoints) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogicalVolumeRequest) (*api.LogicalVolumeMetadata, error) {
+	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	id, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	lv, err := newLv(volumeGroupID, id, in.Size)
+
+	if err != nil {
+		return nil, err
+	}
+
+	metadata := &api.LogicalVolumeMetadata{
+		LvName:          lv.LvName,
+		VgName:          lv.VgName,
+		LvAttr:          lv.LvAttr,
+		LvSize:          lv.LvSize,
+		PoolLv:          lv.PoolLv,
+		Origin:          lv.Origin,
+		DataPercent:     lv.DataPercent,
+		MetadataPercent: lv.MetadataPercent,
+		MovePv:          lv.MovePv,
+		MirrorLog:       lv.MirrorLog,
+		CopyPercent:     lv.CopyPercent,
+		ConvertLv:       lv.ConvertLv,
+	}
+
+	logFields := logrus.Fields{
+		"ID":            id.String(),
+		"Size":          in.Size,
+		"VolumeGroupID": volumeGroupID.String(),
+	}
+
+	logrus.WithFields(logFields).Info("NewLv")
+
+	return metadata, nil
+}
+
+// NewPhysicalVolume : creates physical volume
+func (e *endpoints) NewPhysicalVolume(ctx context.Context, in *api.BlockPhysicalVolumeRequest) (*api.PhysicalVolumeMetadata, error) {
+	pv, err := newPv(in.DeviceName)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	metadata := &api.PhysicalVolumeMetadata{
+		PvName: pv.PvName,
+		VgName: pv.VgName,
+		PvFmt:  pv.PvFmt,
+		PvAttr: pv.PvAttr,
+		PvSize: pv.PvSize,
+		PvFree: pv.PvFree,
+	}
+
+	logrus.WithFields(logrus.Fields{"DeviceName": in.DeviceName}).Info("NewPv")
+
+	return metadata, nil
+}
+
+// NewVolumeGroup : creates volume group
+func (e *endpoints) NewVolumeGroup(ctx context.Context, in *api.BlockNewVolumeGroupRequest) (*api.VolumeGroupMetadata, error) {
+	id, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	vg, err := newVg(in.DeviceName, id)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	metadata := &api.VolumeGroupMetadata{
+		VgName:    vg.VgName,
+		PvCount:   vg.PvCount,
+		LvCount:   vg.LvCount,
+		SnapCount: vg.SnapCount,
+		VgAttr:    vg.VgAttr,
+		VgSize:    vg.VgSize,
+		VgFree:    vg.VgFree,
+	}
+
+	logrus.WithFields(logrus.Fields{"ID": id.String()}).Info("NewVg")
+
+	return metadata, nil
+}
+
+// RemoveLogicalVolume : removes logical volume
+func (e *endpoints) RemoveLogicalVolume(ctx context.Context, in *api.BlockLogicalVolumeRequest) (*api.SuccessStatusResponse, error) {
+	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	id, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	rmErr := removeLv(volumeGroupID, id)
+
+	if rmErr != nil {
+		return nil, api.ProtoError(rmErr)
+	}
+
+	status := &api.SuccessStatusResponse{Success: true}
+
+	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveLv")
+
+	return status, nil
+}
+
+// RemovePhysicalVolume : removes physical volume
+func (e *endpoints) RemovePhysicalVolume(ctx context.Context, in *api.BlockPhysicalVolumeRequest) (*api.SuccessStatusResponse, error) {
+	err := removePv(in.DeviceName)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	status := &api.SuccessStatusResponse{Success: true}
+
+	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemovePv")
+
+	return status, nil
+}
+
+// RemoveVolumeGroup : removes volume group
+func (e *endpoints) RemoveVolumeGroup(ctx context.Context, in *api.BlockVolumeGroupRequest) (*api.SuccessStatusResponse, error) {
+	id, err := uuid.Parse(in.ID)
+
+	if err != nil {
+		return nil, api.ProtoError(err)
+	}
+
+	rmErr := removeVg(id)
+
+	if rmErr != nil {
+		return nil, api.ProtoError(rmErr)
+	}
+
+	status := &api.SuccessStatusResponse{Success: true}
+
+	logrus.WithFields(logrus.Fields{"Success": status.Success}).Info("RemoveVg")
+
+	return status, nil
+}
+
+func (e *endpoints) ServiceInit(ctx context.Context, in *api.BlockServiceInitRequest) (*api.BlockServiceInitResponse, error) {
+	initAddr, err := net.ResolveTCPAddr("tcp", in.ServiceAddr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(initAddr.String(), grpc.WithInsecure())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	r := api.NewManagerClient(conn)
+
+	serviceAddr := fmt.Sprintf("%s", e.block.flags.listenServiceAddr.String())
+
+	opts := &api.ManagerServiceInitRequest{
+		ServiceAddr: serviceAddr,
+		ServiceType: api.ServiceType_BLOCK,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	init, err := r.ServiceInit(ctx, opts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	clusterID, err := uuid.Parse(init.ClusterID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	serviceID, err := uuid.Parse(init.ServiceID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	key := &config.Key{
+		ClusterID: &clusterID,
+		Endpoints: init.Endpoints,
+		ServiceID: &serviceID,
+	}
+
+	saveErr := key.Save(e.block.flags.configDir)
+
+	if saveErr != nil {
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return nil, st.Err()
+	}
+
+	restartErr := e.block.restart(key)
+
+	if restartErr != nil {
+		st := status.New(codes.Internal, restartErr.Error())
+
+		return nil, st.Err()
+	}
+
+	res := &api.BlockServiceInitResponse{
+		ClusterID: clusterID.String(),
+		ServiceID: serviceID.String(),
+	}
+
+	return res, nil
+}
+
+func (e *endpoints) ServiceLeave(ctx context.Context, in *api.BlockServiceLeaveRequest) (*api.SuccessStatusResponse, error) {
+	serviceID, err := uuid.Parse(in.ServiceID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	key, err := e.block.key.Get(e.block.flags.configDir)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if serviceID != *key.ServiceID {
+		st := status.New(codes.PermissionDenied, err.Error())
+
+		return nil, st.Err()
+	}
+
+	leaveErr := e.block.memberlist.Leave(5 * time.Second)
+
+	if leaveErr != nil {
+		st := status.New(codes.Internal, leaveErr.Error())
+
+		return nil, st.Err()
+	}
+
+	shutdownErr := e.block.memberlist.Shutdown()
+
+	if shutdownErr != nil {
+		st := status.New(codes.Internal, shutdownErr.Error())
+
+		return nil, st.Err()
+	}
+
+	logrus.Debug("Block service has left the cluster.")
+
+	res := &api.SuccessStatusResponse{}
+
+	return res, nil
+}

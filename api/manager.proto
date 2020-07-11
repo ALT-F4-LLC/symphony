@@ -4,59 +4,98 @@ option go_package = "github.com/erkrnt/symphony/api";
 
 package api;
 
+import "api/block.proto";
 import "api/generic.proto";
 import "api/service.proto";
 
-service ManagerControl {
-  rpc Init(ManagerControlInitRequest) returns (ManagerControlInitResponse) {}
-  rpc Remove(ManagerControlRemoveRequest) returns (SuccessStatusResponse) {}
+service Manager { 
+  rpc GetLogicalVolume(ManagerLogicalVolumeRequest) returns (LogicalVolume) {}
+  rpc GetPhysicalVolume(ManagerPhysicalVolumeRequest) returns (PhysicalVolume) {}
+  rpc GetService(ManagerServiceRequest) returns (Service) {}
+  rpc GetVolumeGroup(ManagerVolumeGroupRequest) returns (VolumeGroup) {}
+
+  rpc GetLogicalVolumes(ManagerLogicalVolumesRequest) returns (ManagerLogicalVolumesResponse) {}
+  rpc GetPhysicalVolumes(ManagerPhysicalVolumesRequest) returns (ManagerPhysicalVolumesResponse) {}
+  rpc GetServices(ManagerServicesRequest) returns (ManagerServicesResponse) {}
+  rpc GetVolumeGroups(ManagerVolumeGroupsRequest) returns (ManagerVolumeGroupsResponse) {}
+
+  rpc NewLogicalVolume(ManagerNewLogicalVolumeRequest) returns (LogicalVolume) {}
+  rpc NewPhysicalVolume(ManagerNewPhysicalVolumeRequest) returns (PhysicalVolume) {}
+  rpc NewVolumeGroup(ManagerNewVolumeGroupRequest) returns (VolumeGroup) {}
+
+  rpc RemoveLogicalVolume(ManagerLogicalVolumeRequest) returns (SuccessStatusResponse) {}
+  rpc RemovePhysicalVolume(ManagerPhysicalVolumeRequest) returns (SuccessStatusResponse) {}
+  rpc RemoveService(ManagerServiceRequest) returns (SuccessStatusResponse) {}
+  rpc RemoveVolumeGroup(ManagerVolumeGroupRequest) returns (SuccessStatusResponse) {}
+
+  rpc ServiceInit(ManagerServiceInitRequest) returns (ManagerServiceInitResponse) {}
+  rpc ServiceJoin(ManagerServiceJoinRequest) returns (ManagerServiceInitResponse) {}
+  rpc ServiceLeave(ManagerServiceLeaveRequest) returns (SuccessStatusResponse) {}
 }
 
-service ManagerRemote {
-  rpc Init(ManagerRemoteInitRequest) returns (ManagerRemoteInitResponse) {}
-  rpc Join(ManagerRemoteJoinRequest) returns (ManagerRemoteInitResponse) {}
-  rpc Leave(ManagerRemoteLeaveRequest) returns (SuccessStatusResponse) {}
-  rpc Remove(ManagerRemoteRemoveRequest) returns (SuccessStatusResponse) {}
+message ManagerLogicalVolumeRequest { string ID = 1; }
+
+message ManagerLogicalVolumesRequest {}
+
+message ManagerLogicalVolumesResponse {
+  repeated LogicalVolume Results = 1;
 }
 
-// -- CONTROL ENDPOINTS -- //
+message ManagerPhysicalVolumeRequest { string ID = 1; }
 
-message ManagerControlInitRequest {
-  string ServiceAddr = 1;
+message ManagerPhysicalVolumesRequest {}
+
+message ManagerPhysicalVolumesResponse {
+  repeated PhysicalVolume Results = 1;
 }
-message ManagerControlInitResponse {
-  string ClusterID = 1;
+
+message ManagerVolumeGroupRequest { string ID = 1; }
+
+message ManagerVolumeGroupsRequest {}
+
+message ManagerVolumeGroupsResponse {
+  repeated VolumeGroup Results = 1;
+}
+
+message ManagerNewLogicalVolumeRequest {
+  int64 Size = 1;
+  string VolumeGroupID = 2;
+}
+
+message ManagerNewPhysicalVolumeRequest {
+  string DeviceName = 1;
   string ServiceID = 2;
 }
 
-message ManagerControlLeaveRequest {}
+message ManagerNewVolumeGroupRequest {
+  string PhysicalVolumeID = 1;
+}
 
-message ManagerControlRemoveRequest {
+message ManagerServiceRequest {
   string ServiceID = 1;
 }
 
-// -- REMOTE ENDPOINTS -- //
+message ManagerServicesRequest {}
 
-message ManagerRemoteInitRequest {
+message ManagerServicesResponse {
+  repeated Service Results = 1;
+}
+
+message ManagerServiceInitRequest {
   string ServiceAddr = 1;
   ServiceType ServiceType = 2;
 }
-message ManagerRemoteInitResponse {
+
+message ManagerServiceInitResponse {
   string ClusterID = 1;
   repeated string Endpoints = 3;
   string GossipAddr = 2;
   string ServiceID = 4;
 }
 
-message ManagerRemoteJoinRequest {
+message ManagerServiceJoinRequest {
   string ClusterID = 1;
   string ServiceID = 2;
 }
 
-message ManagerRemoteLeaveRequest {
-  string ServiceID = 1;
-}
-
-message ManagerRemoteRemoveRequest {
-  string ServiceID = 1;
-}
+message ManagerServiceLeaveRequest { string ServiceID = 1; }

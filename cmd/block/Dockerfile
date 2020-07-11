@@ -28,13 +28,13 @@ COPY ./internal/pkg/config ./internal/pkg/config
 
 COPY ./internal/pkg/gossip ./internal/pkg/gossip
 
-COPY ./internal/pkg/schema ./internal/pkg/schema
-
 RUN go install -v ./...
 
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
+
+RUN apk add --no-cache lvm2
 
 WORKDIR /usr/local/bin
 

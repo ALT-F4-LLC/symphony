@@ -6,33 +6,11 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/sirupsen/logrus"
 )
 
-// ManagerInit : handle the "init" command
-func ManagerInit(serviceAddr *string, socket *string) {
-	conn := NewConnControl(socket)
-
-	defer conn.Close()
-
-	c := api.NewManagerControlClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	opts := &api.ManagerControlInitRequest{
-		ServiceAddr: *serviceAddr,
-	}
-
-	_, initErr := c.Init(ctx, opts)
-
-	if initErr != nil {
-		log.Fatal(initErr)
-	}
-}
-
-// ManagerRemove : handle the "remove" command
-func ManagerRemove(id *string, socket *string) {
+// ManagerRemoveService : handle the "remove" command
+func ManagerRemoveService(id *string, socket *string) {
 	if *id == "" {
 		log.Fatal("invalid_service_id")
 	}
@@ -41,19 +19,399 @@ func ManagerRemove(id *string, socket *string) {
 
 	defer conn.Close()
 
-	c := api.NewManagerControlClient(conn)
+	c := api.NewManagerClient(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	defer cancel()
 
-	opts := &api.ManagerControlRemoveRequest{
+	opts := &api.ManagerServiceRequest{
 		ServiceID: *id,
 	}
 
-	_, removeErr := c.Remove(ctx, opts)
+	res, err := c.RemoveService(ctx, opts)
 
-	if removeErr != nil {
-		log.Fatal(removeErr)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	logrus.Info(res)
+}
+
+// ManagerServiceInit : handle the "init" command
+func ManagerServiceInit(socket *string) {
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerServiceInitRequest{}
+
+	res, err := c.ServiceInit(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	logrus.Info(res)
+}
+
+// ManagerServiceList : handle the "init" command
+func ManagerServiceList(socket *string) {
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerServicesRequest{}
+
+	res, initErr := c.GetServices(ctx, opts)
+
+	if initErr != nil {
+		log.Fatal(initErr)
+	}
+
+	logrus.Info(res.Results)
+}
+
+// ManagerGetLogicalVolume : gets logical volume
+func ManagerGetLogicalVolume(id *string, socket *string) {
+	if *id == "" || *socket == "" {
+		log.Fatal("invalid_parameters")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerLogicalVolumeRequest{ID: *id}
+
+	lv, err := c.GetLogicalVolume(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*lv)
+}
+
+// ManagerGetPhysicalVolume : gets physical volume
+func ManagerGetPhysicalVolume(id *string, socket *string) {
+	if *id == "" {
+		log.Fatal("invalid_device_parameter")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerPhysicalVolumeRequest{ID: *id}
+
+	pv, err := c.GetPhysicalVolume(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(pv)
+}
+
+// ManagerGetVolumeGroup : gets volume group
+func ManagerGetVolumeGroup(id *string, socket *string) {
+	if *id == "" || *socket == "" {
+		log.Fatal("invalid_parameters")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerVolumeGroupRequest{ID: *id}
+
+	vg, err := c.GetVolumeGroup(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*vg)
+}
+
+// ManagerListLogicalVolumes : gets all logical volumes
+func ManagerListLogicalVolumes(socket *string) {
+	if *socket == "" {
+		log.Fatal("invalid_parameters")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerLogicalVolumesRequest{}
+
+	lvs, err := c.GetLogicalVolumes(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*lvs)
+}
+
+// ManagerListPhysicalVolumes : gets all logical volumes
+func ManagerListPhysicalVolumes(socket *string) {
+	if *socket == "" {
+		log.Fatal("invalid_parameters")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerPhysicalVolumesRequest{}
+
+	pvs, err := c.GetPhysicalVolumes(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*pvs)
+}
+
+// ManagerListVolumeGroups : gets all logical volumes
+func ManagerListVolumeGroups(socket *string) {
+	if *socket == "" {
+		log.Fatal("invalid_parameters")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerVolumeGroupsRequest{}
+
+	vgs, err := c.GetVolumeGroups(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*vgs)
+}
+
+// ManagerNewLogicalVolume : handles creation of new logical volume
+func ManagerNewLogicalVolume(size *int64, volumeGroupID *string, socket *string) {
+	if *size == 0 || *volumeGroupID == "" || *socket == "" {
+		log.Fatal("invalid_parameters")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerNewLogicalVolumeRequest{
+		Size:          *size,
+		VolumeGroupID: *volumeGroupID,
+	}
+
+	lv, err := c.NewLogicalVolume(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*lv)
+}
+
+// ManagerNewPhysicalVolume : handles creation of new physical volume
+func ManagerNewPhysicalVolume(deviceName *string, serviceID *string, socket *string) {
+	if *deviceName == "" || *serviceID == "" || *socket == "" {
+		log.Fatal("invalid_device_parameter")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerNewPhysicalVolumeRequest{
+		DeviceName: *deviceName,
+		ServiceID:  *serviceID,
+	}
+
+	pv, err := c.NewPhysicalVolume(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*pv)
+}
+
+// ManagerNewVolumeGroup : handles creation of new volume group
+func ManagerNewVolumeGroup(physicalVolumeID *string, socket *string) {
+	if *physicalVolumeID == "" || *socket == "" {
+		log.Fatal("invalid_parameters")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerNewVolumeGroupRequest{
+		PhysicalVolumeID: *physicalVolumeID,
+	}
+
+	vg, err := c.NewVolumeGroup(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*vg)
+}
+
+// ManagerRemoveLogicalVolume : removes logical volume
+func ManagerRemoveLogicalVolume(id *string, socket *string) {
+	if *id == "" || *socket == "" {
+		log.Fatal("invalid_parameters")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerLogicalVolumeRequest{ID: *id}
+
+	lv, err := c.RemoveLogicalVolume(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*lv)
+}
+
+// ManagerRemovePhysicalVolume : removes physical volume
+func ManagerRemovePhysicalVolume(id *string, socket *string) {
+	if *id == "" || *socket == "" {
+		log.Fatal("invalid_parameter")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerPhysicalVolumeRequest{ID: *id}
+
+	pv, err := c.RemovePhysicalVolume(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*pv)
+}
+
+// ManagerRemoveVolumeGroup : removes volume group
+func ManagerRemoveVolumeGroup(id *string, socket *string) {
+	if *id == "" || *socket == "" {
+		log.Fatal("invalid_parameter")
+	}
+
+	conn := NewConnControl(socket)
+
+	defer conn.Close()
+
+	c := api.NewManagerClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	defer cancel()
+
+	opts := &api.ManagerVolumeGroupRequest{ID: *id}
+
+	vg, err := c.RemoveVolumeGroup(ctx, opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print(*vg)
 }

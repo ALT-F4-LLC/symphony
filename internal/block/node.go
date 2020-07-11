@@ -61,11 +61,11 @@ func (b *Block) listenControl() {
 
 	s := grpc.NewServer()
 
-	cs := &controlServer{
+	cs := &endpoints{
 		block: b,
 	}
 
-	api.RegisterBlockControlServer(s, cs)
+	api.RegisterBlockServer(s, cs)
 
 	logrus.Info("Started block control gRPC socket server.")
 
@@ -85,11 +85,11 @@ func (b *Block) listenRemote() {
 
 	s := grpc.NewServer()
 
-	server := &remoteServer{
+	server := &endpoints{
 		block: b,
 	}
 
-	api.RegisterBlockRemoteServer(s, server)
+	api.RegisterBlockServer(s, server)
 
 	logrus.Info("Started block remote gRPC tcp server.")
 
@@ -119,18 +119,18 @@ func (b *Block) restart(key *config.Key) error {
 
 		defer conn.Close()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 		defer cancel()
 
-		r := api.NewManagerRemoteClient(conn)
+		r := api.NewManagerClient(conn)
 
-		opts := &api.ManagerRemoteJoinRequest{
+		opts := &api.ManagerServiceJoinRequest{
 			ClusterID: key.ClusterID.String(),
 			ServiceID: key.ServiceID.String(),
 		}
 
-		join, err := r.Join(ctx, opts)
+		join, err := r.ServiceJoin(ctx, opts)
 
 		if err != nil {
 			logrus.Debug("Restart join failed to remote peer... skipping.")
