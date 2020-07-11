@@ -48,34 +48,24 @@ $ docker-compose up -d
 
 ```
 $ docker-compose exec manager_01 cli --socket="/config/control.sock" manager init
-$ docker-compose exec manager_02 cli --socket="/config/control.sock" manager init manager_01:15760
-$ docker-compose exec manager_03 cli --socket="/config/control.sock" manager init manager_01:15760
+$ docker-compose exec manager_02 cli --socket="/config/control.sock" manager init
+$ docker-compose exec manager_03 cli --socket="/config/control.sock" manager init
 ```
 
 #### Initialize the block service:
 
 ```
-$ docker-compose exec block_01 cli --socket="/config/control.sock" block init manager_01:15760
+$ docker-compose exec block_01 cli --socket="/config/control.sock" block init localhost:15760
 ```
 
-#### Check etcd for cluster state:
+#### Check for services:
 
 ```
-docker-compose exec etcd_01 etcdctl \
---endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379" \
-get /cluster
-```
-
-#### Check etcd for service state:
-
-```
-docker-compose exec etcd_01 etcdctl \
---endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379" \
-get /service --prefix
+docker-compose exec manager_01 cli --socket="/config/control.sock" manager service list
 ```
 
 #### Remove a cloud service:
 
 ```
-docker-compose exec manager_01 cli --socket="/config/control.sock" manager remove <service-id>
+docker-compose exec manager_01 cli --socket="/config/control.sock" manager service remove <service-id>
 ```
