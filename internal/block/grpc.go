@@ -3,7 +3,6 @@ package block
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -180,7 +179,7 @@ func (e *endpoints) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogica
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	defer file.Close()
