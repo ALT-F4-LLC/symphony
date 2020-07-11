@@ -34,7 +34,7 @@ FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
-RUN apk add --no-cache lvm2
+RUN apk add --no-cache iscsitarget iscsitarget-grsec lvm2
 
 WORKDIR /usr/local/bin
 
