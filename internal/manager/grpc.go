@@ -108,7 +108,19 @@ func (s *endpoints) GetLogicalVolume(ctx context.Context, in *api.ManagerLogical
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+	member, err := s.manager.getMemberFromService(service)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if member == nil {
+		st := status.New(codes.Unavailable, "service_offline")
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
 
 	if err != nil {
 		return nil, err
@@ -205,7 +217,19 @@ func (s *endpoints) GetPhysicalVolume(ctx context.Context, in *api.ManagerPhysic
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+	member, err := s.manager.getMemberFromService(service)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if member == nil {
+		st := status.New(codes.Unavailable, "service_offline")
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
 
 	if err != nil {
 		return nil, err
@@ -371,7 +395,19 @@ func (s *endpoints) GetVolumeGroup(ctx context.Context, in *api.ManagerVolumeGro
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+	member, err := s.manager.getMemberFromService(service)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if member == nil {
+		st := status.New(codes.Unavailable, "service_offline")
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
 
 	if err != nil {
 		return nil, err
@@ -489,7 +525,19 @@ func (s *endpoints) NewLogicalVolume(ctx context.Context, in *api.ManagerNewLogi
 		return nil, st.Err()
 	}
 
-	newLvAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+	member, err := s.manager.getMemberFromService(service)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if member == nil {
+		st := status.New(codes.Unavailable, "service_offline")
+
+		return nil, st.Err()
+	}
+
+	newLvAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
 
 	if err != nil {
 		return nil, err
@@ -581,7 +629,19 @@ func (s *endpoints) NewPhysicalVolume(ctx context.Context, in *api.ManagerNewPhy
 		return nil, st.Err()
 	}
 
-	newPvAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+	member, err := s.manager.getMemberFromService(service)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if member == nil {
+		st := status.New(codes.Unavailable, "service_offline")
+
+		return nil, st.Err()
+	}
+
+	newPvAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
 
 	if err != nil {
 		return nil, err
@@ -671,7 +731,19 @@ func (s *endpoints) NewVolumeGroup(ctx context.Context, in *api.ManagerNewVolume
 		return nil, st.Err()
 	}
 
-	newVgAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+	member, err := s.manager.getMemberFromService(service)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if member == nil {
+		st := status.New(codes.Unavailable, "service_offline")
+
+		return nil, st.Err()
+	}
+
+	newVgAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
 
 	if err != nil {
 		return nil, err
@@ -811,7 +883,19 @@ func (s *endpoints) RemoveLogicalVolume(ctx context.Context, in *api.ManagerLogi
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+	member, err := s.manager.getMemberFromService(service)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if member == nil {
+		st := status.New(codes.Unavailable, "service_offline")
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
 
 	if err != nil {
 		return nil, err
@@ -913,7 +997,25 @@ func (s *endpoints) RemovePhysicalVolume(ctx context.Context, in *api.ManagerPhy
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+	if service == nil {
+		st := status.New(codes.NotFound, "invalid_service_id")
+
+		return nil, st.Err()
+	}
+
+	member, err := s.manager.getMemberFromService(service)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if member == nil {
+		st := status.New(codes.Unavailable, "service_offline")
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
 
 	if err != nil {
 		return nil, err
@@ -1046,7 +1148,25 @@ func (s *endpoints) RemoveVolumeGroup(ctx context.Context, in *api.ManagerVolume
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", service.Addr)
+	if service == nil {
+		st := status.New(codes.NotFound, "invalid_service_id")
+
+		return nil, st.Err()
+	}
+
+	member, err := s.manager.getMemberFromService(service)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if member == nil {
+		st := status.New(codes.Unavailable, "service_offline")
+
+		return nil, st.Err()
+	}
+
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
 
 	if err != nil {
 		return nil, err

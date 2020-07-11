@@ -348,6 +348,28 @@ func (m *Manager) getServiceByID(id uuid.UUID) (*api.Service, error) {
 	return service, nil
 }
 
+func (m *Manager) getMemberFromService(service *api.Service) (*gossip.Member, error) {
+	var member *gossip.Member
+
+	members := m.memberlist.Members()
+
+	for _, m := range members {
+		var metadata *gossip.Member
+
+		if err := json.Unmarshal(m.Meta, &metadata); err != nil {
+			st := status.New(codes.InvalidArgument, err.Error())
+
+			return nil, st.Err()
+		}
+
+		if service.ID == metadata.ServiceID {
+			member = metadata
+		}
+	}
+
+	return member, nil
+}
+
 func (m *Manager) getStateByKey(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
 	etcd, err := clientv3.New(clientv3.Config{
 		Endpoints:   m.flags.etcdEndpoints,
@@ -664,7 +686,7 @@ func (m *Manager) restart(key *config.Key) error {
 
 						logrus.WithFields(fields).Debug("Restart dial failed... waiting for next attempt.")
 
-						time.Sleep(5 * time.Second)
+						time.Sleep(15 * time.Second)
 
 						continue
 					}
@@ -689,7 +711,7 @@ func (m *Manager) restart(key *config.Key) error {
 
 						logrus.WithFields(fields).Debug("Restart join failed... waiting for next attempt.")
 
-						time.Sleep(5 * time.Second)
+						time.Sleep(15 * time.Second)
 
 						continue
 					}
