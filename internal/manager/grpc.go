@@ -561,13 +561,13 @@ func (s *endpoints) NewLogicalVolume(ctx context.Context, in *api.ManagerNewLogi
 		VolumeGroupID: vg.ID,
 	}
 
-	metadata, err := peer.NewLogicalVolume(ctx, opts)
+	res, err := peer.NewLogicalVolume(ctx, opts)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if metadata == nil {
+	if res.Metadata == nil {
 		st := status.New(codes.NotFound, "invalid_metadata")
 
 		return nil, st.Err()
@@ -576,6 +576,7 @@ func (s *endpoints) NewLogicalVolume(ctx context.Context, in *api.ManagerNewLogi
 	lv := &api.LogicalVolume{
 		ID:            opts.ID,
 		Size:          opts.Size,
+		TargetAddr:    res.TargetAddr,
 		VolumeGroupID: opts.VolumeGroupID,
 	}
 
@@ -585,7 +586,7 @@ func (s *endpoints) NewLogicalVolume(ctx context.Context, in *api.ManagerNewLogi
 		return nil, saveErr
 	}
 
-	lv.Metadata = metadata
+	lv.Metadata = res.Metadata
 
 	return lv, nil
 }

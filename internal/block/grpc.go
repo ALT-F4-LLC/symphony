@@ -3,7 +3,11 @@ package block
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
+	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/erkrnt/symphony/api"
@@ -17,6 +21,20 @@ import (
 
 type endpoints struct {
 	block *Block
+}
+
+const configTemplate = `
+<target %s>
+  backing-store %s
+  initiator-address %s
+</target>`
+
+func reverse(ss []string) {
+	last := len(ss) - 1
+
+	for i := 0; i < len(ss)/2; i++ {
+		ss[i], ss[last-i] = ss[last-i], ss[i]
+	}
 }
 
 // GetLogicalVolume : gets logical volume metadata from block host
@@ -118,7 +136,7 @@ func (e *endpoints) GetVolumeGroup(ctx context.Context, in *api.BlockVolumeGroup
 }
 
 // NewLogicalVolume : creates logical volume
-func (e *endpoints) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogicalVolumeRequest) (*api.LogicalVolumeMetadata, error) {
+func (e *endpoints) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogicalVolumeRequest) (*api.BlockNewLogicalVolumeResponse, error) {
 	volumeGroupID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -135,6 +153,50 @@ func (e *endpoints) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogica
 
 	if err != nil {
 		return nil, err
+	}
+
+	// TODO : get the image and burn into volume
+
+	currentTime := time.Now()
+
+	backingStore := fmt.Sprintf("/dev/%s/%s", volumeGroupID.String(), id.String())
+
+	targetAddrDate := fmt.Sprintf("%d-%02d", currentTime.Year(), currentTime.Month())
+
+	targetIPAddrString := e.block.flags.listenServiceAddr.IP.String()
+
+	targetIPAddrArray := strings.Split(targetIPAddrString, ".")
+
+	reverse(targetIPAddrArray)
+
+	targetIPAddrFQN := strings.Join(targetIPAddrArray, ".")
+
+	targetAddr := fmt.Sprintf("iqn.%s.%s.in-addr.arpa:%s", targetAddrDate, targetIPAddrFQN, id.String())
+
+	config := fmt.Sprintf(configTemplate, targetAddr, backingStore, e.block.flags.listenServiceAddr.IP.String())
+
+	path := fmt.Sprintf("/etc/tgt/conf.d/%s.conf", id.String())
+
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer file.Close()
+
+	data := []byte(config)
+
+	_, writeErr := file.Write(data)
+
+	if writeErr != nil {
+		return nil, writeErr
+	}
+
+	_, tgtErr := exec.Command("tgt-admin", "--update", "ALL").Output()
+
+	if tgtErr != nil {
+		return nil, tgtErr
 	}
 
 	metadata := &api.LogicalVolumeMetadata{
@@ -160,7 +222,12 @@ func (e *endpoints) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogica
 
 	logrus.WithFields(logFields).Info("NewLv")
 
-	return metadata, nil
+	res := &api.BlockNewLogicalVolumeResponse{
+		Metadata:   metadata,
+		TargetAddr: targetAddr,
+	}
+
+	return res, nil
 }
 
 // NewPhysicalVolume : creates physical volume
@@ -226,6 +293,20 @@ func (e *endpoints) RemoveLogicalVolume(ctx context.Context, in *api.BlockLogica
 
 	if err != nil {
 		return nil, api.ProtoError(err)
+	}
+
+	path := fmt.Sprintf("/etc/tgt/conf.d/%s.conf", id.String())
+
+	removeTgtConfigErr := os.Remove(path)
+
+	if removeTgtConfigErr != nil {
+		return nil, removeTgtConfigErr
+	}
+
+	_, tgtErr := exec.Command("tgt-admin", "--update", "ALL").Output()
+
+	if tgtErr != nil {
+		return nil, tgtErr
 	}
 
 	rmErr := removeLv(volumeGroupID, id)

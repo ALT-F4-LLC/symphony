@@ -11,10 +11,10 @@ service Block {
   rpc GetPhysicalVolume(BlockPhysicalVolumeRequest) returns (PhysicalVolumeMetadata) {}
   rpc GetVolumeGroup(BlockVolumeGroupRequest) returns (VolumeGroupMetadata) {}
 
-  rpc NewLogicalVolume(BlockNewLogicalVolumeRequest) returns (LogicalVolumeMetadata) {}
+  rpc NewLogicalVolume(BlockNewLogicalVolumeRequest) returns (BlockNewLogicalVolumeResponse) {}
   rpc NewPhysicalVolume(BlockPhysicalVolumeRequest) returns (PhysicalVolumeMetadata) {}
   rpc NewVolumeGroup(BlockNewVolumeGroupRequest) returns (VolumeGroupMetadata) {}
-  
+
   rpc RemoveLogicalVolume(BlockLogicalVolumeRequest) returns (SuccessStatusResponse) {}
   rpc RemovePhysicalVolume(BlockPhysicalVolumeRequest) returns (SuccessStatusResponse) {}
   rpc RemoveVolumeGroup(BlockVolumeGroupRequest) returns (SuccessStatusResponse) {}
@@ -45,6 +45,11 @@ message BlockNewLogicalVolumeRequest {
   string VolumeGroupID = 3;
 }
 
+message BlockNewLogicalVolumeResponse {
+  LogicalVolumeMetadata Metadata = 1;
+  string TargetAddr = 2;
+}
+
 message BlockNewVolumeGroupRequest {
   string DeviceName = 1;
   string ID = 2;
@@ -54,7 +59,8 @@ message LogicalVolume {
   string ID = 1;
   LogicalVolumeMetadata Metadata = 2;
   int64 Size = 3;
-  string VolumeGroupID = 4;
+  string TargetAddr = 4;
+  string VolumeGroupID = 5;
 }
 
 message PhysicalVolume {

@@ -126,6 +126,7 @@ func removeLv(volumeGroupID uuid.UUID, id uuid.UUID) error {
 
 	if exists == nil {
 		err := status.Error(codes.NotFound, "lv not found")
+
 		return err
 	}
 
