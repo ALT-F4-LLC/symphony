@@ -11,6 +11,7 @@ import (
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/erkrnt/symphony/internal/pkg/gossip"
+	"github.com/erkrnt/symphony/internal/pkg/state"
 	"github.com/google/uuid"
 	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
@@ -24,10 +25,19 @@ import (
 type Manager struct {
 	ErrorC chan string
 
-	flags      *flags
-	key        *config.Key
-	memberlist *memberlist.Memberlist
+	flags          *flags
+	key            *config.Key
+	memberlist     *memberlist.Memberlist
+	watchers       []string
+	watchersReady  []string
+	watchersReadyC chan struct{}
 }
+
+var (
+	ETCD_DIAL_TIMEOUT    = 5 * time.Second
+	ETCD_WATCH_KEYS      = []string{"logicalvolume:assigned/*", "logicalvolume:unassigned/*"}
+	GRPC_CONTEXT_TIMEOUT = 5 * time.Second
+)
 
 // Start : handles start of manager service
 func (m *Manager) Start() {
@@ -45,9 +55,30 @@ func (m *Manager) Start() {
 		}
 	}
 
+	for _, key := range m.watchers {
+		go m.startWatcherForKey(key)
+	}
+
+	<-m.watchersReadyC
+
 	go m.listenControl()
 
 	go m.listenRemote()
+}
+
+func (m *Manager) startWatcherForKey(key string) {
+	// TODO : setup watch for state in etcd
+
+	// NewLogicalVolume -> "logicalvolume:unassigned/*" -> Manager (watcher update) -> Begin scheduling
+
+	// watch "logicalvolume:assigned/*" === lvAssignedC
+	// watch "logicalvolume:unassigned/*" === lvUnassignedC
+
+	m.watchersReady = append(m.watchersReady, key)
+
+	if len(m.watchersReady) == len(m.watchers) {
+		m.watchersReadyC <- struct{}{}
+	}
 }
 
 func (m *Manager) listenControl() {
@@ -371,22 +402,24 @@ func (m *Manager) getMemberFromService(service *api.Service) (*gossip.Member, er
 }
 
 func (m *Manager) getStateByKey(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: ETCD_DIAL_TIMEOUT,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return nil, err
 	}
 
-	defer etcd.Close()
+	defer client.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	results, err := etcd.Get(ctx, key, opts...)
+	results, err := client.Get(ctx, key, opts...)
 
 	if err != nil {
 		return nil, err
@@ -557,9 +590,9 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	grpcCtx, grpcCancel := context.WithTimeout(context.Background(), GRPC_CONTEXT_TIMEOUT)
 
-	defer cancel()
+	defer grpcCancel()
 
 	if service.Type == api.ServiceType_BLOCK.String() {
 		peer := api.NewBlockClient(conn)
@@ -568,7 +601,7 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 			ServiceID: service.ID,
 		}
 
-		_, err := peer.ServiceLeave(ctx, opts)
+		_, err := peer.ServiceLeave(grpcCtx, opts)
 
 		if err != nil {
 			return nil, err
@@ -582,7 +615,7 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 			ServiceID: service.ID,
 		}
 
-		_, err := peer.ServiceLeave(ctx, opts)
+		_, err := peer.ServiceLeave(grpcCtx, opts)
 
 		if err != nil {
 			return nil, err
@@ -591,10 +624,22 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 
 	serviceKey := fmt.Sprintf("/service/%s", service.ID)
 
-	etcd, err := clientv3.New(clientv3.Config{
+	clientCtx, clientCancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+
+	defer clientCancel()
+
+	config := clientv3.Config{
+		DialTimeout: ETCD_DIAL_TIMEOUT,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer client.Close()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -602,9 +647,9 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 		return nil, st.Err()
 	}
 
-	defer etcd.Close()
+	defer client.Close()
 
-	_, delErr := etcd.Delete(ctx, serviceKey)
+	_, delErr := client.Delete(clientCtx, serviceKey)
 
 	if delErr != nil {
 		st := status.New(codes.Internal, delErr.Error())
@@ -691,7 +736,7 @@ func (m *Manager) restart(key *config.Key) error {
 						continue
 					}
 
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					ctx, cancel := context.WithTimeout(context.Background(), GRPC_CONTEXT_TIMEOUT)
 
 					defer cancel()
 
@@ -732,20 +777,22 @@ func (m *Manager) restart(key *config.Key) error {
 }
 
 func (m *Manager) saveCluster(cluster *api.Cluster) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: ETCD_DIAL_TIMEOUT,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	clusterJSON, err := json.Marshal(cluster)
 
@@ -753,7 +800,7 @@ func (m *Manager) saveCluster(cluster *api.Cluster) error {
 		return err
 	}
 
-	_, putErr := etcd.Put(ctx, "/cluster", string(clusterJSON))
+	_, putErr := client.Put(ctx, "/cluster", string(clusterJSON))
 
 	if putErr != nil {
 		return err
@@ -763,20 +810,22 @@ func (m *Manager) saveCluster(cluster *api.Cluster) error {
 }
 
 func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: ETCD_DIAL_TIMEOUT,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	lvJSON, err := json.Marshal(lv)
 
@@ -786,7 +835,7 @@ func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
 
 	lvKey := fmt.Sprintf("/logicalvolume/%s", lv.ID)
 
-	_, putErr := etcd.Put(ctx, lvKey, string(lvJSON))
+	_, putErr := client.Put(ctx, lvKey, string(lvJSON))
 
 	if putErr != nil {
 		return err
@@ -796,20 +845,22 @@ func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
 }
 
 func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: ETCD_DIAL_TIMEOUT,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	pvJSON, err := json.Marshal(pv)
 
@@ -819,7 +870,7 @@ func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
 
 	volumeKey := fmt.Sprintf("/physicalvolume/%s", pv.ID)
 
-	_, putErr := etcd.Put(ctx, volumeKey, string(pvJSON))
+	_, putErr := client.Put(ctx, volumeKey, string(pvJSON))
 
 	if putErr != nil {
 		return err
@@ -829,20 +880,22 @@ func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
 }
 
 func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: ETCD_DIAL_TIMEOUT,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	vgJSON, err := json.Marshal(vg)
 
@@ -852,7 +905,7 @@ func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
 
 	volumeKey := fmt.Sprintf("/volumegroup/%s", vg.ID)
 
-	_, putErr := etcd.Put(ctx, volumeKey, string(vgJSON))
+	_, putErr := client.Put(ctx, volumeKey, string(vgJSON))
 
 	if putErr != nil {
 		return err
@@ -862,20 +915,22 @@ func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
 }
 
 func (m *Manager) saveService(service *api.Service) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: ETCD_DIAL_TIMEOUT,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	serviceKey := fmt.Sprintf("/service/%s", service.ID)
 
@@ -885,7 +940,7 @@ func (m *Manager) saveService(service *api.Service) error {
 		return err
 	}
 
-	_, putErr := etcd.Put(ctx, serviceKey, string(serviceJSON))
+	_, putErr := client.Put(ctx, serviceKey, string(serviceJSON))
 
 	if putErr != nil {
 		return err
@@ -896,10 +951,6 @@ func (m *Manager) saveService(service *api.Service) error {
 
 // New : creates a new manager
 func New() (*Manager, error) {
-	errorC := make(chan string)
-
-	key := &config.Key{}
-
 	flags, err := getFlags()
 
 	if err != nil {
@@ -910,11 +961,16 @@ func New() (*Manager, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	manager := &Manager{
-		ErrorC: errorC,
+	key := &config.Key{}
 
-		flags: flags,
-		key:   key,
+	manager := &Manager{
+		ErrorC: make(chan string),
+
+		flags:          flags,
+		key:            key,
+		watchers:       ETCD_WATCH_KEYS,
+		watchersReady:  make([]string, 0),
+		watchersReadyC: make(chan struct{}),
 	}
 
 	return manager, nil
