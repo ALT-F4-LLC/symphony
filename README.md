@@ -1,6 +1,6 @@
 # symphony
 
-An open-source cloud platform written in Go, heavily inspired from existing orchestrators (Docker Swarm, Kubernetes, OpenStack, tc) and developed weekly live at [The Alt-F4 Stream](https://www.google.com "The Alt-F4 Stream") on Twitch.
+An open-source cloud platform written in Go, heavily inspired from existing orchestrators (Docker Swarm, Kubernetes, OpenStack, tc) and developed weekly live at [The Alt-F4 Stream](https://www.twitch.tv/thealtf4stream "The Alt-F4 Stream") on Twitch.
 
 > NOTE: All documentation below is a WIP (work-in-progress) which is subject to change at any time and is mostly conceptual for development purposes.
 
