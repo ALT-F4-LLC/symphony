@@ -13,7 +13,7 @@ import (
 	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/erkrnt/symphony/internal/pkg/state"
 	"github.com/google/uuid"
-	"github.com/hashicorp/memberlist"
+	"github.com/hashicorp/serf/serf"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
@@ -34,14 +34,14 @@ type Manager struct {
 
 	flags          *flags
 	key            *config.Key
-	memberlist     *memberlist.Memberlist
+	serf           *serf.Serf
 	watchersReady  []string
 	watchersReadyC chan struct{}
 }
 
 var (
 	etcdDialTimeout    = 5 * time.Second
-	etcdWatchKeys      = []string{"logicalvolume:assigned/", "logicalvolume:unassigned/"}
+	etcdWatchResources = []string{"LogicalVolume", "PhysicalVolume", "VolumeGroup"}
 	grpcContextTimeout = 5 * time.Second
 )
 
@@ -96,19 +96,19 @@ func (m *Manager) startWatcherForKey(key string, watcher ResourceWatcher) {
 
 	watcher.UnassignedC = client.Watch(context.Background(), unassignedKey, clientv3.WithPrefix())
 
-	for wresp := range watcher.AssignedC {
-		for _, ev := range wresp.Events {
-			// TODO : handle returned data
-			fmt.Printf("AssignedC: %s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
-		}
-	}
+	/*  for wresp := range watcher.AssignedC { */
+	// for _, ev := range wresp.Events {
+	// // TODO : handle returned data
+	// fmt.Printf("AssignedC: %s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+	// }
+	// }
 
-	for wresp := range watcher.UnassignedC {
-		for _, ev := range wresp.Events {
-			// TODO : handle returned data
-			fmt.Printf("UnassignedC: %s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
-		}
-	}
+	// for wresp := range watcher.UnassignedC {
+	// for _, ev := range wresp.Events {
+	// // TODO : handle returned data
+	// fmt.Printf("UnassignedC: %s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+	// }
+	// }
 
 	// NewLogicalVolume -> "logicalvolume:unassigned/*" -> Manager (watcher update) -> Begin scheduling
 
@@ -117,8 +117,10 @@ func (m *Manager) startWatcherForKey(key string, watcher ResourceWatcher) {
 
 	m.watchersReady = append(m.watchersReady, key)
 
-	if len(m.watchersReady) == len(etcdWatchKeys) {
+	if len(m.watchersReady) == len(etcdWatchResources) {
 		m.watchersReadyC <- struct{}{}
+
+		logrus.Info("Resource watchers registered..")
 	}
 }
 
@@ -423,21 +425,21 @@ func (m *Manager) getServiceByID(id uuid.UUID) (*api.Service, error) {
 func (m *Manager) getMemberFromService(service *api.Service) (*gossip.Member, error) {
 	var member *gossip.Member
 
-	members := m.memberlist.Members()
+	// members := m.serf.Members()
 
-	for _, m := range members {
-		var metadata *gossip.Member
+	// for _, m := range members {
+	// 	var metadata *gossip.Member
 
-		if err := json.Unmarshal(m.Meta, &metadata); err != nil {
-			st := status.New(codes.InvalidArgument, err.Error())
+	// 	// if err := json.Unmarshal(m.Tags, &metadata); err != nil {
+	// 	// 	st := status.New(codes.InvalidArgument, err.Error())
 
-			return nil, st.Err()
-		}
+	// 	// 	return nil, st.Err()
+	// 	// }
 
-		if service.ID == metadata.ServiceID {
-			member = metadata
-		}
-	}
+	// 	if service.ID == metadata.ServiceID {
+	// 		member = metadata
+	// 	}
+	// }
 
 	return member, nil
 }
@@ -574,13 +576,10 @@ func (m *Manager) newService(serviceAddr string, serviceType api.ServiceType) (*
 		}
 	}
 
-	gossipAddr := m.flags.listenGossipAddr
-
 	res := &api.ManagerServiceInitResponse{
-		ClusterID:  cluster.ID,
-		Endpoints:  endpoints,
-		GossipAddr: gossipAddr.String(),
-		ServiceID:  service.ID,
+		ClusterID: cluster.ID,
+		Endpoints: endpoints,
+		ServiceID: service.ID,
 	}
 
 	return res, nil
@@ -720,22 +719,6 @@ func (m *Manager) restart(key *config.Key) error {
 		managerServiceType := api.ServiceType_MANAGER.String()
 
 		if service != nil && service.Type == managerServiceType {
-			gossipMember := &gossip.Member{
-				ServiceAddr: m.flags.listenServiceAddr.String(),
-				ServiceID:   service.ID,
-				ServiceType: service.Type,
-			}
-
-			listenGossipAddr := m.flags.listenGossipAddr
-
-			memberlist, err := gossip.NewMemberList(gossipMember, listenGossipAddr.Port)
-
-			if err != nil {
-				return err
-			}
-
-			m.memberlist = memberlist
-
 			managers := make([]*api.Service, 0)
 
 			services, err := m.getServices()
@@ -788,7 +771,7 @@ func (m *Manager) restart(key *config.Key) error {
 						ServiceID: service.ID,
 					}
 
-					join, err := r.ServiceJoin(ctx, opts)
+					joinRes, err := r.ServiceJoin(ctx, opts)
 
 					if err != nil {
 						fields := logrus.Fields{
@@ -802,10 +785,10 @@ func (m *Manager) restart(key *config.Key) error {
 						continue
 					}
 
-					_, joinErr := memberlist.Join([]string{join.GossipAddr})
+					_, serfErr := m.serf.Join([]string{joinRes.SerfAddress}, true)
 
-					if joinErr != nil {
-						return err
+					if serfErr != nil {
+						return serfErr
 					}
 
 					return nil
@@ -1004,11 +987,21 @@ func New() (*Manager, error) {
 
 	key := &config.Key{}
 
+	serfConf := serf.DefaultConfig()
+
+	serfConf.Init()
+
+	serfCluster, err := serf.Create(serfConf)
+
+	if err != nil {
+		return nil, err
+	}
+
 	watchers := make(map[string]ResourceWatcher)
 
-	watchers["LogicalVolume"] = ResourceWatcher{}
-	watchers["PhysicalVolume"] = ResourceWatcher{}
-	watchers["VolumeGroup"] = ResourceWatcher{}
+	for _, w := range etcdWatchResources {
+		watchers[w] = ResourceWatcher{}
+	}
 
 	manager := &Manager{
 		ErrorC:           make(chan string),
@@ -1016,6 +1009,7 @@ func New() (*Manager, error) {
 
 		flags:          flags,
 		key:            key,
+		serf:           serfCluster,
 		watchersReady:  make([]string, 0),
 		watchersReadyC: make(chan struct{}),
 	}

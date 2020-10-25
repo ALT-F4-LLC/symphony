@@ -14,6 +14,7 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.1
 	github.com/hashicorp/memberlist v0.2.2
+	github.com/hashicorp/serf v0.9.5 // indirect
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/prometheus/procfs v0.0.11 // indirect
 	github.com/sirupsen/logrus v1.6.0

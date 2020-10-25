@@ -1290,20 +1290,20 @@ func (s *endpoints) ServiceJoin(ctx context.Context, in *api.ManagerServiceJoinR
 		}
 	}
 
-	gossipAddr := s.manager.flags.listenGossipAddr
+	serfAddress := s.manager.serf.Memberlist().LocalNode().FullAddress().Addr
 
 	res := &api.ManagerServiceInitResponse{
-		ClusterID:  cluster.ID,
-		Endpoints:  endpoints,
-		GossipAddr: gossipAddr.String(),
-		ServiceID:  service.ID,
+		ClusterID:   cluster.ID,
+		Endpoints:   endpoints,
+		SerfAddress: serfAddress,
+		ServiceID:   service.ID,
 	}
 
 	fields := logrus.Fields{
-		"ClusterID":  cluster.ID,
-		"Endpoints":  endpoints,
-		"GossipAddr": gossipAddr.String(),
-		"ServiceID":  service.ID,
+		"ClusterID":   cluster.ID,
+		"Endpoints":   endpoints,
+		"SerfAddress": serfAddress,
+		"ServiceID":   service.ID,
 	}
 
 	logrus.WithFields(fields).Debug("ServiceJoin successful request for service")
@@ -1334,7 +1334,7 @@ func (s *endpoints) ServiceLeave(ctx context.Context, in *api.ManagerServiceLeav
 		return nil, st.Err()
 	}
 
-	leaveErr := s.manager.memberlist.Leave(5 * time.Second)
+	leaveErr := s.manager.serf.Leave()
 
 	if leaveErr != nil {
 		st := status.New(codes.Internal, leaveErr.Error())
@@ -1342,7 +1342,7 @@ func (s *endpoints) ServiceLeave(ctx context.Context, in *api.ManagerServiceLeav
 		return nil, st.Err()
 	}
 
-	shutdownErr := s.manager.memberlist.Shutdown()
+	shutdownErr := s.manager.serf.Shutdown()
 
 	if shutdownErr != nil {
 		st := status.New(codes.Internal, shutdownErr.Error())
