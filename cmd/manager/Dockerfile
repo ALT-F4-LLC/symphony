@@ -28,6 +28,8 @@ COPY ./internal/pkg/config ./internal/pkg/config
 
 COPY ./internal/pkg/gossip ./internal/pkg/gossip
 
+COPY ./internal/pkg/state ./internal/pkg/state
+
 RUN go install -v ./...
 
 FROM alpine:latest

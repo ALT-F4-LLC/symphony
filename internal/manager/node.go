@@ -21,22 +21,28 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ResourceWatcher : struct for watching resources
+type ResourceWatcher struct {
+	AssignedC   clientv3.WatchChan
+	UnassignedC clientv3.WatchChan
+}
+
 // Manager : manager node
 type Manager struct {
-	ErrorC chan string
+	ErrorC           chan string
+	ResourceWatchers map[string]ResourceWatcher
 
 	flags          *flags
 	key            *config.Key
 	memberlist     *memberlist.Memberlist
-	watchers       []string
 	watchersReady  []string
 	watchersReadyC chan struct{}
 }
 
 var (
-	ETCD_DIAL_TIMEOUT    = 5 * time.Second
-	ETCD_WATCH_KEYS      = []string{"logicalvolume:assigned/*", "logicalvolume:unassigned/*"}
-	GRPC_CONTEXT_TIMEOUT = 5 * time.Second
+	etcdDialTimeout    = 5 * time.Second
+	etcdWatchKeys      = []string{"logicalvolume:assigned/", "logicalvolume:unassigned/"}
+	grpcContextTimeout = 5 * time.Second
 )
 
 // Start : handles start of manager service
@@ -55,8 +61,8 @@ func (m *Manager) Start() {
 		}
 	}
 
-	for _, key := range m.watchers {
-		go m.startWatcherForKey(key)
+	for k, w := range m.ResourceWatchers {
+		go m.startWatcherForKey(k, w)
 	}
 
 	<-m.watchersReadyC
@@ -66,8 +72,43 @@ func (m *Manager) Start() {
 	go m.listenRemote()
 }
 
-func (m *Manager) startWatcherForKey(key string) {
+func (m *Manager) startWatcherForKey(key string, watcher ResourceWatcher) {
 	// TODO : setup watch for state in etcd
+
+	config := clientv3.Config{
+		DialTimeout: etcdDialTimeout,
+		Endpoints:   m.flags.etcdEndpoints,
+	}
+
+	client, err := state.NewClient(config)
+
+	if err != nil {
+		m.ErrorC <- err.Error()
+	}
+
+	defer client.Close()
+
+	assignedKey := fmt.Sprintf("Assigned/%s", key)
+
+	unassignedKey := fmt.Sprintf("Unassigned/%s", key)
+
+	watcher.AssignedC = client.Watch(context.Background(), assignedKey, clientv3.WithPrefix())
+
+	watcher.UnassignedC = client.Watch(context.Background(), unassignedKey, clientv3.WithPrefix())
+
+	for wresp := range watcher.AssignedC {
+		for _, ev := range wresp.Events {
+			// TODO : handle returned data
+			fmt.Printf("AssignedC: %s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+		}
+	}
+
+	for wresp := range watcher.UnassignedC {
+		for _, ev := range wresp.Events {
+			// TODO : handle returned data
+			fmt.Printf("UnassignedC: %s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+		}
+	}
 
 	// NewLogicalVolume -> "logicalvolume:unassigned/*" -> Manager (watcher update) -> Begin scheduling
 
@@ -76,7 +117,7 @@ func (m *Manager) startWatcherForKey(key string) {
 
 	m.watchersReady = append(m.watchersReady, key)
 
-	if len(m.watchersReady) == len(m.watchers) {
+	if len(m.watchersReady) == len(etcdWatchKeys) {
 		m.watchersReadyC <- struct{}{}
 	}
 }
@@ -402,12 +443,12 @@ func (m *Manager) getMemberFromService(service *api.Service) (*gossip.Member, er
 }
 
 func (m *Manager) getStateByKey(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: ETCD_DIAL_TIMEOUT,
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
 	}
 
@@ -590,7 +631,7 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 
 	defer conn.Close()
 
-	grpcCtx, grpcCancel := context.WithTimeout(context.Background(), GRPC_CONTEXT_TIMEOUT)
+	grpcCtx, grpcCancel := context.WithTimeout(context.Background(), grpcContextTimeout)
 
 	defer grpcCancel()
 
@@ -624,12 +665,12 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 
 	serviceKey := fmt.Sprintf("/service/%s", service.ID)
 
-	clientCtx, clientCancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+	clientCtx, clientCancel := context.WithTimeout(context.Background(), etcdDialTimeout)
 
 	defer clientCancel()
 
 	config := clientv3.Config{
-		DialTimeout: ETCD_DIAL_TIMEOUT,
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
 	}
 
@@ -736,7 +777,7 @@ func (m *Manager) restart(key *config.Key) error {
 						continue
 					}
 
-					ctx, cancel := context.WithTimeout(context.Background(), GRPC_CONTEXT_TIMEOUT)
+					ctx, cancel := context.WithTimeout(context.Background(), grpcContextTimeout)
 
 					defer cancel()
 
@@ -777,12 +818,12 @@ func (m *Manager) restart(key *config.Key) error {
 }
 
 func (m *Manager) saveCluster(cluster *api.Cluster) error {
-	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: ETCD_DIAL_TIMEOUT,
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
 	}
 
@@ -810,12 +851,12 @@ func (m *Manager) saveCluster(cluster *api.Cluster) error {
 }
 
 func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
-	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: ETCD_DIAL_TIMEOUT,
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
 	}
 
@@ -845,12 +886,12 @@ func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
 }
 
 func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
-	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: ETCD_DIAL_TIMEOUT,
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
 	}
 
@@ -880,12 +921,12 @@ func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
 }
 
 func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
-	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: ETCD_DIAL_TIMEOUT,
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
 	}
 
@@ -915,12 +956,12 @@ func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
 }
 
 func (m *Manager) saveService(service *api.Service) error {
-	ctx, cancel := context.WithTimeout(context.Background(), ETCD_DIAL_TIMEOUT)
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: ETCD_DIAL_TIMEOUT,
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
 	}
 
@@ -963,12 +1004,18 @@ func New() (*Manager, error) {
 
 	key := &config.Key{}
 
+	watchers := make(map[string]ResourceWatcher)
+
+	watchers["LogicalVolume"] = ResourceWatcher{}
+	watchers["PhysicalVolume"] = ResourceWatcher{}
+	watchers["VolumeGroup"] = ResourceWatcher{}
+
 	manager := &Manager{
-		ErrorC: make(chan string),
+		ErrorC:           make(chan string),
+		ResourceWatchers: watchers,
 
 		flags:          flags,
 		key:            key,
-		watchers:       ETCD_WATCH_KEYS,
 		watchersReady:  make([]string, 0),
 		watchersReadyC: make(chan struct{}),
 	}

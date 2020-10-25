@@ -1,3 +1,15 @@
 @import "tailwindcss/base";
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
+
+#app {
+  grid-template-rows: 50px 1fr auto;
+}
+
+#main {
+  grid-template-columns: 255px 1fr auto;
+}
+
+#content {
+  height: calc(100vh - 50px);
+}

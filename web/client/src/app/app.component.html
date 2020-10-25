@@ -1,7 +1,24 @@
-<h1 class="my-8 text-center text-6xl font-bold">
-  <span class="text-teal-500">TailwindCSS</span> and
-  <span class="text-red-600">Angular</span> is awesome!
-</h1>
-<p class="text-center text-3xl">Thanks for reading!</p>
+<div class="h-screen overflow-hidden grid" id="app">
+  <div class="p-3 border-b border-gray-700 grid" id="toolbar">
+    <h1 class="font-bold">Symphony</h1>
+  </div>
+
+  <div class="grid" id="main">
+    <div class="w-64 border-r border-gray-700 grid grid-cols-1" id="sidebar">
+      <div class="p-4">
+        <div>Images</div>
+        <div>Instances</div>
+        <div>Networks</div>
+        <div>Volumes</div>
+      </div>
+    </div>
+
+    <div class="overflow-x-hidden overflow-y-auto" id="content">
+      <div class="flex flex-col h-full">
+        <p>Whats up chat?</p>
+      </div>
+    </div>
+  </div>
+</div>
 
 <router-outlet></router-outlet>

@@ -5,6 +5,7 @@ import (
 	"go.etcd.io/etcd/clientv3"
 )
 
+// NewClient : creates new etcd client
 func NewClient(config clientv3.Config) (*clientv3.Client, error) {
 	client, err := clientv3.New(config)
 
