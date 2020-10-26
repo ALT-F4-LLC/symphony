@@ -10,19 +10,17 @@ import (
 )
 
 type flags struct {
-	configDir         string
-	etcdEndpoints     []string
-	listenGossipAddr  *net.TCPAddr
-	listenServiceAddr *net.TCPAddr
-	verbose           bool
+	configDir     string
+	etcdEndpoints []string
+	listenAddr    *net.TCPAddr
+	verbose       bool
 }
 
 var (
-	configDir         = kingpin.Flag("config-dir", "Sets configuration directory for manager.").Default(".").String()
-	etcdEndpoints     = kingpin.Flag("etcd-endpoints", "Sets the etcd endpoints list.").Required().String()
-	listenGossipPort  = kingpin.Flag("listen-gossip-port", "Sets the remote gossip listener port.").Int()
-	listenServicePort = kingpin.Flag("listen-service-port", "Sets the remote service port.").Int()
-	verbose           = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
+	configDir     = kingpin.Flag("config-dir", "Sets configuration directory for manager.").Default(".").String()
+	etcdEndpoints = kingpin.Flag("etcd-endpoints", "Sets the etcd endpoints list.").Required().String()
+	listenPort    = kingpin.Flag("listen-port", "Sets the remote service port.").Int()
+	verbose       = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
 )
 
 func getFlags() (*flags, error) {
@@ -40,32 +38,24 @@ func getFlags() (*flags, error) {
 		return nil, err
 	}
 
-	listenGossipAddr, err := config.GetListenAddr(37065, ip, listenGossipPort)
-
-	if err != nil {
-		return nil, err
-	}
-
-	listenServiceAddr, err := config.GetListenAddr(15760, ip, listenServicePort)
+	listenAddr, err := config.GetListenAddr(15760, ip, listenPort)
 
 	if err != nil {
 		return nil, err
 	}
 
 	flags := &flags{
-		configDir:         *configDirPath,
-		etcdEndpoints:     strings.Split(*etcdEndpoints, ","),
-		listenGossipAddr:  listenGossipAddr,
-		listenServiceAddr: listenServiceAddr,
-		verbose:           *verbose,
+		configDir:     *configDirPath,
+		etcdEndpoints: strings.Split(*etcdEndpoints, ","),
+		listenAddr:    listenAddr,
+		verbose:       *verbose,
 	}
 
 	fields := logrus.Fields{
-		"configDir":         flags.configDir,
-		"etcdEndpoints":     flags.etcdEndpoints,
-		"listenGossipAddr":  flags.listenGossipAddr.String(),
-		"listenServiceAddr": flags.listenServiceAddr.String(),
-		"verbose":           flags.verbose,
+		"configDir":     flags.configDir,
+		"etcdEndpoints": flags.etcdEndpoints,
+		"listenAddr":    flags.listenAddr.String(),
+		"verbose":       flags.verbose,
 	}
 
 	logrus.WithFields(fields).Info("Service command-line flags loaded.")

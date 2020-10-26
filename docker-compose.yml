@@ -1,8 +1,26 @@
 networks:
-  etcd:
   symphony:
 
 services:
+  block_01:
+    build:
+      context: .
+      dockerfile: cmd/block/Dockerfile
+    command: >
+      block
+      --config-dir="/config"
+      --verbose
+    depends_on:
+      - manager_01
+      - manager_02
+      - manager_03
+    networks:
+      - symphony
+    ports:
+      - 15763:15760
+    volumes:
+      - block_01:/config
+
   etcd_01:
     command: >-
       etcd
@@ -16,7 +34,7 @@ services:
       -name etcd_01
     image: quay.io/coreos/etcd:v3.4.9
     networks:
-      - etcd
+      - symphony
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
       - etcd_01:/etcd_01.etcd
@@ -34,7 +52,7 @@ services:
       -name etcd_02
     image: quay.io/coreos/etcd:v3.4.9
     networks:
-      - etcd
+      - symphony
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
       - etcd_02:/etcd_02.etcd
@@ -52,7 +70,7 @@ services:
       -name etcd_03
     image: quay.io/coreos/etcd:v3.4.9
     networks:
-      - etcd
+      - symphony
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
       - etcd_03:/etcd_03.etcd
@@ -71,7 +89,6 @@ services:
       - etcd_02
       - etcd_03
     networks:
-      - etcd
       - symphony
     ports:
       - 15760:15760
@@ -92,7 +109,6 @@ services:
       - etcd_02
       - etcd_03
     networks:
-      - etcd
       - symphony
     ports:
       - 15761:15760
@@ -113,7 +129,6 @@ services:
       - etcd_02
       - etcd_03
     networks:
-      - etcd
       - symphony
     ports:
       - 15762:15760
@@ -123,6 +138,7 @@ services:
 version: "3.7"
 
 volumes:
+  block_01:
   etcd_01:
   etcd_02:
   etcd_03:

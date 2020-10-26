@@ -120,7 +120,7 @@ func (s *endpoints) GetLogicalVolume(ctx context.Context, in *api.ManagerLogical
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.Tags["ServiceAddr"])
 
 	if err != nil {
 		return nil, err
@@ -229,7 +229,7 @@ func (s *endpoints) GetPhysicalVolume(ctx context.Context, in *api.ManagerPhysic
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.Tags["ServiceAddr"])
 
 	if err != nil {
 		return nil, err
@@ -407,7 +407,7 @@ func (s *endpoints) GetVolumeGroup(ctx context.Context, in *api.ManagerVolumeGro
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.Tags["ServiceAddr"])
 
 	if err != nil {
 		return nil, err
@@ -537,7 +537,7 @@ func (s *endpoints) NewLogicalVolume(ctx context.Context, in *api.ManagerNewLogi
 		return nil, st.Err()
 	}
 
-	newLvAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
+	newLvAddr, err := net.ResolveTCPAddr("tcp", member.Tags["ServiceAddr"])
 
 	if err != nil {
 		return nil, err
@@ -642,7 +642,7 @@ func (s *endpoints) NewPhysicalVolume(ctx context.Context, in *api.ManagerNewPhy
 		return nil, st.Err()
 	}
 
-	newPvAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
+	newPvAddr, err := net.ResolveTCPAddr("tcp", member.Tags["ServiceAddr"])
 
 	if err != nil {
 		return nil, err
@@ -744,7 +744,7 @@ func (s *endpoints) NewVolumeGroup(ctx context.Context, in *api.ManagerNewVolume
 		return nil, st.Err()
 	}
 
-	newVgAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
+	newVgAddr, err := net.ResolveTCPAddr("tcp", member.Tags["ServiceAddr"])
 
 	if err != nil {
 		return nil, err
@@ -896,7 +896,7 @@ func (s *endpoints) RemoveLogicalVolume(ctx context.Context, in *api.ManagerLogi
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.Tags["ServiceAddr"])
 
 	if err != nil {
 		return nil, err
@@ -1016,7 +1016,7 @@ func (s *endpoints) RemovePhysicalVolume(ctx context.Context, in *api.ManagerPhy
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.Tags["ServiceAddr"])
 
 	if err != nil {
 		return nil, err
@@ -1167,7 +1167,7 @@ func (s *endpoints) RemoveVolumeGroup(ctx context.Context, in *api.ManagerVolume
 		return nil, st.Err()
 	}
 
-	blockAddr, err := net.ResolveTCPAddr("tcp", member.ServiceAddr)
+	blockAddr, err := net.ResolveTCPAddr("tcp", member.Tags["ServiceAddr"])
 
 	if err != nil {
 		return nil, err
@@ -1290,7 +1290,7 @@ func (s *endpoints) ServiceJoin(ctx context.Context, in *api.ManagerServiceJoinR
 		}
 	}
 
-	serfAddress := s.manager.serf.Memberlist().LocalNode().FullAddress().Addr
+	serfAddress := s.manager.Node.Serf.Memberlist().LocalNode().FullAddress().Addr
 
 	res := &api.ManagerServiceInitResponse{
 		ClusterID:   cluster.ID,
@@ -1320,21 +1320,13 @@ func (s *endpoints) ServiceLeave(ctx context.Context, in *api.ManagerServiceLeav
 		return nil, st.Err()
 	}
 
-	key, err := s.manager.key.Get(s.manager.flags.configDir)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if serviceID != *key.ServiceID {
+	if serviceID != *s.manager.Node.Key.ServiceID {
 		st := status.New(codes.PermissionDenied, err.Error())
 
 		return nil, st.Err()
 	}
 
-	leaveErr := s.manager.serf.Leave()
+	leaveErr := s.manager.Node.Serf.Leave()
 
 	if leaveErr != nil {
 		st := status.New(codes.Internal, leaveErr.Error())
@@ -1342,7 +1334,7 @@ func (s *endpoints) ServiceLeave(ctx context.Context, in *api.ManagerServiceLeav
 		return nil, st.Err()
 	}
 
-	shutdownErr := s.manager.serf.Shutdown()
+	shutdownErr := s.manager.Node.Serf.Shutdown()
 
 	if shutdownErr != nil {
 		st := status.New(codes.Internal, shutdownErr.Error())

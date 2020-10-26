@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -162,7 +161,7 @@ func (e *endpoints) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogica
 
 	targetAddrDate := fmt.Sprintf("%d-%02d", currentTime.Year(), currentTime.Month())
 
-	targetIPAddrString := e.block.flags.listenServiceAddr.IP.String()
+	targetIPAddrString := e.block.flags.listenAddr.IP.String()
 
 	targetIPAddrArray := strings.Split(targetIPAddrString, ".")
 
@@ -172,7 +171,7 @@ func (e *endpoints) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogica
 
 	targetAddr := fmt.Sprintf("iqn.%s.%s.in-addr.arpa:%s", targetAddrDate, targetIPAddrFQN, id.String())
 
-	config := fmt.Sprintf(configTemplate, targetAddr, backingStore, e.block.flags.listenServiceAddr.IP.String())
+	config := fmt.Sprintf(configTemplate, targetAddr, backingStore, e.block.flags.listenAddr.IP.String())
 
 	path := fmt.Sprintf("/etc/tgt/conf.d/%s.conf", id.String())
 
@@ -374,7 +373,7 @@ func (e *endpoints) ServiceInit(ctx context.Context, in *api.BlockServiceInitReq
 
 	r := api.NewManagerClient(conn)
 
-	serviceAddr := fmt.Sprintf("%s", e.block.flags.listenServiceAddr.String())
+	serviceAddr := fmt.Sprintf("%s", e.block.flags.listenAddr.String())
 
 	opts := &api.ManagerServiceInitRequest{
 		ServiceAddr: serviceAddr,
@@ -403,13 +402,13 @@ func (e *endpoints) ServiceInit(ctx context.Context, in *api.BlockServiceInitReq
 		return nil, err
 	}
 
-	key := &config.Key{
-		ClusterID: &clusterID,
-		Endpoints: init.Endpoints,
-		ServiceID: &serviceID,
-	}
+	e.block.Node.Key.ClusterID = &clusterID
 
-	saveErr := key.Save(e.block.flags.configDir)
+	e.block.Node.Key.Endpoints = init.Endpoints
+
+	e.block.Node.Key.ServiceID = &serviceID
+
+	saveErr := e.block.Node.Key.Save(e.block.flags.configDir)
 
 	if saveErr != nil {
 		st := status.New(codes.Internal, saveErr.Error())
@@ -417,7 +416,7 @@ func (e *endpoints) ServiceInit(ctx context.Context, in *api.BlockServiceInitReq
 		return nil, st.Err()
 	}
 
-	restartErr := e.block.restart(key)
+	restartErr := e.block.restart()
 
 	if restartErr != nil {
 		st := status.New(codes.Internal, restartErr.Error())
@@ -442,32 +441,16 @@ func (e *endpoints) ServiceLeave(ctx context.Context, in *api.BlockServiceLeaveR
 		return nil, st.Err()
 	}
 
-	key, err := e.block.key.Get(e.block.flags.configDir)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if serviceID != *key.ServiceID {
+	if serviceID != *e.block.Node.Key.ServiceID {
 		st := status.New(codes.PermissionDenied, err.Error())
 
 		return nil, st.Err()
 	}
 
-	leaveErr := e.block.memberlist.Leave(5 * time.Second)
+	stopErr := e.block.Node.StopSerf()
 
-	if leaveErr != nil {
-		st := status.New(codes.Internal, leaveErr.Error())
-
-		return nil, st.Err()
-	}
-
-	shutdownErr := e.block.memberlist.Shutdown()
-
-	if shutdownErr != nil {
-		st := status.New(codes.Internal, shutdownErr.Error())
+	if stopErr != nil {
+		st := status.New(codes.Internal, err.Error())
 
 		return nil, st.Err()
 	}

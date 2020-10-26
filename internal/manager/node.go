@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/cluster"
 	"github.com/erkrnt/symphony/internal/pkg/config"
-	"github.com/erkrnt/symphony/internal/pkg/gossip"
 	"github.com/erkrnt/symphony/internal/pkg/state"
 	"github.com/google/uuid"
 	"github.com/hashicorp/serf/serf"
@@ -21,22 +21,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ResourceWatcher : struct for watching resources
-type ResourceWatcher struct {
-	AssignedC   clientv3.WatchChan
-	UnassignedC clientv3.WatchChan
-}
-
 // Manager : manager node
 type Manager struct {
-	ErrorC           chan string
-	ResourceWatchers map[string]ResourceWatcher
+	Node config.Node
 
 	flags          *flags
-	key            *config.Key
-	serf           *serf.Serf
+	watchers       map[string]Watcher
 	watchersReady  []string
 	watchersReadyC chan struct{}
+}
+
+// Watcher : struct for watching resources
+type Watcher struct {
+	AssignedC   clientv3.WatchChan
+	UnassignedC clientv3.WatchChan
 }
 
 var (
@@ -47,21 +45,15 @@ var (
 
 // Start : handles start of manager service
 func (m *Manager) Start() {
-	key, err := m.key.Get(m.flags.configDir)
-
-	if err != nil {
-		m.ErrorC <- err.Error()
-	}
-
-	if key.ClusterID != nil && key.ServiceID != nil {
-		restartErr := m.restart(key)
+	if m.Node.Key.ClusterID != nil && m.Node.Key.ServiceID != nil {
+		restartErr := m.restart()
 
 		if restartErr != nil {
-			m.ErrorC <- restartErr.Error()
+			m.Node.ErrorC <- restartErr.Error()
 		}
 	}
 
-	for k, w := range m.ResourceWatchers {
+	for k, w := range m.watchers {
 		go m.startWatcherForKey(k, w)
 	}
 
@@ -72,9 +64,7 @@ func (m *Manager) Start() {
 	go m.listenRemote()
 }
 
-func (m *Manager) startWatcherForKey(key string, watcher ResourceWatcher) {
-	// TODO : setup watch for state in etcd
-
+func (m *Manager) startWatcherForKey(key string, watcher Watcher) {
 	config := clientv3.Config{
 		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
@@ -83,7 +73,7 @@ func (m *Manager) startWatcherForKey(key string, watcher ResourceWatcher) {
 	client, err := state.NewClient(config)
 
 	if err != nil {
-		m.ErrorC <- err.Error()
+		m.Node.ErrorC <- err.Error()
 	}
 
 	defer client.Close()
@@ -120,7 +110,7 @@ func (m *Manager) startWatcherForKey(key string, watcher ResourceWatcher) {
 	if len(m.watchersReady) == len(etcdWatchResources) {
 		m.watchersReadyC <- struct{}{}
 
-		logrus.Info("Resource watchers registered..")
+		logrus.Info("Resource watchers registered...")
 	}
 }
 
@@ -128,13 +118,13 @@ func (m *Manager) listenControl() {
 	socketPath := fmt.Sprintf("%s/control.sock", m.flags.configDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
-		m.ErrorC <- err.Error()
+		m.Node.ErrorC <- err.Error()
 	}
 
 	listen, err := net.Listen("unix", socketPath)
 
 	if err != nil {
-		m.ErrorC <- err.Error()
+		m.Node.ErrorC <- err.Error()
 	}
 
 	server := grpc.NewServer()
@@ -155,15 +145,15 @@ func (m *Manager) listenControl() {
 	serveErr := server.Serve(listen)
 
 	if serveErr != nil {
-		m.ErrorC <- serveErr.Error()
+		m.Node.ErrorC <- serveErr.Error()
 	}
 }
 
 func (m *Manager) listenRemote() {
-	listen, err := net.Listen("tcp", m.flags.listenServiceAddr.String())
+	listen, err := net.Listen("tcp", m.flags.listenAddr.String())
 
 	if err != nil {
-		m.ErrorC <- err.Error()
+		m.Node.ErrorC <- err.Error()
 	}
 
 	endpoints := &endpoints{
@@ -186,7 +176,7 @@ func (m *Manager) listenRemote() {
 	serveErr := server.Serve(listen)
 
 	if serveErr != nil {
-		m.ErrorC <- serveErr.Error()
+		m.Node.ErrorC <- serveErr.Error()
 	}
 }
 
@@ -422,24 +412,16 @@ func (m *Manager) getServiceByID(id uuid.UUID) (*api.Service, error) {
 	return service, nil
 }
 
-func (m *Manager) getMemberFromService(service *api.Service) (*gossip.Member, error) {
-	var member *gossip.Member
+func (m *Manager) getMemberFromService(service *api.Service) (*serf.Member, error) {
+	var member *serf.Member
 
-	// members := m.serf.Members()
+	members := m.Node.Serf.Members()
 
-	// for _, m := range members {
-	// 	var metadata *gossip.Member
-
-	// 	// if err := json.Unmarshal(m.Tags, &metadata); err != nil {
-	// 	// 	st := status.New(codes.InvalidArgument, err.Error())
-
-	// 	// 	return nil, st.Err()
-	// 	// }
-
-	// 	if service.ID == metadata.ServiceID {
-	// 		member = metadata
-	// 	}
-	// }
+	for _, m := range members {
+		if m.Tags["ServiceID"] == service.ID {
+			member = &m
+		}
+	}
 
 	return member, nil
 }
@@ -512,7 +494,7 @@ func (m *Manager) newService(serviceAddr string, serviceType api.ServiceType) (*
 		return nil, st.Err()
 	}
 
-	isLocalInit := serviceAddr == m.flags.listenServiceAddr.String()
+	isLocalInit := serviceAddr == m.flags.listenAddr.String()
 
 	if cluster == nil && !isLocalInit {
 		st := status.New(codes.InvalidArgument, "cluster_not_initialized")
@@ -702,7 +684,7 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 	return res, nil
 }
 
-func (m *Manager) restart(key *config.Key) error {
+func (m *Manager) restart() error {
 	cluster, err := m.getCluster()
 
 	if err != nil {
@@ -710,7 +692,7 @@ func (m *Manager) restart(key *config.Key) error {
 	}
 
 	if cluster != nil {
-		service, err := m.getServiceByID(*key.ServiceID)
+		service, err := m.getServiceByID(*m.Node.Key.ServiceID)
 
 		if err != nil {
 			return err
@@ -719,6 +701,12 @@ func (m *Manager) restart(key *config.Key) error {
 		managerServiceType := api.ServiceType_MANAGER.String()
 
 		if service != nil && service.Type == managerServiceType {
+			restartSerfErr := m.Node.RestartSerf(m.flags.listenAddr)
+
+			if restartSerfErr != nil {
+				return restartSerfErr
+			}
+
 			managers := make([]*api.Service, 0)
 
 			services, err := m.getServices()
@@ -785,7 +773,7 @@ func (m *Manager) restart(key *config.Key) error {
 						continue
 					}
 
-					_, serfErr := m.serf.Join([]string{joinRes.SerfAddress}, true)
+					_, serfErr := m.Node.Serf.Join([]string{joinRes.SerfAddress}, true)
 
 					if serfErr != nil {
 						return serfErr
@@ -985,31 +973,35 @@ func New() (*Manager, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	key := &config.Key{}
-
-	serfConf := serf.DefaultConfig()
-
-	serfConf.Init()
-
-	serfCluster, err := serf.Create(serfConf)
+	key, err := config.NewKey(flags.configDir)
 
 	if err != nil {
 		return nil, err
 	}
 
-	watchers := make(map[string]ResourceWatcher)
+	serfInstance, err := cluster.NewSerf(flags.listenAddr, key.ServiceID, api.ServiceType_MANAGER)
+
+	if err != nil {
+		return nil, err
+	}
+
+	node := config.Node{
+		ErrorC: make(chan string),
+		Key:    key,
+		Serf:   serfInstance,
+	}
+
+	watchers := make(map[string]Watcher)
 
 	for _, w := range etcdWatchResources {
-		watchers[w] = ResourceWatcher{}
+		watchers[w] = Watcher{}
 	}
 
 	manager := &Manager{
-		ErrorC:           make(chan string),
-		ResourceWatchers: watchers,
+		Node: node,
 
 		flags:          flags,
-		key:            key,
-		serf:           serfCluster,
+		watchers:       watchers,
 		watchersReady:  make([]string, 0),
 		watchersReadyC: make(chan struct{}),
 	}

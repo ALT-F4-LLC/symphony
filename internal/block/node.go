@@ -9,35 +9,26 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/cluster"
 	"github.com/erkrnt/symphony/internal/pkg/config"
-	"github.com/erkrnt/symphony/internal/pkg/gossip"
-	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
 // Block : block node
 type Block struct {
-	ErrorC chan string
+	Node config.Node
 
-	flags      *flags
-	key        *config.Key
-	memberlist *memberlist.Memberlist
+	flags *flags
 }
 
 // Start : handles start of manager service
 func (b *Block) Start() {
-	key, err := b.key.Get(b.flags.configDir)
-
-	if err != nil {
-		b.ErrorC <- err.Error()
-	}
-
-	if key.ClusterID != nil && key.ServiceID != nil {
-		restartErr := b.restart(key)
+	if b.Node.Key.ClusterID != nil && b.Node.Key.ServiceID != nil {
+		restartErr := b.restart()
 
 		if restartErr != nil {
-			b.ErrorC <- restartErr.Error()
+			b.Node.ErrorC <- restartErr.Error()
 		}
 	}
 
@@ -50,13 +41,13 @@ func (b *Block) listenControl() {
 	socketPath := fmt.Sprintf("%s/control.sock", b.flags.configDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
-		b.ErrorC <- err.Error()
+		b.Node.ErrorC <- err.Error()
 	}
 
 	lis, err := net.Listen("unix", socketPath)
 
 	if err != nil {
-		b.ErrorC <- err.Error()
+		b.Node.ErrorC <- err.Error()
 	}
 
 	s := grpc.NewServer()
@@ -72,15 +63,15 @@ func (b *Block) listenControl() {
 	serveErr := s.Serve(lis)
 
 	if serveErr != nil {
-		b.ErrorC <- serveErr.Error()
+		b.Node.ErrorC <- serveErr.Error()
 	}
 }
 
 func (b *Block) listenRemote() {
-	lis, err := net.Listen("tcp", b.flags.listenServiceAddr.String())
+	lis, err := net.Listen("tcp", b.flags.listenAddr.String())
 
 	if err != nil {
-		b.ErrorC <- err.Error()
+		b.Node.ErrorC <- err.Error()
 	}
 
 	s := grpc.NewServer()
@@ -96,12 +87,12 @@ func (b *Block) listenRemote() {
 	serveErr := s.Serve(lis)
 
 	if serveErr != nil {
-		b.ErrorC <- err.Error()
+		b.Node.ErrorC <- err.Error()
 	}
 }
 
-func (b *Block) restart(key *config.Key) error {
-	managers := key.Endpoints
+func (b *Block) restart() error {
+	managers := b.Node.Key.Endpoints
 
 	for _, manager := range managers {
 		joinAddr, err := net.ResolveTCPAddr("tcp", manager)
@@ -126,8 +117,8 @@ func (b *Block) restart(key *config.Key) error {
 		r := api.NewManagerClient(conn)
 
 		opts := &api.ManagerServiceJoinRequest{
-			ClusterID: key.ClusterID.String(),
-			ServiceID: key.ServiceID.String(),
+			ClusterID: b.Node.Key.ClusterID.String(),
+			ServiceID: b.Node.Key.ServiceID.String(),
 		}
 
 		join, err := r.ServiceJoin(ctx, opts)
@@ -137,26 +128,10 @@ func (b *Block) restart(key *config.Key) error {
 			continue
 		}
 
-		gossipMember := &gossip.Member{
-			ServiceAddr: b.flags.listenServiceAddr.String(),
-			ServiceID:   join.ServiceID,
-			ServiceType: api.ServiceType_BLOCK.String(),
-		}
+		_, serfErr := b.Node.Serf.Join([]string{join.SerfAddress}, true)
 
-		listenGossipAddr := b.flags.listenGossipAddr
-
-		memberlist, err := gossip.NewMemberList(gossipMember, listenGossipAddr.Port)
-
-		if err != nil {
-			return err
-		}
-
-		b.memberlist = memberlist
-
-		_, joinErr := memberlist.Join([]string{join.GossipAddr})
-
-		if joinErr != nil {
-			return err
+		if serfErr != nil {
+			return serfErr
 		}
 
 		return nil
@@ -167,10 +142,6 @@ func (b *Block) restart(key *config.Key) error {
 
 // New : creates new block node
 func New() (*Block, error) {
-	errorC := make(chan string)
-
-	key := &config.Key{}
-
 	flags, err := getFlags()
 
 	if err != nil {
@@ -181,11 +152,31 @@ func New() (*Block, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
+	key, err := config.NewKey(flags.configDir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	serfInstance, err := cluster.NewSerf(flags.listenAddr, key.ServiceID, api.ServiceType_BLOCK)
+
+	if err != nil {
+		return nil, err
+	}
+
+	node := config.Node{
+		Key:  key,
+		Serf: serfInstance,
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
 	block := &Block{
-		ErrorC: errorC,
+		Node: node,
 
 		flags: flags,
-		key:   key,
 	}
 
 	return block, nil

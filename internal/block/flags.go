@@ -9,17 +9,15 @@ import (
 )
 
 type flags struct {
-	configDir         string
-	listenGossipAddr  *net.TCPAddr
-	listenServiceAddr *net.TCPAddr
-	verbose           bool
+	configDir  string
+	listenAddr *net.TCPAddr
+	verbose    bool
 }
 
 var (
-	configDir         = kingpin.Flag("config-dir", "Sets configuration directory for block service.").Default(".").String()
-	listenGossipPort  = kingpin.Flag("listen-gossip-port", "Sets the remote gossip listener port.").Int()
-	listenServicePort = kingpin.Flag("listen-service-port", "Sets the remote service listener port.").Int()
-	verbose           = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
+	configDir  = kingpin.Flag("config-dir", "Sets configuration directory for block service.").Default(".").String()
+	listenPort = kingpin.Flag("listen-port", "Sets the remote service listener port.").Int()
+	verbose    = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
 )
 
 func getFlags() (*flags, error) {
@@ -37,30 +35,22 @@ func getFlags() (*flags, error) {
 		return nil, err
 	}
 
-	listenGossipAddr, err := config.GetListenAddr(37065, ip, listenGossipPort)
-
-	if err != nil {
-		return nil, err
-	}
-
-	listenServiceAddr, err := config.GetListenAddr(15760, ip, listenServicePort)
+	listenAddr, err := config.GetListenAddr(15760, ip, listenPort)
 
 	if err != nil {
 		return nil, err
 	}
 
 	flags := &flags{
-		configDir:         *configPath,
-		listenGossipAddr:  listenGossipAddr,
-		listenServiceAddr: listenServiceAddr,
-		verbose:           *verbose,
+		configDir:  *configPath,
+		listenAddr: listenAddr,
+		verbose:    *verbose,
 	}
 
 	fields := logrus.Fields{
-		"ConfigDir":         flags.configDir,
-		"ListenGossipAddr":  flags.listenGossipAddr.String(),
-		"ListenServiceAddr": flags.listenServiceAddr.String(),
-		"Verbose":           flags.verbose,
+		"ConfigDir":  flags.configDir,
+		"ListenAddr": flags.listenAddr.String(),
+		"Verbose":    flags.verbose,
 	}
 
 	logrus.WithFields(fields).Info("Service command-line flags loaded.")
