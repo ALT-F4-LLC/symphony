@@ -89,7 +89,7 @@ message ManagerServiceInitRequest {
 message ManagerServiceInitResponse {
   string ClusterID = 1;
   repeated string Endpoints = 3;
-  string GossipAddr = 2;
+  string SerfAddress = 2;
   string ServiceID = 4;
 }
 

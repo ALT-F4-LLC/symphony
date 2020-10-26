@@ -69,3 +69,41 @@ docker-compose exec manager_01 cli --socket="/config/control.sock" manager servi
 ```
 docker-compose exec manager_01 cli --socket="/config/control.sock" manager service remove <service-id>
 ```
+
+How To Achieve Simple Tasks:
+
+1. How will manager service maintain state:
+
+   - We will use etcd (distributed key/value store) that saves all cloud state and replicates it across hosts.
+   - We will distribute the cloud state across multiple hosts and direct requests to current leader.
+
+1. Create a logical volume:
+
+   - Provision block service
+   - Configure block service to have a static variable for the manager host address
+   - Create a new logical volume on manager service
+     - Scheduler notices the unassigned volume and schedules it for provisioning
+     - Scheduler notifies manager of where to place volume in cloud
+     - Manager assigns the volume to the block host
+     - Block host notices the changes and updates the resources accordingly
+
+1. Copy/write the OS to that volume:
+
+   - Provision image service
+   - Configure image service to have a static variable for the manager host address
+   - Create a new logical root volume on manager service
+     - Do all previous steps before
+     - Include a OS value to also copy/write to volume
+     - Prompt block service to download image and "dd" image to volume
+
+1. Create the virtual machine:
+
+   - Provision compute service
+   - Configure compute service to have a static variable for the manager host address
+   - Create a new virtual machine on manager service
+     - Create logical root volume on manager (as per 2)
+     - Create logical additional volume(s) on manager (as per 1)
+     * Create virtual networks for your machine
+     - Assign the logical volumes to the compute host
+     - Assign the virtual networks to the compute host
+     - Compute host notice the changes and connect/mount the volume

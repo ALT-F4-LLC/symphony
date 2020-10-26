@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/pkg/cluster"
 	"github.com/erkrnt/symphony/internal/pkg/config"
-	"github.com/erkrnt/symphony/internal/pkg/gossip"
+	"github.com/erkrnt/symphony/internal/pkg/state"
 	"github.com/google/uuid"
-	"github.com/hashicorp/memberlist"
+	"github.com/hashicorp/serf/serf"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
@@ -22,45 +23,108 @@ import (
 
 // Manager : manager node
 type Manager struct {
-	ErrorC chan string
+	Node config.Node
 
-	flags      *flags
-	key        *config.Key
-	memberlist *memberlist.Memberlist
+	flags          *flags
+	watchers       map[string]Watcher
+	watchersReady  []string
+	watchersReadyC chan struct{}
 }
+
+// Watcher : struct for watching resources
+type Watcher struct {
+	AssignedC   clientv3.WatchChan
+	UnassignedC clientv3.WatchChan
+}
+
+var (
+	etcdDialTimeout    = 5 * time.Second
+	etcdWatchResources = []string{"LogicalVolume", "PhysicalVolume", "VolumeGroup"}
+	grpcContextTimeout = 5 * time.Second
+)
 
 // Start : handles start of manager service
 func (m *Manager) Start() {
-	key, err := m.key.Get(m.flags.configDir)
-
-	if err != nil {
-		m.ErrorC <- err.Error()
-	}
-
-	if key.ClusterID != nil && key.ServiceID != nil {
-		restartErr := m.restart(key)
+	if m.Node.Key.ClusterID != nil && m.Node.Key.ServiceID != nil {
+		restartErr := m.restart()
 
 		if restartErr != nil {
-			m.ErrorC <- restartErr.Error()
+			m.Node.ErrorC <- restartErr.Error()
 		}
 	}
+
+	for k, w := range m.watchers {
+		go m.startWatcherForKey(k, w)
+	}
+
+	<-m.watchersReadyC
 
 	go m.listenControl()
 
 	go m.listenRemote()
 }
 
+func (m *Manager) startWatcherForKey(key string, watcher Watcher) {
+	config := clientv3.Config{
+		DialTimeout: etcdDialTimeout,
+		Endpoints:   m.flags.etcdEndpoints,
+	}
+
+	client, err := state.NewClient(config)
+
+	if err != nil {
+		m.Node.ErrorC <- err.Error()
+	}
+
+	defer client.Close()
+
+	assignedKey := fmt.Sprintf("Assigned/%s", key)
+
+	unassignedKey := fmt.Sprintf("Unassigned/%s", key)
+
+	watcher.AssignedC = client.Watch(context.Background(), assignedKey, clientv3.WithPrefix())
+
+	watcher.UnassignedC = client.Watch(context.Background(), unassignedKey, clientv3.WithPrefix())
+
+	/*  for wresp := range watcher.AssignedC { */
+	// for _, ev := range wresp.Events {
+	// // TODO : handle returned data
+	// fmt.Printf("AssignedC: %s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+	// }
+	// }
+
+	// for wresp := range watcher.UnassignedC {
+	// for _, ev := range wresp.Events {
+	// // TODO : handle returned data
+	// fmt.Printf("UnassignedC: %s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+	// }
+	// }
+
+	// NewLogicalVolume -> "logicalvolume:unassigned/*" -> Manager (watcher update) -> Begin scheduling
+
+	// watch "logicalvolume:assigned/*" === lvAssignedC
+	// watch "logicalvolume:unassigned/*" === lvUnassignedC
+
+	m.watchersReady = append(m.watchersReady, key)
+
+	if len(m.watchersReady) == len(etcdWatchResources) {
+		m.watchersReadyC <- struct{}{}
+
+		logrus.Info("Resource watchers registered...")
+	}
+}
+
 func (m *Manager) listenControl() {
 	socketPath := fmt.Sprintf("%s/control.sock", m.flags.configDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
-		m.ErrorC <- err.Error()
+		m.Node.ErrorC <- err.Error()
 	}
 
 	listen, err := net.Listen("unix", socketPath)
 
 	if err != nil {
-		m.ErrorC <- err.Error()
+		m.Node.ErrorC <- err.Error()
 	}
 
 	server := grpc.NewServer()
@@ -81,15 +145,15 @@ func (m *Manager) listenControl() {
 	serveErr := server.Serve(listen)
 
 	if serveErr != nil {
-		m.ErrorC <- serveErr.Error()
+		m.Node.ErrorC <- serveErr.Error()
 	}
 }
 
 func (m *Manager) listenRemote() {
-	listen, err := net.Listen("tcp", m.flags.listenServiceAddr.String())
+	listen, err := net.Listen("tcp", m.flags.listenAddr.String())
 
 	if err != nil {
-		m.ErrorC <- err.Error()
+		m.Node.ErrorC <- err.Error()
 	}
 
 	endpoints := &endpoints{
@@ -112,7 +176,7 @@ func (m *Manager) listenRemote() {
 	serveErr := server.Serve(listen)
 
 	if serveErr != nil {
-		m.ErrorC <- serveErr.Error()
+		m.Node.ErrorC <- serveErr.Error()
 	}
 }
 
@@ -348,22 +412,14 @@ func (m *Manager) getServiceByID(id uuid.UUID) (*api.Service, error) {
 	return service, nil
 }
 
-func (m *Manager) getMemberFromService(service *api.Service) (*gossip.Member, error) {
-	var member *gossip.Member
+func (m *Manager) getMemberFromService(service *api.Service) (*serf.Member, error) {
+	var member *serf.Member
 
-	members := m.memberlist.Members()
+	members := m.Node.Serf.Members()
 
 	for _, m := range members {
-		var metadata *gossip.Member
-
-		if err := json.Unmarshal(m.Meta, &metadata); err != nil {
-			st := status.New(codes.InvalidArgument, err.Error())
-
-			return nil, st.Err()
-		}
-
-		if service.ID == metadata.ServiceID {
-			member = metadata
+		if m.Tags["ServiceID"] == service.ID {
+			member = &m
 		}
 	}
 
@@ -371,22 +427,24 @@ func (m *Manager) getMemberFromService(service *api.Service) (*gossip.Member, er
 }
 
 func (m *Manager) getStateByKey(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return nil, err
 	}
 
-	defer etcd.Close()
+	defer client.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	results, err := etcd.Get(ctx, key, opts...)
+	results, err := client.Get(ctx, key, opts...)
 
 	if err != nil {
 		return nil, err
@@ -436,7 +494,7 @@ func (m *Manager) newService(serviceAddr string, serviceType api.ServiceType) (*
 		return nil, st.Err()
 	}
 
-	isLocalInit := serviceAddr == m.flags.listenServiceAddr.String()
+	isLocalInit := serviceAddr == m.flags.listenAddr.String()
 
 	if cluster == nil && !isLocalInit {
 		st := status.New(codes.InvalidArgument, "cluster_not_initialized")
@@ -500,13 +558,10 @@ func (m *Manager) newService(serviceAddr string, serviceType api.ServiceType) (*
 		}
 	}
 
-	gossipAddr := m.flags.listenGossipAddr
-
 	res := &api.ManagerServiceInitResponse{
-		ClusterID:  cluster.ID,
-		Endpoints:  endpoints,
-		GossipAddr: gossipAddr.String(),
-		ServiceID:  service.ID,
+		ClusterID: cluster.ID,
+		Endpoints: endpoints,
+		ServiceID: service.ID,
 	}
 
 	return res, nil
@@ -557,9 +612,9 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	grpcCtx, grpcCancel := context.WithTimeout(context.Background(), grpcContextTimeout)
 
-	defer cancel()
+	defer grpcCancel()
 
 	if service.Type == api.ServiceType_BLOCK.String() {
 		peer := api.NewBlockClient(conn)
@@ -568,7 +623,7 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 			ServiceID: service.ID,
 		}
 
-		_, err := peer.ServiceLeave(ctx, opts)
+		_, err := peer.ServiceLeave(grpcCtx, opts)
 
 		if err != nil {
 			return nil, err
@@ -582,7 +637,7 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 			ServiceID: service.ID,
 		}
 
-		_, err := peer.ServiceLeave(ctx, opts)
+		_, err := peer.ServiceLeave(grpcCtx, opts)
 
 		if err != nil {
 			return nil, err
@@ -591,10 +646,22 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 
 	serviceKey := fmt.Sprintf("/service/%s", service.ID)
 
-	etcd, err := clientv3.New(clientv3.Config{
+	clientCtx, clientCancel := context.WithTimeout(context.Background(), etcdDialTimeout)
+
+	defer clientCancel()
+
+	config := clientv3.Config{
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer client.Close()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -602,9 +669,9 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 		return nil, st.Err()
 	}
 
-	defer etcd.Close()
+	defer client.Close()
 
-	_, delErr := etcd.Delete(ctx, serviceKey)
+	_, delErr := client.Delete(clientCtx, serviceKey)
 
 	if delErr != nil {
 		st := status.New(codes.Internal, delErr.Error())
@@ -617,7 +684,7 @@ func (m *Manager) removeService(id string) (*api.SuccessStatusResponse, error) {
 	return res, nil
 }
 
-func (m *Manager) restart(key *config.Key) error {
+func (m *Manager) restart() error {
 	cluster, err := m.getCluster()
 
 	if err != nil {
@@ -625,7 +692,7 @@ func (m *Manager) restart(key *config.Key) error {
 	}
 
 	if cluster != nil {
-		service, err := m.getServiceByID(*key.ServiceID)
+		service, err := m.getServiceByID(*m.Node.Key.ServiceID)
 
 		if err != nil {
 			return err
@@ -634,21 +701,11 @@ func (m *Manager) restart(key *config.Key) error {
 		managerServiceType := api.ServiceType_MANAGER.String()
 
 		if service != nil && service.Type == managerServiceType {
-			gossipMember := &gossip.Member{
-				ServiceAddr: m.flags.listenServiceAddr.String(),
-				ServiceID:   service.ID,
-				ServiceType: service.Type,
+			restartSerfErr := m.Node.RestartSerf(m.flags.listenAddr)
+
+			if restartSerfErr != nil {
+				return restartSerfErr
 			}
-
-			listenGossipAddr := m.flags.listenGossipAddr
-
-			memberlist, err := gossip.NewMemberList(gossipMember, listenGossipAddr.Port)
-
-			if err != nil {
-				return err
-			}
-
-			m.memberlist = memberlist
 
 			managers := make([]*api.Service, 0)
 
@@ -691,7 +748,7 @@ func (m *Manager) restart(key *config.Key) error {
 						continue
 					}
 
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					ctx, cancel := context.WithTimeout(context.Background(), grpcContextTimeout)
 
 					defer cancel()
 
@@ -702,7 +759,7 @@ func (m *Manager) restart(key *config.Key) error {
 						ServiceID: service.ID,
 					}
 
-					join, err := r.ServiceJoin(ctx, opts)
+					joinRes, err := r.ServiceJoin(ctx, opts)
 
 					if err != nil {
 						fields := logrus.Fields{
@@ -716,10 +773,10 @@ func (m *Manager) restart(key *config.Key) error {
 						continue
 					}
 
-					_, joinErr := memberlist.Join([]string{join.GossipAddr})
+					_, serfErr := m.Node.Serf.Join([]string{joinRes.SerfAddress}, true)
 
-					if joinErr != nil {
-						return err
+					if serfErr != nil {
+						return serfErr
 					}
 
 					return nil
@@ -732,20 +789,22 @@ func (m *Manager) restart(key *config.Key) error {
 }
 
 func (m *Manager) saveCluster(cluster *api.Cluster) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	clusterJSON, err := json.Marshal(cluster)
 
@@ -753,7 +812,7 @@ func (m *Manager) saveCluster(cluster *api.Cluster) error {
 		return err
 	}
 
-	_, putErr := etcd.Put(ctx, "/cluster", string(clusterJSON))
+	_, putErr := client.Put(ctx, "/cluster", string(clusterJSON))
 
 	if putErr != nil {
 		return err
@@ -763,20 +822,22 @@ func (m *Manager) saveCluster(cluster *api.Cluster) error {
 }
 
 func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	lvJSON, err := json.Marshal(lv)
 
@@ -786,7 +847,7 @@ func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
 
 	lvKey := fmt.Sprintf("/logicalvolume/%s", lv.ID)
 
-	_, putErr := etcd.Put(ctx, lvKey, string(lvJSON))
+	_, putErr := client.Put(ctx, lvKey, string(lvJSON))
 
 	if putErr != nil {
 		return err
@@ -796,20 +857,22 @@ func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
 }
 
 func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	pvJSON, err := json.Marshal(pv)
 
@@ -819,7 +882,7 @@ func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
 
 	volumeKey := fmt.Sprintf("/physicalvolume/%s", pv.ID)
 
-	_, putErr := etcd.Put(ctx, volumeKey, string(pvJSON))
+	_, putErr := client.Put(ctx, volumeKey, string(pvJSON))
 
 	if putErr != nil {
 		return err
@@ -829,20 +892,22 @@ func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
 }
 
 func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	vgJSON, err := json.Marshal(vg)
 
@@ -852,7 +917,7 @@ func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
 
 	volumeKey := fmt.Sprintf("/volumegroup/%s", vg.ID)
 
-	_, putErr := etcd.Put(ctx, volumeKey, string(vgJSON))
+	_, putErr := client.Put(ctx, volumeKey, string(vgJSON))
 
 	if putErr != nil {
 		return err
@@ -862,20 +927,22 @@ func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
 }
 
 func (m *Manager) saveService(service *api.Service) error {
-	etcd, err := clientv3.New(clientv3.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), etcdDialTimeout)
+
+	defer cancel()
+
+	config := clientv3.Config{
+		DialTimeout: etcdDialTimeout,
 		Endpoints:   m.flags.etcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	client, err := state.NewClient(config)
 
 	if err != nil {
 		return err
 	}
 
-	defer etcd.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
+	defer client.Close()
 
 	serviceKey := fmt.Sprintf("/service/%s", service.ID)
 
@@ -885,7 +952,7 @@ func (m *Manager) saveService(service *api.Service) error {
 		return err
 	}
 
-	_, putErr := etcd.Put(ctx, serviceKey, string(serviceJSON))
+	_, putErr := client.Put(ctx, serviceKey, string(serviceJSON))
 
 	if putErr != nil {
 		return err
@@ -896,10 +963,6 @@ func (m *Manager) saveService(service *api.Service) error {
 
 // New : creates a new manager
 func New() (*Manager, error) {
-	errorC := make(chan string)
-
-	key := &config.Key{}
-
 	flags, err := getFlags()
 
 	if err != nil {
@@ -910,11 +973,37 @@ func New() (*Manager, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	manager := &Manager{
-		ErrorC: errorC,
+	key, err := config.NewKey(flags.configDir)
 
-		flags: flags,
-		key:   key,
+	if err != nil {
+		return nil, err
+	}
+
+	serfInstance, err := cluster.NewSerf(flags.listenAddr, key.ServiceID, api.ServiceType_MANAGER)
+
+	if err != nil {
+		return nil, err
+	}
+
+	node := config.Node{
+		ErrorC: make(chan string),
+		Key:    key,
+		Serf:   serfInstance,
+	}
+
+	watchers := make(map[string]Watcher)
+
+	for _, w := range etcdWatchResources {
+		watchers[w] = Watcher{}
+	}
+
+	manager := &Manager{
+		Node: node,
+
+		flags:          flags,
+		watchers:       watchers,
+		watchersReady:  make([]string, 0),
+		watchersReadyC: make(chan struct{}),
 	}
 
 	return manager, nil
