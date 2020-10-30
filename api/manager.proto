@@ -9,93 +9,73 @@ import "api/generic.proto";
 import "api/service.proto";
 
 service Manager { 
-  rpc GetLogicalVolume(ManagerLogicalVolumeRequest) returns (LogicalVolume) {}
-  rpc GetPhysicalVolume(ManagerPhysicalVolumeRequest) returns (PhysicalVolume) {}
-  rpc GetService(ManagerServiceRequest) returns (Service) {}
-  rpc GetVolumeGroup(ManagerVolumeGroupRequest) returns (VolumeGroup) {}
+  rpc GetLogicalVolume(RequestLogicalVolume) returns (LogicalVolume) {}
+  rpc GetPhysicalVolume(RequestPhysicalVolume) returns (PhysicalVolume) {}
+  rpc GetService(RequestService) returns (Service) {}
+  rpc GetVolumeGroup(RequestVolumeGroup) returns (VolumeGroup) {}
 
-  rpc GetLogicalVolumes(ManagerLogicalVolumesRequest) returns (ManagerLogicalVolumesResponse) {}
-  rpc GetPhysicalVolumes(ManagerPhysicalVolumesRequest) returns (ManagerPhysicalVolumesResponse) {}
-  rpc GetServices(ManagerServicesRequest) returns (ManagerServicesResponse) {}
-  rpc GetVolumeGroups(ManagerVolumeGroupsRequest) returns (ManagerVolumeGroupsResponse) {}
+  rpc GetLogicalVolumes(RequestLogicalVolumes) returns (ResponseLogicalVolumes) {}
+  rpc GetPhysicalVolumes(RequestPhysicalVolumes) returns (ResponsePhysicalVolumes) {}
+  rpc GetServices(RequestServices) returns (ResponseServices) {}
+  rpc GetVolumeGroups(RequestVolumeGroups) returns (ResponseVolumeGroups) {}
 
-  rpc NewLogicalVolume(ManagerNewLogicalVolumeRequest) returns (LogicalVolume) {}
-  rpc NewPhysicalVolume(ManagerNewPhysicalVolumeRequest) returns (PhysicalVolume) {}
-  rpc NewVolumeGroup(ManagerNewVolumeGroupRequest) returns (VolumeGroup) {}
+  rpc NewLogicalVolume(RequestNewLogicalVolume) returns (LogicalVolume) {}
+  rpc NewPhysicalVolume(RequestNewPhysicalVolume) returns (PhysicalVolume) {}
+  rpc NewVolumeGroup(RequestNewVolumeGroup) returns (VolumeGroup) {}
 
-  rpc RemoveLogicalVolume(ManagerLogicalVolumeRequest) returns (SuccessStatusResponse) {}
-  rpc RemovePhysicalVolume(ManagerPhysicalVolumeRequest) returns (SuccessStatusResponse) {}
-  rpc RemoveService(ManagerServiceRequest) returns (SuccessStatusResponse) {}
-  rpc RemoveVolumeGroup(ManagerVolumeGroupRequest) returns (SuccessStatusResponse) {}
+  rpc RemoveLogicalVolume(RequestLogicalVolume) returns (ResponseStatus) {}
+  rpc RemovePhysicalVolume(RequestPhysicalVolume) returns (ResponseStatus) {}
+  rpc RemoveService(RequestService) returns (ResponseStatus) {}
+  rpc RemoveVolumeGroup(RequestVolumeGroup) returns (ResponseStatus) {}
 
-  rpc ServiceInit(ManagerServiceInitRequest) returns (ManagerServiceInitResponse) {}
-  rpc ServiceJoin(ManagerServiceJoinRequest) returns (ManagerServiceInitResponse) {}
-  rpc ServiceLeave(ManagerServiceLeaveRequest) returns (SuccessStatusResponse) {}
+  rpc ServiceInit(RequestServiceInit) returns (ResponseServiceInit) {}
+  rpc ServiceJoin(RequestServiceJoin) returns (ResponseServiceInit) {}
+  rpc ServiceLeave(RequestServiceLeave) returns (ResponseStatus) {}
 }
 
-message ManagerLogicalVolumeRequest { string ID = 1; }
+message RequestLogicalVolume {
+  string ID = 1;
+}
 
-message ManagerLogicalVolumesRequest {}
+message RequestLogicalVolumes {}
 
-message ManagerLogicalVolumesResponse {
+message ResponseLogicalVolumes {
   repeated LogicalVolume Results = 1;
 }
 
-message ManagerPhysicalVolumeRequest { string ID = 1; }
+message RequestPhysicalVolume {
+  string ID = 1;
+}
 
-message ManagerPhysicalVolumesRequest {}
+message RequestPhysicalVolumes {}
 
-message ManagerPhysicalVolumesResponse {
+message ResponsePhysicalVolumes {
   repeated PhysicalVolume Results = 1;
 }
 
-message ManagerVolumeGroupRequest { string ID = 1; }
+message RequestVolumeGroup {
+  string ID = 1;
+}
 
-message ManagerVolumeGroupsRequest {}
+message RequestVolumeGroups {}
 
-message ManagerVolumeGroupsResponse {
+message ResponseVolumeGroups {
   repeated VolumeGroup Results = 1;
 }
 
-message ManagerNewLogicalVolumeRequest {
+message RequestNewLogicalVolume {
   int64 Size = 1;
-  string VolumeGroupID = 2;
+  ResourceStatus Status = 2;
+  string VolumeGroupID = 3;
 }
 
-message ManagerNewPhysicalVolumeRequest {
+message RequestNewPhysicalVolume {
   string DeviceName = 1;
   string ServiceID = 2;
+  ResourceStatus Status = 3;
 }
 
-message ManagerNewVolumeGroupRequest {
+message RequestNewVolumeGroup {
   string PhysicalVolumeID = 1;
+  ResourceStatus Status = 2;
 }
-
-message ManagerServiceRequest {
-  string ServiceID = 1;
-}
-
-message ManagerServicesRequest {}
-
-message ManagerServicesResponse {
-  repeated Service Results = 1;
-}
-
-message ManagerServiceInitRequest {
-  string ServiceAddr = 1;
-  ServiceType ServiceType = 2;
-}
-
-message ManagerServiceInitResponse {
-  string ClusterID = 1;
-  repeated string Endpoints = 3;
-  string SerfAddress = 2;
-  string ServiceID = 4;
-}
-
-message ManagerServiceJoinRequest {
-  string ClusterID = 1;
-  string ServiceID = 2;
-}
-
-message ManagerServiceLeaveRequest { string ServiceID = 1; }

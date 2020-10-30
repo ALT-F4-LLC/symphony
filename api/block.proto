@@ -5,75 +5,37 @@ option go_package = "github.com/erkrnt/symphony/api";
 package api;
 
 import "api/generic.proto";
+import "api/service.proto";
 
 service Block {
-  rpc GetLogicalVolume(BlockLogicalVolumeRequest) returns (LogicalVolumeMetadata) {}
-  rpc GetPhysicalVolume(BlockPhysicalVolumeRequest) returns (PhysicalVolumeMetadata) {}
-  rpc GetVolumeGroup(BlockVolumeGroupRequest) returns (VolumeGroupMetadata) {}
-
-  rpc NewLogicalVolume(BlockNewLogicalVolumeRequest) returns (BlockNewLogicalVolumeResponse) {}
-  rpc NewPhysicalVolume(BlockPhysicalVolumeRequest) returns (PhysicalVolumeMetadata) {}
-  rpc NewVolumeGroup(BlockNewVolumeGroupRequest) returns (VolumeGroupMetadata) {}
-
-  rpc RemoveLogicalVolume(BlockLogicalVolumeRequest) returns (SuccessStatusResponse) {}
-  rpc RemovePhysicalVolume(BlockPhysicalVolumeRequest) returns (SuccessStatusResponse) {}
-  rpc RemoveVolumeGroup(BlockVolumeGroupRequest) returns (SuccessStatusResponse) {}
-
-  rpc ServiceInit(BlockServiceInitRequest) returns (BlockServiceInitResponse) {}
-  rpc ServiceLeave(BlockServiceLeaveRequest) returns (SuccessStatusResponse) {}
-}
-
-message BlockServiceInitRequest { string ServiceAddr = 1; }
-
-message BlockServiceInitResponse {
-  string ClusterID = 1;
-  string ServiceID = 2;
-}
-
-message BlockLogicalVolumeRequest {
-  string ID = 1;
-  string VolumeGroupID = 2;
-}
-
-message BlockPhysicalVolumeRequest { string DeviceName = 1; }
-
-message BlockVolumeGroupRequest { string ID = 1; }
-
-message BlockNewLogicalVolumeRequest {
-  string ID = 1;
-  int64 Size = 2;
-  string VolumeGroupID = 3;
-}
-
-message BlockNewLogicalVolumeResponse {
-  LogicalVolumeMetadata Metadata = 1;
-  string TargetAddr = 2;
-}
-
-message BlockNewVolumeGroupRequest {
-  string DeviceName = 1;
-  string ID = 2;
+  rpc ServiceInit(RequestServiceInit) returns (ResponseServiceInit) {}
+  rpc ServiceLeave(RequestServiceLeave) returns (ResponseStatus) {}
 }
 
 message LogicalVolume {
-  string ID = 1;
-  LogicalVolumeMetadata Metadata = 2;
-  int64 Size = 3;
-  string TargetAddr = 4;
-  string VolumeGroupID = 5;
+  string ClusterID = 1;
+  string ID = 2;
+  string ServiceID = 3;
+  int64 Size = 4;
+  ResourceStatus Status = 5;
+  string TargetAddr = 6;
+  string VolumeGroupID = 7;
 }
 
 message PhysicalVolume {
-  string DeviceName = 1;
+  string ClusterID = 1;
   string ID = 2;
-  PhysicalVolumeMetadata Metadata = 3;
-  string ServiceID = 4;
+  string ServiceID = 3;
+  string DeviceName = 4;
+  ResourceStatus Status = 5;
 }
 
 message VolumeGroup {
-  string ID = 1;
-  VolumeGroupMetadata Metadata = 2;
-  string PhysicalVolumeID = 3;
+  string ClusterID = 1;
+  string ID = 2;
+  string ServiceID = 3;
+  string PhysicalVolumeID = 4;
+  ResourceStatus Status = 5;
 }
 
 message LogicalVolumeMetadata {
@@ -109,5 +71,3 @@ message VolumeGroupMetadata {
   string VgSize = 6;
   string VgFree = 7;
 }
-
-message BlockServiceLeaveRequest { string ServiceID = 1; }

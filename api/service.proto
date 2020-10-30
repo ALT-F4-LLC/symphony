@@ -10,7 +10,34 @@ enum ServiceType {
 }
 
 message Service {
-  string Addr = 1;
+  string ClusterID = 1;
   string ID = 2;
-  string Type = 4;
+  ServiceType Type = 3;
 }
+
+message RequestService {
+  string ServiceID = 1;
+}
+
+message RequestServices {}
+message ResponseServices {
+  repeated Service Results = 1;
+}
+
+message RequestServiceInit {
+  string ServiceAddr = 1;
+  ServiceType ServiceType = 2;
+}
+message ResponseServiceInit {
+  string ClusterID = 1;
+  repeated string Endpoints = 2;
+  string SerfAddress = 3;
+  string ServiceID = 4;
+}
+
+message RequestServiceJoin {
+  string ClusterID = 1;
+  string ServiceID = 2;
+}
+
+message RequestServiceLeave { string ServiceID = 1; }
