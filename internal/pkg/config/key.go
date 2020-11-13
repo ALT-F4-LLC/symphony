@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"sync"
 
@@ -13,15 +14,15 @@ import (
 
 // Key : key used for initialization and authentication of nodes
 type Key struct {
-	ClusterID *uuid.UUID `json:"cluster_id"`
-	Endpoints []string
-	ServiceID *uuid.UUID `json:"service_id"`
+	ClusterID *uuid.UUID   `json:"cluster_id"`
+	JoinAddr  *net.TCPAddr `json:"join_addr"`
+	ServiceID *uuid.UUID   `json:"service_id"`
 
 	mu sync.Mutex
 }
 
-// NewKey : gets contents of key.json file
-func NewKey(configDir string) (*Key, error) {
+// GetKey : gets contents of key.json file
+func GetKey(configDir string) (*Key, error) {
 	keyPath := fmt.Sprintf("%s/%s", configDir, "key.json")
 
 	keyFile, err := os.OpenFile(keyPath, os.O_RDONLY|os.O_CREATE, 0666)
@@ -72,9 +73,9 @@ func (k *Key) Save(configDir string) error {
 	defer k.mu.Unlock()
 
 	fields := logrus.Fields{
-		"cluster_id": k.ClusterID.String(),
-		"endpoints":  k.Endpoints,
-		"service_id": k.ServiceID.String(),
+		"ClusterID": k.ClusterID.String(),
+		"JoinAddr":  k.JoinAddr.String(),
+		"ServiceID": k.ServiceID.String(),
 	}
 
 	logrus.WithFields(fields).Debug("Updated key.json file")

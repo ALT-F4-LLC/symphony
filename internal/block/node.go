@@ -128,6 +128,12 @@ func (b *Block) restart() error {
 			continue
 		}
 
+		restartSerfErr := b.Node.RestartSerf(b.flags.listenAddr)
+
+		if restartSerfErr != nil {
+			return restartSerfErr
+		}
+
 		_, serfErr := b.Node.Serf.Join([]string{join.SerfAddress}, true)
 
 		if serfErr != nil {

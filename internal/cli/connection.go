@@ -1,22 +1,21 @@
 package cli
 
 import (
-	"fmt"
-	"path/filepath"
+	"net"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
-// NewConnControl : creates a new control connection
-func NewConnControl(socketPath *string) *grpc.ClientConn {
-	socket, err := filepath.Abs(*socketPath)
+// NewClient : creates a new api client
+func NewClient(serviceAddr string) *grpc.ClientConn {
+	addr, err := net.ResolveTCPAddr("tcp", serviceAddr)
 
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
-	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", socket), grpc.WithInsecure())
+	conn, err := grpc.Dial(addr.String(), grpc.WithInsecure())
 
 	if err != nil {
 		logrus.Fatal(err)

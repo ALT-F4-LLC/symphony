@@ -27,12 +27,12 @@ func GetDirPath(dir *string) (*string, error) {
 }
 
 // GetListenAddr : returns the TCP listen addr
-func GetListenAddr(defaultPort int, ip *net.IP, overridePort *int) (*net.TCPAddr, error) {
+func GetListenAddr(defaultPort int, overridePort *int) (*net.TCPAddr, error) {
 	if *overridePort != 0 {
 		defaultPort = *overridePort
 	}
 
-	listenAddr := fmt.Sprintf("%s:%d", ip.String(), defaultPort)
+	listenAddr := fmt.Sprintf(":%d", defaultPort)
 
 	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddr)
 
@@ -41,21 +41,4 @@ func GetListenAddr(defaultPort int, ip *net.IP, overridePort *int) (*net.TCPAddr
 	}
 
 	return listenTCPAddr, nil
-}
-
-// GetOutboundIP : get preferred outbound ip of this machine
-func GetOutboundIP() (*net.IP, error) {
-	conn, err := net.Dial("udp", "1.1.1.1:80")
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer conn.Close()
-
-	addr := conn.LocalAddr().(*net.UDPAddr)
-
-	ip := addr.IP
-
-	return &ip, nil
 }

@@ -1,25 +1,68 @@
 networks:
-  symphony:
+  apiserver:
+  #block:
+  etcd:
 
 services:
-  block_01:
+
+  apiserver_01:
     build:
       context: .
-      dockerfile: cmd/block/Dockerfile
+      dockerfile: cmd/apiserver/Dockerfile
     command: >
-      block
+      apiserver
       --config-dir="/config"
+      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
       --verbose
     depends_on:
-      - manager_01
-      - manager_02
-      - manager_03
+      - etcd_01
+      - etcd_02
+      - etcd_03
     networks:
-      - symphony
-    ports:
-      - 15763:15760
+      apiserver:
+        aliases:
+          - apiserver
+      etcd:
     volumes:
-      - block_01:/config
+      - apiserver_01:/config
+
+  apiserver_02:
+    build:
+      context: .
+      dockerfile: cmd/apiserver/Dockerfile
+    command: >
+      apiserver
+      --config-dir="/config"
+      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
+      --verbose
+    depends_on:
+      - etcd_01
+      - etcd_02
+      - etcd_03
+    networks:
+      apiserver:
+        aliases:
+          - apiserver
+      etcd:
+    volumes:
+      - apiserver_02:/config
+
+  #block_01:
+    #build:
+      #context: .
+      #dockerfile: cmd/block/Dockerfile
+    #command: >
+      #block
+      #--config-dir="/config"
+      #--verbose
+    #depends_on:
+      #- apiserver_01
+      #- apiserver_02
+    #networks:
+      #- apiserver
+      #- block
+    #volumes:
+      #- block_01:/config
 
   etcd_01:
     command: >-
@@ -34,7 +77,7 @@ services:
       -name etcd_01
     image: quay.io/coreos/etcd:v3.4.9
     networks:
-      - symphony
+      - etcd
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
       - etcd_01:/etcd_01.etcd
@@ -52,7 +95,7 @@ services:
       -name etcd_02
     image: quay.io/coreos/etcd:v3.4.9
     networks:
-      - symphony
+      - etcd
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
       - etcd_02:/etcd_02.etcd
@@ -70,78 +113,17 @@ services:
       -name etcd_03
     image: quay.io/coreos/etcd:v3.4.9
     networks:
-      - symphony
+      - etcd
     volumes:
       - /usr/share/ca-certificates/:/etc/ssl/certs
       - etcd_03:/etcd_03.etcd
 
-  manager_01:
-    build:
-      context: .
-      dockerfile: cmd/manager/Dockerfile
-    command: >
-      manager
-      --config-dir="/config"
-      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
-      --verbose
-    depends_on:
-      - etcd_01
-      - etcd_02
-      - etcd_03
-    networks:
-      - symphony
-    ports:
-      - 15760:15760
-    volumes:
-      - manager_01:/config
-
-  manager_02:
-    build:
-      context: .
-      dockerfile: cmd/manager/Dockerfile
-    command: >
-      manager
-      --config-dir="/config"
-      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
-      --verbose
-    depends_on:
-      - etcd_01
-      - etcd_02
-      - etcd_03
-    networks:
-      - symphony
-    ports:
-      - 15761:15760
-    volumes:
-      - manager_02:/config
-
-  manager_03:
-    build:
-      context: .
-      dockerfile: cmd/manager/Dockerfile
-    command: >
-      manager
-      --config-dir="/config"
-      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
-      --verbose
-    depends_on:
-      - etcd_01
-      - etcd_02
-      - etcd_03
-    networks:
-      - symphony
-    ports:
-      - 15762:15760
-    volumes:
-      - manager_03:/config
-
 version: "3.7"
 
 volumes:
-  block_01:
+  apiserver_01:
+  apiserver_02:
+  #block_01:
   etcd_01:
   etcd_02:
   etcd_03:
-  manager_01:
-  manager_02:
-  manager_03:

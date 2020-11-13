@@ -29,13 +29,7 @@ func getFlags() (*flags, error) {
 		return nil, err
 	}
 
-	ip, err := config.GetOutboundIP()
-
-	if err != nil {
-		return nil, err
-	}
-
-	listenAddr, err := config.GetListenAddr(15760, ip, listenPort)
+	listenAddr, err := config.GetListenAddr(15760, listenPort)
 
 	if err != nil {
 		return nil, err

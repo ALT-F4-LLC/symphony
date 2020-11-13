@@ -4,40 +4,7 @@ option go_package = "github.com/erkrnt/symphony/api";
 
 package api;
 
-enum ServiceType {
-  MANAGER = 0;
-  BLOCK = 1;
-}
-
-message Service {
-  string ClusterID = 1;
-  string ID = 2;
-  ServiceType Type = 3;
-}
-
-message RequestService {
-  string ServiceID = 1;
-}
-
-message RequestServices {}
-message ResponseServices {
-  repeated Service Results = 1;
-}
-
-message RequestServiceInit {
-  string ServiceAddr = 1;
-  ServiceType ServiceType = 2;
-}
-message ResponseServiceInit {
-  string ClusterID = 1;
-  repeated string Endpoints = 2;
-  string SerfAddress = 3;
-  string ServiceID = 4;
-}
-
-message RequestServiceJoin {
+message RequestServiceLeave {
   string ClusterID = 1;
   string ServiceID = 2;
 }
-
-message RequestServiceLeave { string ServiceID = 1; }

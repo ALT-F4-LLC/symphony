@@ -1,7 +1,6 @@
 package config
 
 import (
-	"log"
 	"net"
 
 	"github.com/erkrnt/symphony/api"
@@ -15,37 +14,22 @@ type Node struct {
 	Serf   *serf.Serf
 }
 
-func (n *Node) startSerf(serviceAddr *net.TCPAddr) error {
-	conf := serf.DefaultConfig()
+// GetMember : retrieves a gossip member from a service
+func (n *Node) GetMember(service *api.Service) (*serf.Member, error) {
+	var member *serf.Member
 
-	confTags := make(map[string]string)
+	members := n.Serf.Members()
 
-	confTags["ServiceAddr"] = serviceAddr.String()
-
-	if n.Key.ServiceID != nil {
-		confTags["ServiceID"] = n.Key.ServiceID.String()
+	for _, m := range members {
+		if m.Tags["ServiceID"] == service.ID {
+			member = &m
+		}
 	}
 
-	confTags["ServiceType"] = api.ServiceType_MANAGER.String()
-
-	log.Print(confTags)
-
-	conf.Tags = confTags
-
-	conf.Init()
-
-	cluster, err := serf.Create(conf)
-
-	if err != nil {
-		return err
-	}
-
-	n.Serf = cluster
-
-	return nil
-
+	return member, nil
 }
 
+// StopSerf : stops Serf instance
 func (n *Node) StopSerf() error {
 	leaveErr := n.Serf.Leave()
 
@@ -64,18 +48,47 @@ func (n *Node) StopSerf() error {
 	return nil
 }
 
-func (n *Node) RestartSerf(serviceAddr *net.TCPAddr) error {
+// RestartSerf : restarts Serf instance
+func (n *Node) RestartSerf(serviceAddr *net.TCPAddr, serviceType api.ServiceType) error {
 	stopSerfErr := n.StopSerf()
 
 	if stopSerfErr != nil {
 		return stopSerfErr
 	}
 
-	startSerfErr := n.startSerf(serviceAddr)
+	startSerfErr := n.startSerf(serviceAddr, serviceType)
 
 	if startSerfErr != nil {
 		return startSerfErr
 	}
+
+	return nil
+}
+
+func (n *Node) startSerf(serviceAddr *net.TCPAddr, serviceType api.ServiceType) error {
+	conf := serf.DefaultConfig()
+
+	tags := make(map[string]string)
+
+	tags["ServiceAddr"] = serviceAddr.String()
+
+	if n.Key.ServiceID != nil {
+		tags["ServiceID"] = n.Key.ServiceID.String()
+	}
+
+	tags["ServiceType"] = serviceType.String()
+
+	conf.Tags = tags
+
+	conf.Init()
+
+	cluster, err := serf.Create(conf)
+
+	if err != nil {
+		return err
+	}
+
+	n.Serf = cluster
 
 	return nil
 }

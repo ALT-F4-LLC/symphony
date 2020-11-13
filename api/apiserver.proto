@@ -4,23 +4,26 @@ option go_package = "github.com/erkrnt/symphony/api";
 
 package api;
 
-import "api/block.proto";
-import "api/generic.proto";
+import "api/resource.proto";
 import "api/service.proto";
+import "api/status.proto";
 
-service Manager { 
+service APIServer { 
   rpc GetLogicalVolume(RequestLogicalVolume) returns (LogicalVolume) {}
   rpc GetPhysicalVolume(RequestPhysicalVolume) returns (PhysicalVolume) {}
   rpc GetService(RequestService) returns (Service) {}
   rpc GetVolumeGroup(RequestVolumeGroup) returns (VolumeGroup) {}
 
+  rpc GetClusters(RequestClusters) returns (ResponseClusters) {}
   rpc GetLogicalVolumes(RequestLogicalVolumes) returns (ResponseLogicalVolumes) {}
   rpc GetPhysicalVolumes(RequestPhysicalVolumes) returns (ResponsePhysicalVolumes) {}
   rpc GetServices(RequestServices) returns (ResponseServices) {}
   rpc GetVolumeGroups(RequestVolumeGroups) returns (ResponseVolumeGroups) {}
 
+  rpc NewCluster(RequestNewCluster) returns (Cluster) {}
   rpc NewLogicalVolume(RequestNewLogicalVolume) returns (LogicalVolume) {}
   rpc NewPhysicalVolume(RequestNewPhysicalVolume) returns (PhysicalVolume) {}
+  rpc NewService(RequestNewService) returns (ResponseNewService) {}
   rpc NewVolumeGroup(RequestNewVolumeGroup) returns (VolumeGroup) {}
 
   rpc RemoveLogicalVolume(RequestLogicalVolume) returns (ResponseStatus) {}
@@ -28,9 +31,14 @@ service Manager {
   rpc RemoveService(RequestService) returns (ResponseStatus) {}
   rpc RemoveVolumeGroup(RequestVolumeGroup) returns (ResponseStatus) {}
 
-  rpc ServiceInit(RequestServiceInit) returns (ResponseServiceInit) {}
-  rpc ServiceJoin(RequestServiceJoin) returns (ResponseServiceInit) {}
+  rpc ServiceJoin(RequestServiceJoin) returns (ResponseServiceJoin) {}
   rpc ServiceLeave(RequestServiceLeave) returns (ResponseStatus) {}
+}
+
+message RequestClusters {}
+
+message ResponseClusters {
+  repeated Cluster Results = 1;
 }
 
 message RequestLogicalVolume {
@@ -43,25 +51,7 @@ message ResponseLogicalVolumes {
   repeated LogicalVolume Results = 1;
 }
 
-message RequestPhysicalVolume {
-  string ID = 1;
-}
-
-message RequestPhysicalVolumes {}
-
-message ResponsePhysicalVolumes {
-  repeated PhysicalVolume Results = 1;
-}
-
-message RequestVolumeGroup {
-  string ID = 1;
-}
-
-message RequestVolumeGroups {}
-
-message ResponseVolumeGroups {
-  repeated VolumeGroup Results = 1;
-}
+message RequestNewCluster {}
 
 message RequestNewLogicalVolume {
   int64 Size = 1;
@@ -75,7 +65,60 @@ message RequestNewPhysicalVolume {
   ResourceStatus Status = 3;
 }
 
+message RequestNewService {
+  string ClusterID = 1;
+  string JoinAddr = 2;
+  ServiceType ServiceType = 3;
+}
+
+message ResponseNewService {
+  string ClusterID = 1;
+  string JoinAddr = 2;
+  string ServiceID = 3;
+}
+
 message RequestNewVolumeGroup {
   string PhysicalVolumeID = 1;
   ResourceStatus Status = 2;
+}
+
+message RequestPhysicalVolume {
+  string ID = 1;
+}
+
+message RequestPhysicalVolumes {}
+
+message ResponsePhysicalVolumes {
+  repeated PhysicalVolume Results = 1;
+}
+
+message RequestService {
+  string ClusterID = 1;
+  string ServiceID = 2;
+}
+
+message RequestServices {}
+
+message ResponseServices {
+  repeated Service Results = 1;
+}
+
+message RequestServiceJoin {
+  string ClusterID = 1;
+  string JoinAddr = 2;
+  string ServiceID = 3;
+}
+
+message ResponseServiceJoin {
+  string PeerAddr = 1;
+}
+
+message RequestVolumeGroup {
+  string ID = 1;
+}
+
+message RequestVolumeGroups {}
+
+message ResponseVolumeGroups {
+  repeated VolumeGroup Results = 1;
 }

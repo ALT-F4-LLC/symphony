@@ -14,6 +14,6 @@ enum ResourceStatus {
 }
 
 message ResponseStatus {
-  bool Failure = 1;
-  bool Success = 2;
+  bool FAILURE = 1;
+  bool SUCCESS = 2;
 }

@@ -18,8 +18,10 @@ require (
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/prometheus/procfs v0.0.11 // indirect
 	github.com/sirupsen/logrus v1.6.0
+	github.com/spf13/afero v1.4.1
 	go.etcd.io/etcd v3.3.22+incompatible
 	go.uber.org/zap v1.15.0
+	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
 	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f // indirect
 	golang.org/x/tools/gopls v0.4.1 // indirect
 	google.golang.org/grpc v1.26.0
