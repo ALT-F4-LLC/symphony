@@ -1,35 +1,31 @@
 package cli
 
 import (
-	"time"
-
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/service"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
-const (
-	GrpcContextTimeout = 5 * time.Second
-)
-
-func ClusterList(serviceAddr *string) {
-	if serviceAddr == nil {
-		logrus.Fatal("Missing APIServer address option. Check --help for more.")
+// ClusterList : returns list of clusters
+func ClusterList(apiserverAddr *string) {
+	if apiserverAddr == nil {
+		logrus.Fatal("Missing --apiserver-addr option. Check --help for more.")
 	}
 
-	conn := NewClient(*serviceAddr)
+	conn := service.NewClientConnTCP(*apiserverAddr)
 
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), GrpcContextTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), service.ContextTimeout)
 
 	defer cancel()
 
-	client := api.NewAPIServerClient(conn)
+	c := api.NewAPIServerClient(conn)
 
 	options := &api.RequestClusters{}
 
-	clusters, err := client.GetClusters(ctx, options)
+	clusters, err := c.GetClusters(ctx, options)
 
 	if err != nil {
 		logrus.Fatal(err)
@@ -38,24 +34,25 @@ func ClusterList(serviceAddr *string) {
 	logrus.Info(clusters)
 }
 
-func ClusterInit(serviceAddr *string) {
-	if serviceAddr == nil {
-		logrus.Fatal("Missing APIServer address option. Check --help for more.")
+// ClusterNew : create a new cluster
+func ClusterNew(apiserverAddr *string) {
+	if apiserverAddr == nil {
+		logrus.Fatal("Missing --apiserver-addr option. Check --help for more.")
 	}
 
-	conn := NewClient(*serviceAddr)
+	conn := service.NewClientConnTCP(*apiserverAddr)
 
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), GrpcContextTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), service.ContextTimeout)
 
 	defer cancel()
 
-	client := api.NewAPIServerClient(conn)
+	c := api.NewAPIServerClient(conn)
 
 	options := &api.RequestNewCluster{}
 
-	cluster, err := client.NewCluster(ctx, options)
+	cluster, err := c.NewCluster(ctx, options)
 
 	if err != nil {
 		logrus.Fatal(err)

@@ -4,6 +4,24 @@ option go_package = "github.com/erkrnt/symphony/api";
 
 package api;
 
+import "api/resource.proto";
+
+// socket://control.sock
+service Control {
+  rpc ServiceNew(RequestServiceNew) returns (ResponseServiceNew) {}
+}
+
+message RequestServiceNew {
+  string APIServerAddr = 1;
+  string ClusterID = 2;
+  ServiceType ServiceType = 3;
+}
+
+message ResponseServiceNew {
+  string ClusterID = 1;
+  string ServiceID = 2;
+}
+
 message RequestServiceLeave {
   string ClusterID = 1;
   string ServiceID = 2;

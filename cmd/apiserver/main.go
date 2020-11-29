@@ -14,7 +14,7 @@ func main() {
 
 	go s.Start()
 
-	startErr := <-s.Node.ErrorC
+	startErr := <-s.Service.ErrorC
 
 	logrus.Fatal(startErr)
 }

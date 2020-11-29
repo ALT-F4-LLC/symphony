@@ -7,12 +7,18 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/state"
+	"github.com/erkrnt/symphony/internal/service"
 	"github.com/google/uuid"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// NewServiceOptions : options for creating a new Service
+type NewServiceOptions struct {
+	ClusterID   string
+	ServiceType api.ServiceType
+}
 
 // Resources : defines handlers for resources
 type Resources struct {
@@ -164,10 +170,10 @@ func (r *Resources) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
 	return pvs, nil
 }
 
-func (m *Resources) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, error) {
+func (r *Resources) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, error) {
 	etcdKey := fmt.Sprintf("/physicalvolume/%s", id.String())
 
-	results, err := m.getStateByKey(etcdKey)
+	results, err := r.getStateByKey(etcdKey)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -257,16 +263,16 @@ func (r *Resources) getServiceByID(id uuid.UUID) (*api.Service, error) {
 }
 
 func (r *Resources) getStateByKey(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), EtcdDialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: EtcdDialTimeout,
+		DialTimeout: service.DialTimeout,
 		Endpoints:   r.EtcdEndpoints,
 	}
 
-	client, err := state.NewClient(config)
+	client, err := clientv3.New(config)
 
 	if err != nil {
 		return nil, err
@@ -283,8 +289,8 @@ func (r *Resources) getStateByKey(key string, opts ...clientv3.OpOption) (*clien
 	return results, nil
 }
 
-func (m *Resources) getVolumeGroups() ([]*api.VolumeGroup, error) {
-	results, err := m.getStateByKey("/VolumeGroup", clientv3.WithPrefix())
+func (r *Resources) getVolumeGroups() ([]*api.VolumeGroup, error) {
+	results, err := r.getStateByKey("/VolumeGroup", clientv3.WithPrefix())
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -343,6 +349,49 @@ func (r *Resources) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, error) {
 	return volumeGroup, nil
 }
 
+func (r *Resources) newService(opts NewServiceOptions) (*api.Service, error) {
+	clusterID, err := uuid.Parse(opts.ClusterID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	cluster, err := r.getClusterByID(clusterID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	if cluster == nil {
+		st := status.New(codes.NotFound, "invalid_cluster")
+
+		return nil, st.Err()
+	}
+
+	serviceID := uuid.New()
+
+	service := &api.Service{
+		ClusterID: cluster.ID,
+		ID:        serviceID.String(),
+		Status:    api.ResourceStatus_CREATE_COMPLETED,
+		Type:      opts.ServiceType,
+	}
+
+	serviceSaveErr := r.saveService(service)
+
+	if serviceSaveErr != nil {
+		st := status.New(codes.Internal, serviceSaveErr.Error())
+
+		return nil, st.Err()
+	}
+
+	return service, nil
+}
+
 func (r *Resources) removeResource(key string) error {
 	etcd, err := clientv3.New(clientv3.Config{
 		Endpoints:   r.EtcdEndpoints,
@@ -373,16 +422,16 @@ func (r *Resources) removeResource(key string) error {
 }
 
 func (r *Resources) saveCluster(cluster *api.Cluster) error {
-	ctx, cancel := context.WithTimeout(context.Background(), EtcdDialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: EtcdDialTimeout,
+		DialTimeout: service.DialTimeout,
 		Endpoints:   r.EtcdEndpoints,
 	}
 
-	client, err := state.NewClient(config)
+	client, err := clientv3.New(config)
 
 	if err != nil {
 		return err
@@ -408,16 +457,16 @@ func (r *Resources) saveCluster(cluster *api.Cluster) error {
 }
 
 func (r *Resources) saveLogicalVolume(lv *api.LogicalVolume) error {
-	ctx, cancel := context.WithTimeout(context.Background(), EtcdDialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: EtcdDialTimeout,
+		DialTimeout: service.DialTimeout,
 		Endpoints:   r.EtcdEndpoints,
 	}
 
-	client, err := state.NewClient(config)
+	client, err := clientv3.New(config)
 
 	if err != nil {
 		return err
@@ -443,16 +492,16 @@ func (r *Resources) saveLogicalVolume(lv *api.LogicalVolume) error {
 }
 
 func (r *Resources) savePhysicalVolume(pv *api.PhysicalVolume) error {
-	ctx, cancel := context.WithTimeout(context.Background(), EtcdDialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: EtcdDialTimeout,
+		DialTimeout: service.DialTimeout,
 		Endpoints:   r.EtcdEndpoints,
 	}
 
-	client, err := state.NewClient(config)
+	client, err := clientv3.New(config)
 
 	if err != nil {
 		return err
@@ -478,16 +527,16 @@ func (r *Resources) savePhysicalVolume(pv *api.PhysicalVolume) error {
 }
 
 func (r *Resources) saveVolumeGroup(vg *api.VolumeGroup) error {
-	ctx, cancel := context.WithTimeout(context.Background(), EtcdDialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: EtcdDialTimeout,
+		DialTimeout: service.DialTimeout,
 		Endpoints:   r.EtcdEndpoints,
 	}
 
-	client, err := state.NewClient(config)
+	client, err := clientv3.New(config)
 
 	if err != nil {
 		return err
@@ -512,17 +561,17 @@ func (r *Resources) saveVolumeGroup(vg *api.VolumeGroup) error {
 	return nil
 }
 
-func (m *Resources) saveService(service *api.Service) error {
-	ctx, cancel := context.WithTimeout(context.Background(), EtcdDialTimeout)
+func (r *Resources) saveService(s *api.Service) error {
+	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
 
 	defer cancel()
 
 	config := clientv3.Config{
-		DialTimeout: EtcdDialTimeout,
-		Endpoints:   m.EtcdEndpoints,
+		DialTimeout: service.DialTimeout,
+		Endpoints:   r.EtcdEndpoints,
 	}
 
-	client, err := state.NewClient(config)
+	client, err := clientv3.New(config)
 
 	if err != nil {
 		return err
@@ -530,9 +579,9 @@ func (m *Resources) saveService(service *api.Service) error {
 
 	defer client.Close()
 
-	serviceKey := fmt.Sprintf("/Service/%s", service.ID)
+	serviceKey := fmt.Sprintf("/Service/%s", s.ID)
 
-	serviceJSON, err := json.Marshal(service)
+	serviceJSON, err := json.Marshal(s)
 
 	if err != nil {
 		return err

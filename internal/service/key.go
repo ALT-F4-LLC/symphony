@@ -1,10 +1,9 @@
-package config
+package service
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"sync"
 
@@ -14,9 +13,8 @@ import (
 
 // Key : key used for initialization and authentication of nodes
 type Key struct {
-	ClusterID *uuid.UUID   `json:"cluster_id"`
-	JoinAddr  *net.TCPAddr `json:"join_addr"`
-	ServiceID *uuid.UUID   `json:"service_id"`
+	ClusterID *uuid.UUID `json:"cluster_id"`
+	ServiceID *uuid.UUID `json:"service_id"`
 
 	mu sync.Mutex
 }
@@ -53,10 +51,14 @@ func GetKey(configDir string) (*Key, error) {
 }
 
 // Save : save the key.json file
-func (k *Key) Save(configDir string) error {
+func (k *Key) Save(configDir string, key *Key) error {
 	k.mu.Lock()
 
-	keyJSON, err := json.Marshal(k)
+	k.ClusterID = key.ClusterID
+
+	k.ServiceID = key.ServiceID
+
+	keyJSON, err := json.Marshal(key)
 
 	if err != nil {
 		return err
@@ -74,7 +76,6 @@ func (k *Key) Save(configDir string) error {
 
 	fields := logrus.Fields{
 		"ClusterID": k.ClusterID.String(),
-		"JoinAddr":  k.JoinAddr.String(),
 		"ServiceID": k.ServiceID.String(),
 	}
 

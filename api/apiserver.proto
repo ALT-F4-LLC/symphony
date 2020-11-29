@@ -8,6 +8,7 @@ import "api/resource.proto";
 import "api/service.proto";
 import "api/status.proto";
 
+// 0.0.0.0:15760
 service APIServer { 
   rpc GetLogicalVolume(RequestLogicalVolume) returns (LogicalVolume) {}
   rpc GetPhysicalVolume(RequestPhysicalVolume) returns (PhysicalVolume) {}
@@ -23,7 +24,7 @@ service APIServer {
   rpc NewCluster(RequestNewCluster) returns (Cluster) {}
   rpc NewLogicalVolume(RequestNewLogicalVolume) returns (LogicalVolume) {}
   rpc NewPhysicalVolume(RequestNewPhysicalVolume) returns (PhysicalVolume) {}
-  rpc NewService(RequestNewService) returns (ResponseNewService) {}
+  rpc NewService(RequestNewService) returns (Service) {}
   rpc NewVolumeGroup(RequestNewVolumeGroup) returns (VolumeGroup) {}
 
   rpc RemoveLogicalVolume(RequestLogicalVolume) returns (ResponseStatus) {}
@@ -67,14 +68,7 @@ message RequestNewPhysicalVolume {
 
 message RequestNewService {
   string ClusterID = 1;
-  string JoinAddr = 2;
-  ServiceType ServiceType = 3;
-}
-
-message ResponseNewService {
-  string ClusterID = 1;
-  string JoinAddr = 2;
-  string ServiceID = 3;
+  ServiceType ServiceType = 2;
 }
 
 message RequestNewVolumeGroup {

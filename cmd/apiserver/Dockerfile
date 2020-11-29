@@ -20,9 +20,7 @@ COPY ./cmd/cli ./cmd/cli
 COPY ./internal/cli ./internal/cli
 COPY ./cmd/apiserver ./cmd/apiserver
 COPY ./internal/apiserver ./internal/apiserver
-COPY ./internal/pkg/cluster ./internal/pkg/cluster
-COPY ./internal/pkg/config ./internal/pkg/config
-COPY ./internal/pkg/state ./internal/pkg/state
+COPY ./internal/service ./internal/service
 
 RUN go install -v ./...
 
