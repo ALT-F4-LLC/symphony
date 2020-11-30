@@ -14,7 +14,6 @@ type Flags struct {
 	ConfigDir     string
 	EtcdEndpoints []string
 	ListenAddr    *net.TCPAddr
-	PeerAddr      *net.TCPAddr
 	Verbose       bool
 }
 
@@ -22,7 +21,6 @@ var (
 	configDir     = kingpin.Flag("config-dir", "Sets configuration directory for manager.").Default(".").String()
 	etcdEndpoints = kingpin.Flag("etcd-endpoints", "Sets the etcd endpoints list.").Required().String()
 	listenPort    = kingpin.Flag("listen-port", "Sets the remote service port.").Int()
-	peerAddr      = kingpin.Flag("peer-addr", "Sets the peer address for the service.").Required().String()
 	verbose       = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
 )
 
@@ -35,19 +33,7 @@ func getFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	ip, err := service.GetOutboundIP()
-
-	if err != nil {
-		return nil, err
-	}
-
-	listenAddr, err := service.GetListenAddr(15760, ip, listenPort)
-
-	if err != nil {
-		return nil, err
-	}
-
-	peerAddrTCP, err := net.ResolveTCPAddr("tcp", *peerAddr)
+	listenAddr, err := service.GetListenAddr(15760, listenPort)
 
 	if err != nil {
 		return nil, err
@@ -57,16 +43,14 @@ func getFlags() (*Flags, error) {
 		ConfigDir:     *configDirPath,
 		EtcdEndpoints: strings.Split(*etcdEndpoints, ","),
 		ListenAddr:    listenAddr,
-		PeerAddr:      peerAddrTCP,
 		Verbose:       *verbose,
 	}
 
 	fields := logrus.Fields{
-		"configDir":     flags.ConfigDir,
-		"etcdEndpoints": flags.EtcdEndpoints,
-		"listenAddr":    flags.ListenAddr.String(),
-		"peerAddr":      peerAddrTCP.String(),
-		"verbose":       flags.Verbose,
+		"ConfigDir":     flags.ConfigDir,
+		"EtcdEndpoints": flags.EtcdEndpoints,
+		"ListenAddr":    flags.ListenAddr.String(),
+		"Verbose":       flags.Verbose,
 	}
 
 	logrus.WithFields(fields).Info("Service command-line flags loaded.")

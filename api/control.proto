@@ -21,8 +21,3 @@ message ResponseServiceNew {
   string ClusterID = 1;
   string ServiceID = 2;
 }
-
-message RequestServiceLeave {
-  string ClusterID = 1;
-  string ServiceID = 2;
-}

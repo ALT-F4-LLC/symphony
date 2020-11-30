@@ -5,12 +5,13 @@ option go_package = "github.com/erkrnt/symphony/api";
 package api;
 
 enum ResourceStatus {
-  REVIEW_IN_PROGRESS = 0;
-  REVIEW_COMPLETED = 1;
-  REVIEW_FAILED = 2;
-  CREATE_IN_PROGRESS = 3;
-  CREATE_COMPLETED = 4;
-  CREATE_FAILED = 5;
+  UNKNOWN_RESOURCE_STATUS = 0;
+  REVIEW_IN_PROGRESS = 1;
+  REVIEW_COMPLETED = 2;
+  REVIEW_FAILED = 3;
+  CREATE_IN_PROGRESS = 4;
+  CREATE_COMPLETED = 5;
+  CREATE_FAILED = 6;
 }
 
 message ResponseStatus {

@@ -3,13 +3,9 @@ package apiserver
 import (
 	"context"
 	"fmt"
-	"net"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/service"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -21,7 +17,7 @@ type GRPCServerAPIServer struct {
 
 // GetClusters : retrieves all clusters from state
 func (s *GRPCServerAPIServer) GetClusters(ctx context.Context, in *api.RequestClusters) (*api.ResponseClusters, error) {
-	clusters, err := s.APIServer.Resources.getClusters()
+	clusters, err := s.APIServer.getClusters()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -46,7 +42,7 @@ func (s *GRPCServerAPIServer) GetLogicalVolume(ctx context.Context, in *api.Requ
 		return nil, st.Err()
 	}
 
-	lv, err := s.APIServer.Resources.getLogicalVolumeByID(lvID)
+	lv, err := s.APIServer.getLogicalVolumeByID(lvID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -65,7 +61,7 @@ func (s *GRPCServerAPIServer) GetLogicalVolume(ctx context.Context, in *api.Requ
 
 // GetLogicalVolumes : retrieves all logical volumes from state
 func (s *GRPCServerAPIServer) GetLogicalVolumes(ctx context.Context, in *api.RequestLogicalVolumes) (*api.ResponseLogicalVolumes, error) {
-	lvs, err := s.APIServer.Resources.getLogicalVolumes()
+	lvs, err := s.APIServer.getLogicalVolumes()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -90,7 +86,7 @@ func (s *GRPCServerAPIServer) GetPhysicalVolume(ctx context.Context, in *api.Req
 		return nil, st.Err()
 	}
 
-	pv, err := s.APIServer.Resources.getPhysicalVolumeByID(pvID)
+	pv, err := s.APIServer.getPhysicalVolumeByID(pvID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -109,7 +105,7 @@ func (s *GRPCServerAPIServer) GetPhysicalVolume(ctx context.Context, in *api.Req
 
 // GetPhysicalVolumes : retrieves all physical volumes from state
 func (s *GRPCServerAPIServer) GetPhysicalVolumes(ctx context.Context, in *api.RequestPhysicalVolumes) (*api.ResponsePhysicalVolumes, error) {
-	pvs, err := s.APIServer.Resources.getPhysicalVolumes()
+	pvs, err := s.APIServer.getPhysicalVolumes()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -133,7 +129,7 @@ func (s *GRPCServerAPIServer) GetService(ctx context.Context, in *api.RequestSer
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.Resources.getServiceByID(serviceID)
+	service, err := s.APIServer.getServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -152,7 +148,7 @@ func (s *GRPCServerAPIServer) GetService(ctx context.Context, in *api.RequestSer
 
 // GetServices : retrieves all services from state
 func (s *GRPCServerAPIServer) GetServices(ctx context.Context, in *api.RequestServices) (*api.ResponseServices, error) {
-	services, err := s.APIServer.Resources.getServices()
+	services, err := s.APIServer.getServices()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -176,7 +172,7 @@ func (s *GRPCServerAPIServer) GetVolumeGroup(ctx context.Context, in *api.Reques
 		return nil, st.Err()
 	}
 
-	vg, err := s.APIServer.Resources.getVolumeGroupByID(vgID)
+	vg, err := s.APIServer.getVolumeGroupByID(vgID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -193,7 +189,7 @@ func (s *GRPCServerAPIServer) GetVolumeGroup(ctx context.Context, in *api.Reques
 
 // GetVolumeGroups : retrieves all volume groups from state
 func (s *GRPCServerAPIServer) GetVolumeGroups(ctx context.Context, in *api.RequestVolumeGroups) (*api.ResponseVolumeGroups, error) {
-	vgs, err := s.APIServer.Resources.getVolumeGroups()
+	vgs, err := s.APIServer.getVolumeGroups()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -216,7 +212,7 @@ func (s *GRPCServerAPIServer) NewCluster(ctx context.Context, in *api.RequestNew
 		Status: api.ResourceStatus_CREATE_COMPLETED,
 	}
 
-	clusterSaveErr := s.APIServer.Resources.saveCluster(c)
+	clusterSaveErr := s.APIServer.saveCluster(c)
 
 	if clusterSaveErr != nil {
 		st := status.New(codes.Internal, clusterSaveErr.Error())
@@ -237,7 +233,7 @@ func (s *GRPCServerAPIServer) NewLogicalVolume(ctx context.Context, in *api.Requ
 		return nil, st.Err()
 	}
 
-	vg, err := s.APIServer.Resources.getVolumeGroupByID(vgID)
+	vg, err := s.APIServer.getVolumeGroupByID(vgID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -259,7 +255,7 @@ func (s *GRPCServerAPIServer) NewLogicalVolume(ctx context.Context, in *api.Requ
 		return nil, st.Err()
 	}
 
-	pv, err := s.APIServer.Resources.getPhysicalVolumeByID(pvID)
+	pv, err := s.APIServer.getPhysicalVolumeByID(pvID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -282,7 +278,7 @@ func (s *GRPCServerAPIServer) NewLogicalVolume(ctx context.Context, in *api.Requ
 		VolumeGroupID: vg.ID,
 	}
 
-	saveErr := s.APIServer.Resources.saveLogicalVolume(lv)
+	saveErr := s.APIServer.saveLogicalVolume(lv)
 
 	if saveErr != nil {
 		return nil, saveErr
@@ -300,14 +296,14 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.Resources.getServiceByID(serviceID)
+	service, err := s.APIServer.getServiceByID(serviceID)
 
 	if service == nil {
 		st := status.New(codes.NotFound, "invalid_service_id")
 		return nil, st.Err()
 	}
 
-	volumes, err := s.APIServer.Resources.getPhysicalVolumes()
+	volumes, err := s.APIServer.getPhysicalVolumes()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -335,7 +331,7 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 		ServiceID:  service.ID,
 	}
 
-	saveErr := s.APIServer.Resources.savePhysicalVolume(pv)
+	saveErr := s.APIServer.savePhysicalVolume(pv)
 
 	if saveErr != nil {
 		return nil, saveErr
@@ -346,12 +342,15 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 
 // NewService : creates a new service in state
 func (s *GRPCServerAPIServer) NewService(ctx context.Context, in *api.RequestNewService) (*api.Service, error) {
-	options := NewServiceOptions{
-		ClusterID:   in.ClusterID,
-		ServiceType: in.ServiceType,
+	clusterID, err := uuid.Parse(in.ClusterID)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.Resources.newService(options)
+	service, err := s.APIServer.newService(clusterID, in.ServiceType)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -371,7 +370,7 @@ func (s *GRPCServerAPIServer) NewVolumeGroup(ctx context.Context, in *api.Reques
 		return nil, st.Err()
 	}
 
-	physicalVolume, err := s.APIServer.Resources.getPhysicalVolumeByID(physicalVolumeID)
+	physicalVolume, err := s.APIServer.getPhysicalVolumeByID(physicalVolumeID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -390,7 +389,7 @@ func (s *GRPCServerAPIServer) NewVolumeGroup(ctx context.Context, in *api.Reques
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.Resources.getServiceByID(physicalVolumeServiceID)
+	service, err := s.APIServer.getServiceByID(physicalVolumeServiceID)
 
 	if service == nil {
 		st := status.New(codes.NotFound, "invalid_service_id")
@@ -405,7 +404,7 @@ func (s *GRPCServerAPIServer) NewVolumeGroup(ctx context.Context, in *api.Reques
 		Status:           api.ResourceStatus_REVIEW_IN_PROGRESS,
 	}
 
-	saveErr := s.APIServer.Resources.saveVolumeGroup(vg)
+	saveErr := s.APIServer.saveVolumeGroup(vg)
 
 	if saveErr != nil {
 		return nil, saveErr
@@ -423,7 +422,7 @@ func (s *GRPCServerAPIServer) RemoveLogicalVolume(ctx context.Context, in *api.R
 		return nil, st.Err()
 	}
 
-	lv, err := s.APIServer.Resources.getLogicalVolumeByID(logicalVolumeID)
+	lv, err := s.APIServer.getLogicalVolumeByID(logicalVolumeID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -437,7 +436,7 @@ func (s *GRPCServerAPIServer) RemoveLogicalVolume(ctx context.Context, in *api.R
 
 	resourceKey := fmt.Sprintf("/LogicalVolume/%s", lv.ID)
 
-	delErr := s.APIServer.Resources.removeResource(resourceKey)
+	delErr := s.APIServer.removeResource(resourceKey)
 
 	if delErr != nil {
 		st := status.New(codes.Internal, delErr.Error())
@@ -445,7 +444,7 @@ func (s *GRPCServerAPIServer) RemoveLogicalVolume(ctx context.Context, in *api.R
 		return nil, st.Err()
 	}
 
-	// TODO : emit an event change to block services
+	// TODO: emit an event change to block services
 
 	res := &api.ResponseStatus{SUCCESS: true}
 
@@ -462,7 +461,7 @@ func (s *GRPCServerAPIServer) RemovePhysicalVolume(ctx context.Context, in *api.
 		return nil, st.Err()
 	}
 
-	pv, err := s.APIServer.Resources.getPhysicalVolumeByID(physicalVolumeID)
+	pv, err := s.APIServer.getPhysicalVolumeByID(physicalVolumeID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -484,7 +483,7 @@ func (s *GRPCServerAPIServer) RemovePhysicalVolume(ctx context.Context, in *api.
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.Resources.getServiceByID(serviceID)
+	service, err := s.APIServer.getServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -500,7 +499,7 @@ func (s *GRPCServerAPIServer) RemovePhysicalVolume(ctx context.Context, in *api.
 
 	resourceKey := fmt.Sprintf("/PhysicalVolume/%s", pv.ID)
 
-	delRes := s.APIServer.Resources.removeResource(resourceKey)
+	delRes := s.APIServer.removeResource(resourceKey)
 
 	if delRes != nil {
 		st := status.New(codes.Internal, delRes.Error())
@@ -523,7 +522,7 @@ func (s *GRPCServerAPIServer) RemoveService(ctx context.Context, in *api.Request
 		return nil, st.Err()
 	}
 
-	cluster, err := s.APIServer.Resources.getClusterByID(clusterID)
+	cluster, err := s.APIServer.getClusterByID(clusterID)
 
 	if err != nil {
 		st := status.New(codes.InvalidArgument, err.Error())
@@ -545,7 +544,7 @@ func (s *GRPCServerAPIServer) RemoveService(ctx context.Context, in *api.Request
 		return nil, st.Err()
 	}
 
-	srvc, err := s.APIServer.Resources.getServiceByID(serviceID)
+	srvc, err := s.APIServer.getServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -553,61 +552,9 @@ func (s *GRPCServerAPIServer) RemoveService(ctx context.Context, in *api.Request
 		return nil, st.Err()
 	}
 
-	member, err := s.APIServer.Service.GetSerfMember(srvc)
-
-	if member != nil {
-		st := status.New(codes.Unavailable, "service_unavailable")
-
-		return nil, st.Err()
-	}
-
-	serviceAddr := member.Tags["ServiceAddr"]
-
-	leaveAddr, err := net.ResolveTCPAddr("tcp", serviceAddr)
-
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := grpc.Dial(leaveAddr.String(), grpc.WithInsecure())
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer conn.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), service.ContextTimeout)
-
-	defer cancel()
-
-	leaveOpts := &api.RequestServiceLeave{
-		ServiceID: srvc.ID,
-	}
-
-	if srvc.Type == api.ServiceType_APISERVER {
-		peer := api.NewAPIServerClient(conn)
-
-		_, err := peer.ServiceLeave(ctx, leaveOpts)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if srvc.Type == api.ServiceType_BLOCK {
-		peer := api.NewBlockClient(conn)
-
-		_, err := peer.ServiceLeave(ctx, leaveOpts)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	resourceKey := fmt.Sprintf("/Service/%s", srvc.ID)
 
-	delErr := s.APIServer.Resources.removeResource(resourceKey)
+	delErr := s.APIServer.removeResource(resourceKey)
 
 	if delErr != nil {
 		st := status.New(codes.Internal, delErr.Error())
@@ -630,7 +577,7 @@ func (s *GRPCServerAPIServer) RemoveVolumeGroup(ctx context.Context, in *api.Req
 		return nil, st.Err()
 	}
 
-	vg, err := s.APIServer.Resources.getVolumeGroupByID(volumeGroupID)
+	vg, err := s.APIServer.getVolumeGroupByID(volumeGroupID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -646,139 +593,13 @@ func (s *GRPCServerAPIServer) RemoveVolumeGroup(ctx context.Context, in *api.Req
 
 	resourceKey := fmt.Sprintf("/VolumeGroup/%s", vg.ID)
 
-	delErr := s.APIServer.Resources.removeResource(resourceKey)
+	delErr := s.APIServer.removeResource(resourceKey)
 
 	if delErr != nil {
 		st := status.New(codes.Internal, delErr.Error())
 
 		return nil, st.Err()
 	}
-
-	res := &api.ResponseStatus{SUCCESS: true}
-
-	return res, nil
-}
-
-// ServiceJoin : service re/join requests to cluster
-func (s *GRPCServerAPIServer) ServiceJoin(ctx context.Context, in *api.RequestServiceJoin) (*api.ResponseServiceJoin, error) {
-	clusterID, err := uuid.Parse(in.ClusterID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	cluster, err := s.APIServer.Resources.getClusterByID(clusterID)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if cluster == nil {
-		st := status.New(codes.NotFound, "invalid_cluster_id")
-
-		return nil, st.Err()
-	}
-
-	serviceID, err := uuid.Parse(in.ServiceID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	service, err := s.APIServer.Resources.getServiceByID(serviceID)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if service == nil {
-		st := status.New(codes.InvalidArgument, "invalid_service_id")
-
-		return nil, st.Err()
-	}
-
-	// TODO : update key.json with new "peer addr" that can join the cluster
-
-	local := s.APIServer.Service.Serf.Memberlist().LocalNode()
-
-	localAddr := local.FullAddress().Addr
-
-	res := &api.ResponseServiceJoin{
-		PeerAddr: localAddr,
-	}
-
-	fields := logrus.Fields{
-		"PeerAddr": localAddr,
-	}
-
-	logrus.WithFields(fields).Debug("ServiceJoin successful request for service")
-
-	return res, nil
-}
-
-// ServiceLeave : service leave cluster
-func (s *GRPCServerAPIServer) ServiceLeave(ctx context.Context, in *api.RequestServiceLeave) (*api.ResponseStatus, error) {
-	clusterID, err := uuid.Parse(in.ClusterID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	cluster, err := s.APIServer.Resources.getClusterByID(clusterID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if cluster == nil {
-		st := status.New(codes.NotFound, "invalid_cluster_id")
-
-		return nil, st.Err()
-	}
-
-	serviceID, err := uuid.Parse(in.ServiceID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if serviceID != *s.APIServer.Service.Key.ServiceID {
-		st := status.New(codes.PermissionDenied, err.Error())
-
-		return nil, st.Err()
-	}
-
-	leaveErr := s.APIServer.Service.Serf.Leave()
-
-	if leaveErr != nil {
-		st := status.New(codes.Internal, leaveErr.Error())
-
-		return nil, st.Err()
-	}
-
-	shutdownErr := s.APIServer.Service.Serf.Shutdown()
-
-	if shutdownErr != nil {
-		st := status.New(codes.Internal, shutdownErr.Error())
-
-		return nil, st.Err()
-	}
-
-	logrus.Debug("Service 'apiserver' has left the cluster.")
 
 	res := &api.ResponseStatus{SUCCESS: true}
 

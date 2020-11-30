@@ -4,7 +4,7 @@ networks:
   etcd:
 
 services:
-  apiserver_01:
+  apiserver:
     build:
       context: .
       dockerfile: cmd/apiserver/Dockerfile
@@ -12,41 +12,16 @@ services:
       apiserver
       --config-dir="/config"
       --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
-      --peer-addr="apiserver:15760"
       --verbose
     depends_on:
       - etcd_01
       - etcd_02
       - etcd_03
     networks:
-      apiserver:
-        aliases:
-          - apiserver
-      etcd:
+      - apiserver
+      - etcd
     volumes:
-      - apiserver_01:/config
-
-  apiserver_02:
-    build:
-      context: .
-      dockerfile: cmd/apiserver/Dockerfile
-    command: >
-      apiserver
-      --config-dir="/config"
-      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
-      --peer-addr="apiserver:15760"
-      --verbose
-    depends_on:
-      - etcd_01
-      - etcd_02
-      - etcd_03
-    networks:
-      apiserver:
-        aliases:
-          - apiserver
-      etcd:
-    volumes:
-      - apiserver_02:/config
+      - apiserver:/config
 
   #block_01:
   #build:
@@ -57,8 +32,7 @@ services:
   #--config-dir="/config"
   #--verbose
   #depends_on:
-  #- apiserver_01
-  #- apiserver_02
+  #- apiserver
   #networks:
   #- apiserver
   #- block
@@ -122,8 +96,7 @@ services:
 version: "3.7"
 
 volumes:
-  apiserver_01:
-  apiserver_02:
+  apiserver:
   #block_01:
   etcd_01:
   etcd_02:

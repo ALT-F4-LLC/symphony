@@ -5,11 +5,10 @@ option go_package = "github.com/erkrnt/symphony/api";
 package api;
 
 import "api/resource.proto";
-import "api/service.proto";
 import "api/status.proto";
 
 // 0.0.0.0:15760
-service APIServer { 
+service APIServer {
   rpc GetLogicalVolume(RequestLogicalVolume) returns (LogicalVolume) {}
   rpc GetPhysicalVolume(RequestPhysicalVolume) returns (PhysicalVolume) {}
   rpc GetService(RequestService) returns (Service) {}
@@ -31,9 +30,6 @@ service APIServer {
   rpc RemovePhysicalVolume(RequestPhysicalVolume) returns (ResponseStatus) {}
   rpc RemoveService(RequestService) returns (ResponseStatus) {}
   rpc RemoveVolumeGroup(RequestVolumeGroup) returns (ResponseStatus) {}
-
-  rpc ServiceJoin(RequestServiceJoin) returns (ResponseServiceJoin) {}
-  rpc ServiceLeave(RequestServiceLeave) returns (ResponseStatus) {}
 }
 
 message RequestClusters {}
@@ -95,16 +91,6 @@ message RequestServices {}
 
 message ResponseServices {
   repeated Service Results = 1;
-}
-
-message RequestServiceJoin {
-  string ClusterID = 1;
-  string JoinAddr = 2;
-  string ServiceID = 3;
-}
-
-message ResponseServiceJoin {
-  string PeerAddr = 1;
 }
 
 message RequestVolumeGroup {

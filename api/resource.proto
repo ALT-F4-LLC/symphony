@@ -7,7 +7,7 @@ package api;
 import "api/status.proto";
 
 enum ServiceType {
-  APISERVER = 0;
+  UNKNOWN_SERVICE_TYPE = 0;
   BLOCK = 1;
 }
 

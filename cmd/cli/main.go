@@ -83,10 +83,9 @@ func main() {
 
 	case serviceNew.FullCommand():
 		cli.ServiceNew(cli.ServiceNewOptions{
-			APIServerAddr: apiserverAddr,
-			ClusterID:     serviceInitClusterID,
-			ServiceType:   serviceInitServiceType,
-			SocketPath:    socketPath,
+			ClusterID:   serviceInitClusterID,
+			ServiceType: serviceInitServiceType,
+			SocketPath:  socketPath,
 		})
 
 		/* case serviceList.FullCommand():*/

@@ -153,7 +153,7 @@ func (e *endpoints) NewLogicalVolume(ctx context.Context, in *api.BlockNewLogica
 		return nil, err
 	}
 
-	// TODO : get the image and burn into volume
+	// TODO: get the image and burn into volume
 
 	currentTime := time.Now()
 
