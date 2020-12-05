@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-option go_package = "github.com/erkrnt/symphony/api";
-
-package api;
-
-message Cluster {
-  string ID = 1;
-}

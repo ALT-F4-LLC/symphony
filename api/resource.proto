@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+option go_package = "github.com/erkrnt/symphony/api";
+
+package api;
+
+import "api/status.proto";
+
+enum ServiceType {
+  UNKNOWN_SERVICE_TYPE = 0;
+  BLOCK = 1;
+}
+
+message Cluster {
+  string ID = 1;
+  ResourceStatus Status = 2;
+}
+
+message LogicalVolume {
+  string ClusterID = 1;
+  string ID = 2;
+  string ServiceID = 3;
+  int64 Size = 4;
+  ResourceStatus Status = 5;
+  string TargetAddr = 6;
+  string VolumeGroupID = 7;
+}
+
+message LogicalVolumeMetadata {
+  string LvName = 1;
+  string VgName = 2;
+  string LvAttr = 3;
+  string LvSize = 4;
+  string PoolLv = 5;
+  string Origin = 6;
+  string DataPercent = 7;
+  string MetadataPercent = 8;
+  string MovePv = 9;
+  string MirrorLog = 10;
+  string CopyPercent = 11;
+  string ConvertLv = 12;
+}
+
+message PhysicalVolume {
+  string ClusterID = 1;
+  string ID = 2;
+  string ServiceID = 3;
+  string DeviceName = 4;
+  ResourceStatus Status = 5;
+}
+
+message PhysicalVolumeMetadata {
+  string PvName = 1;
+  string VgName = 2;
+  string PvFmt = 3;
+  string PvAttr = 4;
+  string PvSize = 5;
+  string PvFree = 6;
+}
+
+message Service {
+  string ClusterID = 1;
+  string ID = 2;
+  ResourceStatus Status = 3;
+  ServiceType Type = 4;
+}
+
+message VolumeGroup {
+  string ClusterID = 1;
+  string ID = 2;
+  string ServiceID = 3;
+  string PhysicalVolumeID = 4;
+  ResourceStatus Status = 5;
+}
+
+message VolumeGroupMetadata {
+  string VgName = 1;
+  string PvCount = 2;
+  string LvCount = 3;
+  string SnapCount = 4;
+  string VgAttr = 5;
+  string VgSize = 6;
+  string VgFree = 7;
+}

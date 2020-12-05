@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/pkg/cluster"
-	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -126,6 +124,12 @@ func (b *Block) restart() error {
 		if err != nil {
 			logrus.Debug("Restart join failed to remote peer... skipping.")
 			continue
+		}
+
+		restartSerfErr := b.Node.RestartSerf(b.flags.listenAddr)
+
+		if restartSerfErr != nil {
+			return restartSerfErr
 		}
 
 		_, serfErr := b.Node.Serf.Join([]string{join.SerfAddress}, true)

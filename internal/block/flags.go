@@ -3,7 +3,6 @@ package block
 import (
 	"net"
 
-	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -29,13 +28,7 @@ func getFlags() (*flags, error) {
 		return nil, err
 	}
 
-	ip, err := config.GetOutboundIP()
-
-	if err != nil {
-		return nil, err
-	}
-
-	listenAddr, err := config.GetListenAddr(15760, ip, listenPort)
+	listenAddr, err := config.GetListenAddr(15760, listenPort)
 
 	if err != nil {
 		return nil, err

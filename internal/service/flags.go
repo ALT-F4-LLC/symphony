@@ -1,10 +1,19 @@
-package config
+package service
 
 import (
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"time"
+)
+
+const (
+	// ContextTimeout : default context timeout
+	ContextTimeout = 5 * time.Second
+
+	// DialTimeout : default dial timeout
+	DialTimeout = 5 * time.Second
 )
 
 // GetDirPath : resolves full path for directory
@@ -27,20 +36,22 @@ func GetDirPath(dir *string) (*string, error) {
 }
 
 // GetListenAddr : returns the TCP listen addr
-func GetListenAddr(defaultPort int, ip *net.IP, overridePort *int) (*net.TCPAddr, error) {
-	if *overridePort != 0 {
+func GetListenAddr(ipAddr string, overridePort *int) (*net.TCPAddr, error) {
+	defaultPort := 15760
+
+	if overridePort != nil {
 		defaultPort = *overridePort
 	}
 
-	listenAddr := fmt.Sprintf("%s:%d", ip.String(), defaultPort)
+	listenAddr := fmt.Sprintf("%s:%d", ipAddr, defaultPort)
 
-	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddr)
+	listenAddrTCP, err := net.ResolveTCPAddr("tcp", listenAddr)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return listenTCPAddr, nil
+	return listenAddrTCP, nil
 }
 
 // GetOutboundIP : get preferred outbound ip of this machine
