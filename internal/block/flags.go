@@ -3,7 +3,6 @@ package block
 import (
 	"net"
 
-	"github.com/erkrnt/symphony/internal/pkg/config"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )

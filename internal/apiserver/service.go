@@ -1,17 +1,15 @@
 package apiserver
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/service"
 	"github.com/google/uuid"
+	consul "github.com/hashicorp/consul/api"
 	"github.com/sirupsen/logrus"
-	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -69,7 +67,7 @@ func (apiserver *APIServer) Start() {
 }
 
 func (apiserver *APIServer) getClusters() ([]*api.Cluster, error) {
-	results, err := apiserver.getStateByKey("/Cluster", clientv3.WithPrefix())
+	results, err := apiserver.getResources("cluster/")
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -79,7 +77,7 @@ func (apiserver *APIServer) getClusters() ([]*api.Cluster, error) {
 
 	clusters := make([]*api.Cluster, 0)
 
-	for _, ev := range results.Kvs {
+	for _, ev := range results {
 		var c *api.Cluster
 
 		err := json.Unmarshal(ev.Value, &c)
@@ -97,9 +95,9 @@ func (apiserver *APIServer) getClusters() ([]*api.Cluster, error) {
 }
 
 func (apiserver *APIServer) getClusterByID(clusterID uuid.UUID) (*api.Cluster, error) {
-	clusterKey := fmt.Sprintf("/Cluster/%s", clusterID.String())
+	clusterKey := fmt.Sprintf("cluster/%s", clusterID.String())
 
-	results, err := apiserver.getStateByKey(clusterKey)
+	result, err := apiserver.getResource(clusterKey)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -109,24 +107,19 @@ func (apiserver *APIServer) getClusterByID(clusterID uuid.UUID) (*api.Cluster, e
 
 	var cluster *api.Cluster
 
-	for i, ev := range results.Kvs {
+	jsonErr := json.Unmarshal(result.Value, &cluster)
 
-		if i == 0 {
-			err := json.Unmarshal(ev.Value, &cluster)
+	if jsonErr != nil {
+		st := status.New(codes.Internal, err.Error())
 
-			if err != nil {
-				st := status.New(codes.Internal, err.Error())
-
-				return nil, st.Err()
-			}
-		}
+		return nil, st.Err()
 	}
 
 	return cluster, nil
 }
 
 func (apiserver *APIServer) getLogicalVolumes() ([]*api.LogicalVolume, error) {
-	results, err := apiserver.getStateByKey("/LogicalVolume", clientv3.WithPrefix())
+	results, err := apiserver.getResources("logicalvolume/")
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -136,7 +129,7 @@ func (apiserver *APIServer) getLogicalVolumes() ([]*api.LogicalVolume, error) {
 
 	lvs := make([]*api.LogicalVolume, 0)
 
-	for _, ev := range results.Kvs {
+	for _, ev := range results {
 		var lv *api.LogicalVolume
 
 		err := json.Unmarshal(ev.Value, &lv)
@@ -154,9 +147,9 @@ func (apiserver *APIServer) getLogicalVolumes() ([]*api.LogicalVolume, error) {
 }
 
 func (apiserver *APIServer) getLogicalVolumeByID(id uuid.UUID) (*api.LogicalVolume, error) {
-	etcdKey := fmt.Sprintf("/LogicalVolume/%s", id.String())
+	key := fmt.Sprintf("logicalvolume/%s", id.String())
 
-	results, err := apiserver.getStateByKey(etcdKey)
+	result, err := apiserver.getResource(key)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -166,27 +159,19 @@ func (apiserver *APIServer) getLogicalVolumeByID(id uuid.UUID) (*api.LogicalVolu
 
 	var lv *api.LogicalVolume
 
-	for _, ev := range results.Kvs {
-		var v *api.LogicalVolume
+	jsonErr := json.Unmarshal(result.Value, &lv)
 
-		err := json.Unmarshal(ev.Value, &v)
+	if jsonErr != nil {
+		st := status.New(codes.Internal, err.Error())
 
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-
-		if v.ID == id.String() {
-			lv = v
-		}
+		return nil, st.Err()
 	}
 
 	return lv, nil
 }
 
 func (apiserver *APIServer) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
-	results, err := apiserver.getStateByKey("/PhysicalVolume", clientv3.WithPrefix())
+	results, err := apiserver.getResources("physicalvolume/")
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -196,7 +181,7 @@ func (apiserver *APIServer) getPhysicalVolumes() ([]*api.PhysicalVolume, error) 
 
 	pvs := make([]*api.PhysicalVolume, 0)
 
-	for _, ev := range results.Kvs {
+	for _, ev := range results {
 		var s *api.PhysicalVolume
 
 		err := json.Unmarshal(ev.Value, &s)
@@ -214,9 +199,9 @@ func (apiserver *APIServer) getPhysicalVolumes() ([]*api.PhysicalVolume, error) 
 }
 
 func (apiserver *APIServer) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, error) {
-	etcdKey := fmt.Sprintf("/physicalvolume/%s", id.String())
+	key := fmt.Sprintf("physicalvolume/%s", id.String())
 
-	results, err := apiserver.getStateByKey(etcdKey)
+	result, err := apiserver.getResource(key)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -224,29 +209,21 @@ func (apiserver *APIServer) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVo
 		return nil, st.Err()
 	}
 
-	var volume *api.PhysicalVolume
+	var pv *api.PhysicalVolume
 
-	for _, ev := range results.Kvs {
-		var s *api.PhysicalVolume
+	jsonErr := json.Unmarshal(result.Value, &pv)
 
-		err := json.Unmarshal(ev.Value, &s)
+	if jsonErr != nil {
+		st := status.New(codes.Internal, err.Error())
 
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-
-		if s.ID == id.String() {
-			volume = s
-		}
+		return nil, st.Err()
 	}
 
-	return volume, nil
+	return pv, nil
 }
 
 func (apiserver *APIServer) getServices() ([]*api.Service, error) {
-	results, err := apiserver.getStateByKey("/Service", clientv3.WithPrefix())
+	results, err := apiserver.getResources("service/")
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -256,7 +233,7 @@ func (apiserver *APIServer) getServices() ([]*api.Service, error) {
 
 	services := make([]*api.Service, 0)
 
-	for _, ev := range results.Kvs {
+	for _, ev := range results {
 		var s *api.Service
 
 		err := json.Unmarshal(ev.Value, &s)
@@ -274,9 +251,9 @@ func (apiserver *APIServer) getServices() ([]*api.Service, error) {
 }
 
 func (apiserver *APIServer) getServiceByID(id uuid.UUID) (*api.Service, error) {
-	etcdKey := fmt.Sprintf("/Service/%s", id.String())
+	key := fmt.Sprintf("service/%s", id.String())
 
-	results, err := apiserver.getStateByKey(etcdKey)
+	result, err := apiserver.getResource(key)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -284,46 +261,46 @@ func (apiserver *APIServer) getServiceByID(id uuid.UUID) (*api.Service, error) {
 		return nil, st.Err()
 	}
 
-	var service *api.Service
+	var s *api.Service
 
-	for _, ev := range results.Kvs {
-		var s *api.Service
+	jsonErr := json.Unmarshal(result.Value, &s)
 
-		err := json.Unmarshal(ev.Value, &s)
+	if jsonErr != nil {
+		st := status.New(codes.Internal, err.Error())
 
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-
-		if s.ID == id.String() {
-			service = s
-		}
+		return nil, st.Err()
 	}
-
-	return service, nil
+	return s, nil
 }
 
-func (apiserver *APIServer) getStateByKey(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
-
-	defer cancel()
-
-	config := clientv3.Config{
-		DialTimeout: service.DialTimeout,
-		Endpoints:   apiserver.Flags.EtcdEndpoints,
-	}
-
-	client, err := clientv3.New(config)
+func (apiserver *APIServer) getResource(key string) (*consul.KVPair, error) {
+	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
 		return nil, err
 	}
 
-	defer client.Close()
+	kv := client.KV()
 
-	results, err := client.Get(ctx, key, opts...)
+	results, _, err := kv.Get(key, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func (apiserver *APIServer) getResources(key string) (consul.KVPairs, error) {
+	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	kv := client.KV()
+
+	results, _, err := kv.List(key, nil)
 
 	if err != nil {
 		return nil, err
@@ -333,7 +310,7 @@ func (apiserver *APIServer) getStateByKey(key string, opts ...clientv3.OpOption)
 }
 
 func (apiserver *APIServer) getVolumeGroups() ([]*api.VolumeGroup, error) {
-	results, err := apiserver.getStateByKey("/VolumeGroup", clientv3.WithPrefix())
+	results, err := apiserver.getResources("volumegroup/")
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -343,7 +320,7 @@ func (apiserver *APIServer) getVolumeGroups() ([]*api.VolumeGroup, error) {
 
 	vgs := make([]*api.VolumeGroup, 0)
 
-	for _, ev := range results.Kvs {
+	for _, ev := range results {
 		var s *api.VolumeGroup
 
 		err := json.Unmarshal(ev.Value, &s)
@@ -361,9 +338,9 @@ func (apiserver *APIServer) getVolumeGroups() ([]*api.VolumeGroup, error) {
 }
 
 func (apiserver *APIServer) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, error) {
-	etcdKey := fmt.Sprintf("/VolumeGroup/%s", id.String())
+	key := fmt.Sprintf("volumegroup/%s", id.String())
 
-	results, err := apiserver.getStateByKey(etcdKey)
+	result, err := apiserver.getResource(key)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -371,25 +348,16 @@ func (apiserver *APIServer) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, 
 		return nil, st.Err()
 	}
 
-	var volumeGroup *api.VolumeGroup
+	var vg *api.VolumeGroup
 
-	for _, ev := range results.Kvs {
-		var vg *api.VolumeGroup
+	jsonErr := json.Unmarshal(result.Value, &vg)
 
-		err := json.Unmarshal(ev.Value, &vg)
+	if jsonErr != nil {
+		st := status.New(codes.Internal, jsonErr.Error())
 
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-
-		if vg.ID == id.String() {
-			volumeGroup = vg
-		}
+		return nil, st.Err()
 	}
-
-	return volumeGroup, nil
+	return vg, nil
 }
 
 func (apiserver *APIServer) newService(clusterID uuid.UUID, serviceType api.ServiceType) (*api.Service, error) {
@@ -428,10 +396,7 @@ func (apiserver *APIServer) newService(clusterID uuid.UUID, serviceType api.Serv
 }
 
 func (apiserver *APIServer) removeResource(key string) error {
-	etcd, err := clientv3.New(clientv3.Config{
-		Endpoints:   apiserver.Flags.EtcdEndpoints,
-		DialTimeout: 5 * time.Second,
-	})
+	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -439,16 +404,12 @@ func (apiserver *APIServer) removeResource(key string) error {
 		return st.Err()
 	}
 
-	defer etcd.Close()
+	kv := client.KV()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	_, resErr := kv.Delete(key, nil)
 
-	defer cancel()
-
-	_, res := etcd.Delete(ctx, key)
-
-	if res != nil {
-		st := status.New(codes.Internal, res.Error())
+	if resErr != nil {
+		st := status.New(codes.Internal, resErr.Error())
 
 		return st.Err()
 	}
@@ -457,32 +418,30 @@ func (apiserver *APIServer) removeResource(key string) error {
 }
 
 func (apiserver *APIServer) saveCluster(cluster *api.Cluster) error {
-	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
+	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
 
-	defer cancel()
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
 
-	config := clientv3.Config{
-		DialTimeout: service.DialTimeout,
-		Endpoints:   apiserver.Flags.EtcdEndpoints,
+		return st.Err()
 	}
 
-	client, err := clientv3.New(config)
+	kv := client.KV()
+
+	clusterValue, err := json.Marshal(cluster)
 
 	if err != nil {
 		return err
 	}
 
-	defer client.Close()
+	clusterKey := fmt.Sprintf("cluster/%s", cluster.ID)
 
-	clusterJSON, err := json.Marshal(cluster)
-
-	if err != nil {
-		return err
+	kvPair := &consul.KVPair{
+		Key:   clusterKey,
+		Value: clusterValue,
 	}
 
-	clusterKey := fmt.Sprintf("/Cluster/%s", cluster.ID)
-
-	_, putErr := client.Put(ctx, clusterKey, string(clusterJSON))
+	_, putErr := kv.Put(kvPair, nil)
 
 	if putErr != nil {
 		return err
@@ -492,32 +451,30 @@ func (apiserver *APIServer) saveCluster(cluster *api.Cluster) error {
 }
 
 func (apiserver *APIServer) saveLogicalVolume(lv *api.LogicalVolume) error {
-	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
+	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
 
-	defer cancel()
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
 
-	config := clientv3.Config{
-		DialTimeout: service.DialTimeout,
-		Endpoints:   apiserver.Flags.EtcdEndpoints,
+		return st.Err()
 	}
 
-	client, err := clientv3.New(config)
+	kv := client.KV()
+
+	lvKey := fmt.Sprintf("logicalvolume/%s", lv.ID)
+
+	lvValue, err := json.Marshal(lv)
 
 	if err != nil {
 		return err
 	}
 
-	defer client.Close()
-
-	lvJSON, err := json.Marshal(lv)
-
-	if err != nil {
-		return err
+	kvPair := &consul.KVPair{
+		Key:   lvKey,
+		Value: lvValue,
 	}
 
-	lvKey := fmt.Sprintf("/LogicalVolume/%s", lv.ID)
-
-	_, putErr := client.Put(ctx, lvKey, string(lvJSON))
+	_, putErr := kv.Put(kvPair, nil)
 
 	if putErr != nil {
 		return err
@@ -527,32 +484,30 @@ func (apiserver *APIServer) saveLogicalVolume(lv *api.LogicalVolume) error {
 }
 
 func (apiserver *APIServer) savePhysicalVolume(pv *api.PhysicalVolume) error {
-	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
+	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
 
-	defer cancel()
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
 
-	config := clientv3.Config{
-		DialTimeout: service.DialTimeout,
-		Endpoints:   apiserver.Flags.EtcdEndpoints,
+		return st.Err()
 	}
 
-	client, err := clientv3.New(config)
+	kv := client.KV()
+
+	pvKey := fmt.Sprintf("physicalvolume/%s", pv.ID)
+
+	pvValue, err := json.Marshal(pv)
 
 	if err != nil {
 		return err
 	}
 
-	defer client.Close()
-
-	pvJSON, err := json.Marshal(pv)
-
-	if err != nil {
-		return err
+	kvPair := &consul.KVPair{
+		Key:   pvKey,
+		Value: pvValue,
 	}
 
-	volumeKey := fmt.Sprintf("/PhysicalVolume/%s", pv.ID)
-
-	_, putErr := client.Put(ctx, volumeKey, string(pvJSON))
+	_, putErr := kv.Put(kvPair, nil)
 
 	if putErr != nil {
 		return err
@@ -562,32 +517,30 @@ func (apiserver *APIServer) savePhysicalVolume(pv *api.PhysicalVolume) error {
 }
 
 func (apiserver *APIServer) saveVolumeGroup(vg *api.VolumeGroup) error {
-	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
+	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
 
-	defer cancel()
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
 
-	config := clientv3.Config{
-		DialTimeout: service.DialTimeout,
-		Endpoints:   apiserver.Flags.EtcdEndpoints,
+		return st.Err()
 	}
 
-	client, err := clientv3.New(config)
+	kv := client.KV()
+
+	vgKey := fmt.Sprintf("volumegroup/%s", vg.ID)
+
+	vgValue, err := json.Marshal(vg)
 
 	if err != nil {
 		return err
 	}
 
-	defer client.Close()
-
-	vgJSON, err := json.Marshal(vg)
-
-	if err != nil {
-		return err
+	kvPair := &consul.KVPair{
+		Key:   vgKey,
+		Value: vgValue,
 	}
 
-	volumeKey := fmt.Sprintf("/VolumeGroup/%s", vg.ID)
-
-	_, putErr := client.Put(ctx, volumeKey, string(vgJSON))
+	_, putErr := kv.Put(kvPair, nil)
 
 	if putErr != nil {
 		return err
@@ -597,32 +550,29 @@ func (apiserver *APIServer) saveVolumeGroup(vg *api.VolumeGroup) error {
 }
 
 func (apiserver *APIServer) saveService(s *api.Service) error {
-	ctx, cancel := context.WithTimeout(context.Background(), service.DialTimeout)
+	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
 
-	defer cancel()
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
 
-	config := clientv3.Config{
-		DialTimeout: service.DialTimeout,
-		Endpoints:   apiserver.Flags.EtcdEndpoints,
+		return st.Err()
 	}
 
-	client, err := clientv3.New(config)
+	kv := client.KV()
+
+	serviceKey := fmt.Sprintf("service/%s", s.ID)
+
+	serviceValue, err := json.Marshal(s)
 
 	if err != nil {
 		return err
 	}
 
-	defer client.Close()
-
-	serviceKey := fmt.Sprintf("/Service/%s", s.ID)
-
-	serviceJSON, err := json.Marshal(s)
-
-	if err != nil {
-		return err
+	kvPair := &consul.KVPair{
+		Key:   serviceKey,
+		Value: serviceValue,
 	}
-
-	_, putErr := client.Put(ctx, serviceKey, string(serviceJSON))
+	_, putErr := kv.Put(kvPair, nil)
 
 	if putErr != nil {
 		return err

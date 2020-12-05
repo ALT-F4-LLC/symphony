@@ -36,12 +36,14 @@ func GetDirPath(dir *string) (*string, error) {
 }
 
 // GetListenAddr : returns the TCP listen addr
-func GetListenAddr(defaultPort int, overridePort *int) (*net.TCPAddr, error) {
-	if *overridePort != 0 {
+func GetListenAddr(ipAddr string, overridePort *int) (*net.TCPAddr, error) {
+	defaultPort := 15760
+
+	if overridePort != nil {
 		defaultPort = *overridePort
 	}
 
-	listenAddr := fmt.Sprintf(":%d", defaultPort)
+	listenAddr := fmt.Sprintf("%s:%d", ipAddr, defaultPort)
 
 	listenAddrTCP, err := net.ResolveTCPAddr("tcp", listenAddr)
 
