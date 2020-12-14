@@ -37,16 +37,10 @@ var (
 	blockVgRemove                 = blockVg.Command("remove", "Removes a volume group.")
 	blockVgRemoveID               = blockVgRemove.Arg("id", "Sets volume group id.").Required().String()
 
-	cluster     = kingpin.Command("cluster", "Cluster management commands.")
-	clusterList = cluster.Command("list", "Shows a list of all available clusters.")
-	clusterNew  = cluster.Command("new", "Initializes new cluster.")
-
-	service                = kingpin.Command("service", "Service management commands.")
-	serviceNew             = service.Command("new", "Initializes service to an existing cluster.")
-	serviceInitClusterID   = serviceNew.Flag("cluster-id", "Sets the Cluster ID of the service.").Required().String()
-	serviceInitServiceType = serviceNew.Flag("service-type", "Sets the service type by name.").Required().String()
-	serviceRemove          = service.Command("remove", "Removes a service from the cluster.")
-	serviceRemoveMemberID  = serviceRemove.Arg("service-id", "Service to be removed from the cluster.").Required().String()
+	service               = kingpin.Command("service", "Service management commands.")
+	serviceNew            = service.Command("new", "Initializes service to an existing cluster.")
+	serviceRemove         = service.Command("remove", "Removes a service from the cluster.")
+	serviceRemoveMemberID = serviceRemove.Arg("service-id", "Service to be removed from the cluster.").Required().String()
 )
 
 func main() {
@@ -76,16 +70,10 @@ func main() {
 	//case blockVgRemove.FullCommand():
 	//cli.ManagerRemoveVolumeGroup(blockVgRemoveID)
 
-	case clusterList.FullCommand():
-		cli.ClusterList(apiserverAddr)
-	case clusterNew.FullCommand():
-		cli.ClusterNew(apiserverAddr)
-
 	case serviceNew.FullCommand():
 		cli.ServiceNew(cli.ServiceNewOptions{
-			ClusterID:   serviceInitClusterID,
-			ServiceType: serviceInitServiceType,
-			SocketPath:  socketPath,
+			APIServerAddr: apiserverAddr,
+			SocketPath:    socketPath,
 		})
 
 		/* case serviceList.FullCommand():*/

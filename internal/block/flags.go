@@ -1,49 +1,62 @@
 package block
 
 import (
+	"errors"
 	"net"
 
+	"github.com/erkrnt/symphony/internal/service"
+	"github.com/hashicorp/go-sockaddr"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-type flags struct {
-	configDir  string
-	listenAddr *net.TCPAddr
-	verbose    bool
+type Flags struct {
+	ConfigDir         string
+	HealthServiceAddr *net.TCPAddr
+	Verbose           bool
 }
 
 var (
-	configDir  = kingpin.Flag("config-dir", "Sets configuration directory for block service.").Default(".").String()
-	listenPort = kingpin.Flag("listen-port", "Sets the remote service listener port.").Int()
-	verbose    = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
+	bindInterface = kingpin.Flag("bind-interface", "Sets the bind interface for listening services.").Required().String()
+	configDir     = kingpin.Flag("config-dir", "Sets configuration directory for block service.").Default(".").String()
+	verbose       = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
 )
 
-func getFlags() (*flags, error) {
+func getFlags() (*Flags, error) {
 	kingpin.Parse()
 
-	configPath, err := config.GetDirPath(configDir)
+	if bindInterface == nil {
+		return nil, errors.New("invalid_bind_interface")
+	}
+
+	configDirPath, err := service.GetDirPath(configDir)
 
 	if err != nil {
 		return nil, err
 	}
 
-	listenAddr, err := config.GetListenAddr(15760, listenPort)
+	ipAddr, err := sockaddr.GetInterfaceIP(*bindInterface)
 
 	if err != nil {
 		return nil, err
 	}
 
-	flags := &flags{
-		configDir:  *configPath,
-		listenAddr: listenAddr,
-		verbose:    *verbose,
+	healthServiceAddr, err := service.GetListenAddr(ipAddr, 15761)
+
+	if err != nil {
+		return nil, err
+	}
+
+	flags := &Flags{
+		ConfigDir:         *configDirPath,
+		HealthServiceAddr: healthServiceAddr,
+		Verbose:           *verbose,
 	}
 
 	fields := logrus.Fields{
-		"ConfigDir":  flags.configDir,
-		"ListenAddr": flags.listenAddr.String(),
-		"Verbose":    flags.verbose,
+		"ConfigDir":        flags.ConfigDir,
+		"HealthListenAddr": flags.HealthServiceAddr.String(),
+		"Verbose":          flags.Verbose,
 	}
 
 	logrus.WithFields(fields).Info("Service command-line flags loaded.")

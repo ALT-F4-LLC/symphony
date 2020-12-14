@@ -14,13 +14,11 @@ service APIServer {
   rpc GetService(RequestService) returns (Service) {}
   rpc GetVolumeGroup(RequestVolumeGroup) returns (VolumeGroup) {}
 
-  rpc GetClusters(RequestClusters) returns (ResponseClusters) {}
   rpc GetLogicalVolumes(RequestLogicalVolumes) returns (ResponseLogicalVolumes) {}
   rpc GetPhysicalVolumes(RequestPhysicalVolumes) returns (ResponsePhysicalVolumes) {}
   rpc GetServices(RequestServices) returns (ResponseServices) {}
   rpc GetVolumeGroups(RequestVolumeGroups) returns (ResponseVolumeGroups) {}
 
-  rpc NewCluster(RequestNewCluster) returns (Cluster) {}
   rpc NewLogicalVolume(RequestNewLogicalVolume) returns (LogicalVolume) {}
   rpc NewPhysicalVolume(RequestNewPhysicalVolume) returns (PhysicalVolume) {}
   rpc NewService(RequestNewService) returns (Service) {}
@@ -32,12 +30,6 @@ service APIServer {
   rpc RemoveVolumeGroup(RequestVolumeGroup) returns (ResponseStatus) {}
 }
 
-message RequestClusters {}
-
-message ResponseClusters {
-  repeated Cluster Results = 1;
-}
-
 message RequestLogicalVolume {
   string ID = 1;
 }
@@ -47,8 +39,6 @@ message RequestLogicalVolumes {}
 message ResponseLogicalVolumes {
   repeated LogicalVolume Results = 1;
 }
-
-message RequestNewCluster {}
 
 message RequestNewLogicalVolume {
   int64 Size = 1;
@@ -63,7 +53,7 @@ message RequestNewPhysicalVolume {
 }
 
 message RequestNewService {
-  string ClusterID = 1;
+  string HealthServiceAddr = 1;
   ServiceType ServiceType = 2;
 }
 
@@ -83,8 +73,7 @@ message ResponsePhysicalVolumes {
 }
 
 message RequestService {
-  string ClusterID = 1;
-  string ServiceID = 2;
+  string ServiceName = 1;
 }
 
 message RequestServices {}

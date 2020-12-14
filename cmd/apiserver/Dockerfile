@@ -18,6 +18,7 @@ RUN protoc --proto_path="$(pwd)" api/*.proto --go_out=plugins=grpc:../../../
 
 COPY ./cmd/cli ./cmd/cli
 COPY ./internal/cli ./internal/cli
+
 COPY ./cmd/apiserver ./cmd/apiserver
 COPY ./internal/apiserver ./internal/apiserver
 COPY ./internal/service ./internal/service

@@ -66,58 +66,6 @@ func (apiserver *APIServer) Start() {
 	}
 }
 
-func (apiserver *APIServer) getClusters() ([]*api.Cluster, error) {
-	results, err := apiserver.getResources("cluster/")
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	clusters := make([]*api.Cluster, 0)
-
-	for _, ev := range results {
-		var c *api.Cluster
-
-		err := json.Unmarshal(ev.Value, &c)
-
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-
-		clusters = append(clusters, c)
-	}
-
-	return clusters, nil
-}
-
-func (apiserver *APIServer) getClusterByID(clusterID uuid.UUID) (*api.Cluster, error) {
-	clusterKey := fmt.Sprintf("cluster/%s", clusterID.String())
-
-	result, err := apiserver.getResource(clusterKey)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	var cluster *api.Cluster
-
-	jsonErr := json.Unmarshal(result.Value, &cluster)
-
-	if jsonErr != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	return cluster, nil
-}
-
 func (apiserver *APIServer) getLogicalVolumes() ([]*api.LogicalVolume, error) {
 	results, err := apiserver.getResources("logicalvolume/")
 
@@ -250,8 +198,10 @@ func (apiserver *APIServer) getServices() ([]*api.Service, error) {
 	return services, nil
 }
 
-func (apiserver *APIServer) getServiceByID(id uuid.UUID) (*api.Service, error) {
-	key := fmt.Sprintf("service/%s", id.String())
+func (apiserver *APIServer) getServiceByName(name uuid.UUID) (*api.Service, error) {
+	key := fmt.Sprintf("service/%s", name.String())
+
+	// TODO: replace with lookup in agent.Services
 
 	result, err := apiserver.getResource(key)
 
@@ -360,41 +310,6 @@ func (apiserver *APIServer) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, 
 	return vg, nil
 }
 
-func (apiserver *APIServer) newService(clusterID uuid.UUID, serviceType api.ServiceType) (*api.Service, error) {
-	cluster, err := apiserver.getClusterByID(clusterID)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if cluster == nil {
-		st := status.New(codes.NotFound, "invalid_cluster")
-
-		return nil, st.Err()
-	}
-
-	serviceID := uuid.New()
-
-	service := &api.Service{
-		ClusterID: cluster.ID,
-		ID:        serviceID.String(),
-		Status:    api.ResourceStatus_CREATE_COMPLETED,
-		Type:      serviceType,
-	}
-
-	serviceSaveErr := apiserver.saveService(service)
-
-	if serviceSaveErr != nil {
-		st := status.New(codes.Internal, serviceSaveErr.Error())
-
-		return nil, st.Err()
-	}
-
-	return service, nil
-}
-
 func (apiserver *APIServer) removeResource(key string) error {
 	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
 
@@ -412,39 +327,6 @@ func (apiserver *APIServer) removeResource(key string) error {
 		st := status.New(codes.Internal, resErr.Error())
 
 		return st.Err()
-	}
-
-	return nil
-}
-
-func (apiserver *APIServer) saveCluster(cluster *api.Cluster) error {
-	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return st.Err()
-	}
-
-	kv := client.KV()
-
-	clusterValue, err := json.Marshal(cluster)
-
-	if err != nil {
-		return err
-	}
-
-	clusterKey := fmt.Sprintf("cluster/%s", cluster.ID)
-
-	kvPair := &consul.KVPair{
-		Key:   clusterKey,
-		Value: clusterValue,
-	}
-
-	_, putErr := kv.Put(kvPair, nil)
-
-	if putErr != nil {
-		return err
 	}
 
 	return nil
@@ -540,38 +422,6 @@ func (apiserver *APIServer) saveVolumeGroup(vg *api.VolumeGroup) error {
 		Value: vgValue,
 	}
 
-	_, putErr := kv.Put(kvPair, nil)
-
-	if putErr != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (apiserver *APIServer) saveService(s *api.Service) error {
-	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return st.Err()
-	}
-
-	kv := client.KV()
-
-	serviceKey := fmt.Sprintf("service/%s", s.ID)
-
-	serviceValue, err := json.Marshal(s)
-
-	if err != nil {
-		return err
-	}
-
-	kvPair := &consul.KVPair{
-		Key:   serviceKey,
-		Value: serviceValue,
-	}
 	_, putErr := kv.Put(kvPair, nil)
 
 	if putErr != nil {

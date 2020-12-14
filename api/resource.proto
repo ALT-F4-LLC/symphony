@@ -11,19 +11,13 @@ enum ServiceType {
   BLOCK = 1;
 }
 
-message Cluster {
-  string ID = 1;
-  ResourceStatus Status = 2;
-}
-
 message LogicalVolume {
-  string ClusterID = 1;
-  string ID = 2;
-  string ServiceID = 3;
-  int64 Size = 4;
-  ResourceStatus Status = 5;
-  string TargetAddr = 6;
-  string VolumeGroupID = 7;
+  string ID = 1;
+  string ServiceName = 2;
+  int64 Size = 3;
+  ResourceStatus Status = 4;
+  string TargetAddr = 5;
+  string VolumeGroupID = 6;
 }
 
 message LogicalVolumeMetadata {
@@ -42,11 +36,10 @@ message LogicalVolumeMetadata {
 }
 
 message PhysicalVolume {
-  string ClusterID = 1;
-  string ID = 2;
-  string ServiceID = 3;
-  string DeviceName = 4;
-  ResourceStatus Status = 5;
+  string ID = 1;
+  string ServiceName = 2;
+  string DeviceName = 3;
+  ResourceStatus Status = 4;
 }
 
 message PhysicalVolumeMetadata {
@@ -59,18 +52,15 @@ message PhysicalVolumeMetadata {
 }
 
 message Service {
-  string ClusterID = 1;
-  string ID = 2;
-  ResourceStatus Status = 3;
-  ServiceType Type = 4;
+  string Name = 1;
+  ServiceType Type = 2;
 }
 
 message VolumeGroup {
-  string ClusterID = 1;
-  string ID = 2;
-  string ServiceID = 3;
-  string PhysicalVolumeID = 4;
-  ResourceStatus Status = 5;
+  string ID = 1;
+  string ServiceName = 2;
+  string PhysicalVolumeID = 3;
+  ResourceStatus Status = 4;
 }
 
 message VolumeGroupMetadata {

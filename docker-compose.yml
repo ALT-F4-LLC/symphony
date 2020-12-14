@@ -1,6 +1,5 @@
 networks:
-  apiserver:
-  consul:
+  services:
 services:
   apiserver:
     build:
@@ -15,15 +14,29 @@ services:
     depends_on:
       - consul
     networks:
-      - apiserver
-      - consul
+      - services
     volumes:
       - apiserver:/config
+  block:
+    build:
+      context: .
+      dockerfile: cmd/block/Dockerfile
+    command: >
+      block
+      --bind-interface="eth0"
+      --config-dir="/config"
+      --verbose
+    depends_on:
+      - apiserver
+    networks:
+      - services
+    volumes:
+      - block:/config
   consul:
     command: agent -bind '{{ GetInterfaceIP "eth0" }}' -client '{{ GetInterfaceIP "eth0" }}' -dev
     image: consul:1.9
     networks:
-      - consul
+      - services
     ports:
       - 8500:8500
     volumes:
@@ -31,4 +44,5 @@ services:
 version: "3.7"
 volumes:
   apiserver:
+  block:
   consul:

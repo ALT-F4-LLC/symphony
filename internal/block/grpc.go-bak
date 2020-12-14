@@ -390,19 +390,11 @@ func (e *endpoints) ServiceInit(ctx context.Context, in *api.BlockServiceInitReq
 		return nil, err
 	}
 
-	clusterID, err := uuid.Parse(init.ClusterID)
-
-	if err != nil {
-		return nil, err
-	}
-
 	serviceID, err := uuid.Parse(init.ServiceID)
 
 	if err != nil {
 		return nil, err
 	}
-
-	e.block.Node.Key.ClusterID = &clusterID
 
 	e.block.Node.Key.Endpoints = init.Endpoints
 
@@ -425,7 +417,6 @@ func (e *endpoints) ServiceInit(ctx context.Context, in *api.BlockServiceInitReq
 	}
 
 	res := &api.BlockServiceInitResponse{
-		ClusterID: clusterID.String(),
 		ServiceID: serviceID.String(),
 	}
 

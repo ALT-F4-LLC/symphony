@@ -44,7 +44,7 @@ func getFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	listenAddr, err := service.GetListenAddr(ipAddr, nil)
+	listenAddr, err := service.GetListenAddr(ipAddr, 15760)
 
 	if err != nil {
 		return nil, err
