@@ -37,9 +37,7 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 		ServiceType:       api.ServiceType_BLOCK,
 	}
 
-	// TODO: replace _ with service response
-
-	_, err := c.NewService(ctx, options)
+	service, err := c.NewService(ctx, options)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -47,7 +45,9 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 		return nil, st.Err()
 	}
 
-	res := &api.ResponseServiceNew{}
+	res := &api.ResponseServiceNew{
+		ServiceID: service.ID,
+	}
 
 	return res, nil
 }

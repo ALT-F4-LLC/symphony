@@ -107,7 +107,7 @@ func (s *GRPCServerAPIServer) GetPhysicalVolumes(ctx context.Context, in *api.Re
 
 // GetService : retrieves a service from state
 func (s *GRPCServerAPIServer) GetService(ctx context.Context, in *api.RequestService) (*api.Service, error) {
-	serviceName, err := uuid.Parse(in.ServiceName)
+	serviceID, err := uuid.Parse(in.ServiceID)
 
 	if err != nil {
 		st := status.New(codes.InvalidArgument, "invalid_service_id")
@@ -115,7 +115,7 @@ func (s *GRPCServerAPIServer) GetService(ctx context.Context, in *api.RequestSer
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.getServiceByName(serviceName)
+	service, err := s.APIServer.getServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -262,7 +262,7 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.getServiceByName(serviceID)
+	service, err := s.APIServer.getServiceByID(serviceID)
 
 	if service == nil {
 		st := status.New(codes.NotFound, "invalid_service_id")
@@ -279,7 +279,7 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 	var volume *api.PhysicalVolume
 
 	for _, v := range volumes {
-		if in.DeviceName == v.DeviceName && service.Name == v.ServiceName {
+		if in.DeviceName == v.DeviceName && service.ID == v.ServiceID {
 			volume = v
 		}
 	}
@@ -292,9 +292,9 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 	pvID := uuid.New()
 
 	pv := &api.PhysicalVolume{
-		DeviceName:  in.DeviceName,
-		ID:          pvID.String(),
-		ServiceName: service.Name,
+		DeviceName: in.DeviceName,
+		ID:         pvID.String(),
+		ServiceID:  service.ID,
 	}
 
 	saveErr := s.APIServer.savePhysicalVolume(pv)
@@ -337,9 +337,10 @@ func (s *GRPCServerAPIServer) NewService(ctx context.Context, in *api.RequestNew
 	}
 
 	reg := &consul.AgentServiceRegistration{
-		Check: regCheck,
-		Name:  regName.String(),
-		Tags:  []string{in.ServiceType.String()},
+		Address: regCheckGRPC.IP.String(),
+		Check:   regCheck,
+		Name:    regName.String(),
+		Tags:    []string{in.ServiceType.String()},
 	}
 
 	regErr := agent.ServiceRegister(reg)
@@ -350,8 +351,18 @@ func (s *GRPCServerAPIServer) NewService(ctx context.Context, in *api.RequestNew
 		return nil, st.Err()
 	}
 
+	serviceQueryOpts := &consul.QueryOptions{}
+
+	regService, _, err := agent.Service(reg.Name, serviceQueryOpts)
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
 	service := &api.Service{
-		Name: regName.String(),
+		ID:   regService.ID,
 		Type: in.ServiceType,
 	}
 
@@ -381,14 +392,14 @@ func (s *GRPCServerAPIServer) NewVolumeGroup(ctx context.Context, in *api.Reques
 		return nil, st.Err()
 	}
 
-	physicalVolumeServiceName, err := uuid.Parse(physicalVolume.ServiceName)
+	physicalVolumeServiceID, err := uuid.Parse(physicalVolume.ID)
 
 	if err != nil {
 		st := status.New(codes.InvalidArgument, "invalid_service_id")
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.getServiceByName(physicalVolumeServiceName)
+	service, err := s.APIServer.getServiceByID(physicalVolumeServiceID)
 
 	if service == nil {
 		st := status.New(codes.NotFound, "invalid_service_id")
@@ -474,7 +485,7 @@ func (s *GRPCServerAPIServer) RemovePhysicalVolume(ctx context.Context, in *api.
 		return nil, st.Err()
 	}
 
-	serviceName, err := uuid.Parse(pv.ServiceName)
+	serviceID, err := uuid.Parse(pv.ServiceID)
 
 	if err != nil {
 		st := status.New(codes.InvalidArgument, err.Error())
@@ -482,7 +493,7 @@ func (s *GRPCServerAPIServer) RemovePhysicalVolume(ctx context.Context, in *api.
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.getServiceByName(serviceName)
+	service, err := s.APIServer.getServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -513,7 +524,7 @@ func (s *GRPCServerAPIServer) RemovePhysicalVolume(ctx context.Context, in *api.
 
 // RemoveService : removes a service from state
 func (s *GRPCServerAPIServer) RemoveService(ctx context.Context, in *api.RequestService) (*api.ResponseStatus, error) {
-	serviceName, err := uuid.Parse(in.ServiceName)
+	serviceID, err := uuid.Parse(in.ServiceID)
 
 	if err != nil {
 		st := status.New(codes.InvalidArgument, err.Error())
@@ -521,7 +532,7 @@ func (s *GRPCServerAPIServer) RemoveService(ctx context.Context, in *api.Request
 		return nil, st.Err()
 	}
 
-	srvc, err := s.APIServer.getServiceByName(serviceName)
+	srvc, err := s.APIServer.getServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -529,7 +540,7 @@ func (s *GRPCServerAPIServer) RemoveService(ctx context.Context, in *api.Request
 		return nil, st.Err()
 	}
 
-	resourceKey := fmt.Sprintf("/Service/%s", srvc.Name)
+	resourceKey := fmt.Sprintf("/Service/%s", srvc.ID)
 
 	delErr := s.APIServer.removeResource(resourceKey)
 

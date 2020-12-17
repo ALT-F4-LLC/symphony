@@ -13,7 +13,7 @@ enum ServiceType {
 
 message LogicalVolume {
   string ID = 1;
-  string ServiceName = 2;
+  string ServiceID = 2;
   int64 Size = 3;
   ResourceStatus Status = 4;
   string TargetAddr = 5;
@@ -37,7 +37,7 @@ message LogicalVolumeMetadata {
 
 message PhysicalVolume {
   string ID = 1;
-  string ServiceName = 2;
+  string ServiceID = 2;
   string DeviceName = 3;
   ResourceStatus Status = 4;
 }
@@ -52,13 +52,13 @@ message PhysicalVolumeMetadata {
 }
 
 message Service {
-  string Name = 1;
+  string ID = 1;
   ServiceType Type = 2;
 }
 
 message VolumeGroup {
   string ID = 1;
-  string ServiceName = 2;
+  string ServiceID = 2;
   string PhysicalVolumeID = 3;
   ResourceStatus Status = 4;
 }

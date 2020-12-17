@@ -73,7 +73,7 @@ message ResponsePhysicalVolumes {
 }
 
 message RequestService {
-  string ServiceName = 1;
+  string ServiceID = 1;
 }
 
 message RequestServices {}

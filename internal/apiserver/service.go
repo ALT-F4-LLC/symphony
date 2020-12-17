@@ -198,7 +198,7 @@ func (apiserver *APIServer) getServices() ([]*api.Service, error) {
 	return services, nil
 }
 
-func (apiserver *APIServer) getServiceByName(name uuid.UUID) (*api.Service, error) {
+func (apiserver *APIServer) getServiceByID(name uuid.UUID) (*api.Service, error) {
 	key := fmt.Sprintf("service/%s", name.String())
 
 	// TODO: replace with lookup in agent.Services
