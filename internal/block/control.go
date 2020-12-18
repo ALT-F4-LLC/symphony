@@ -5,22 +5,33 @@ import (
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/service"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// GRPCServerControl : control service struct
 type GRPCServerControl struct {
 	Block *Block
 }
 
+// ServiceNew : handles creating a new service definition
 func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServiceNew) (*api.ResponseServiceNew, error) {
-	if in.APIServerAddr == "" {
+	if s.Block.Key.ServiceID != nil {
+		st := status.New(codes.AlreadyExists, "service_already_exists")
+
+		return nil, st.Err()
+	}
+
+	apiserverAddr := s.Block.Flags.APIServerAddr
+
+	if apiserverAddr == nil {
 		st := status.New(codes.InvalidArgument, "invalid_apiserver_addr")
 
 		return nil, st.Err()
 	}
 
-	conn := service.NewClientConnTCP(in.APIServerAddr)
+	conn := service.NewClientConnTCP(apiserverAddr.String())
 
 	defer conn.Close()
 
@@ -32,12 +43,12 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 
 	healthServiceAddr := s.Block.Flags.HealthServiceAddr.String()
 
-	options := &api.RequestNewService{
+	newServiceOptions := &api.RequestNewService{
 		HealthServiceAddr: healthServiceAddr,
 		ServiceType:       api.ServiceType_BLOCK,
 	}
 
-	service, err := c.NewService(ctx, options)
+	newService, err := c.NewService(ctx, newServiceOptions)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -45,8 +56,29 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 		return nil, st.Err()
 	}
 
+	serviceID, err := uuid.Parse(newService.ID)
+
+	if err != nil {
+		st := status.New(codes.InvalidArgument, err.Error())
+
+		return nil, st.Err()
+	}
+
+	saveKeyOptions := service.SaveKeyOptions{
+		ConfigDir: s.Block.Flags.ConfigDir,
+		ServiceID: serviceID,
+	}
+
+	saveErr := s.Block.Key.Save(saveKeyOptions)
+
+	if saveErr != nil {
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return nil, st.Err()
+	}
+
 	res := &api.ResponseServiceNew{
-		ServiceID: service.ID,
+		ServiceID: newService.ID,
 	}
 
 	return res, nil

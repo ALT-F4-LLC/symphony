@@ -11,13 +11,14 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Block : block node
+// Block : block service
 type Block struct {
 	ErrorC chan error
 	Flags  *Flags
+	Key    *service.Key
 }
 
-// New : creates new block node
+// New : creates new block service
 func New() (*Block, error) {
 	flags, err := getFlags()
 
@@ -29,15 +30,22 @@ func New() (*Block, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
+	key, err := service.GetKey(flags.ConfigDir)
+
+	if err != nil {
+		return nil, err
+	}
+
 	block := &Block{
 		ErrorC: make(chan error),
 		Flags:  flags,
+		Key:    key,
 	}
 
 	return block, nil
 }
 
-// Start : handles start of manager service
+// Start : handles start of block service
 func (b *Block) Start() {
 	go b.startControl()
 

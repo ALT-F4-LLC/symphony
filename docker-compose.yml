@@ -23,6 +23,7 @@ services:
       dockerfile: cmd/block/Dockerfile
     command: >
       block
+      --apiserver-addr="apiserver:15760"
       --bind-interface="eth0"
       --config-dir="/config"
       --verbose

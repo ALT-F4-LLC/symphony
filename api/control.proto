@@ -9,9 +9,7 @@ service Control {
   rpc ServiceNew(RequestServiceNew) returns (ResponseServiceNew) {}
 }
 
-message RequestServiceNew {
-  string APIServerAddr = 1;
-}
+message RequestServiceNew {}
 
 message ResponseServiceNew {
   string ServiceID = 1;

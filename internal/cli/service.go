@@ -15,10 +15,6 @@ type ServiceNewOptions struct {
 
 // ServiceNew : initializes a service for use
 func ServiceNew(opts ServiceNewOptions) {
-	if opts.APIServerAddr == nil {
-		logrus.Fatal("Missing --apiserver option. Check --help for more.")
-	}
-
 	if opts.SocketPath == nil {
 		logrus.Fatal("Missing --socket-path option. Check --help for more.")
 	}
@@ -33,9 +29,7 @@ func ServiceNew(opts ServiceNewOptions) {
 
 	c := api.NewControlClient(conn)
 
-	options := &api.RequestServiceNew{
-		APIServerAddr: *opts.APIServerAddr,
-	}
+	options := &api.RequestServiceNew{}
 
 	service, err := c.ServiceNew(ctx, options)
 

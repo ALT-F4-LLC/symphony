@@ -72,8 +72,7 @@ func main() {
 
 	case serviceNew.FullCommand():
 		cli.ServiceNew(cli.ServiceNewOptions{
-			APIServerAddr: apiserverAddr,
-			SocketPath:    socketPath,
+			SocketPath: socketPath,
 		})
 
 		/* case serviceList.FullCommand():*/
