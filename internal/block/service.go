@@ -1,7 +1,10 @@
 package block
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 
@@ -47,6 +50,14 @@ func New() (*Block, error) {
 
 // Start : handles start of block service
 func (b *Block) Start() {
+	if b.Key.ServiceID != nil {
+		err := b.restart()
+
+		if err != nil {
+			b.ErrorC <- err
+		}
+	}
+
 	go b.startControl()
 
 	go b.startHealth()
@@ -104,4 +115,110 @@ func (b *Block) startHealth() {
 	if serveErr != nil {
 		b.ErrorC <- serveErr
 	}
+}
+
+func (b *Block) stateListeners() {
+	conn := service.NewClientConnTCP(b.Flags.APIServerAddr.String())
+
+	client := api.NewAPIServerClient(conn)
+
+	in := &api.RequestState{
+		ServiceID: b.Key.ServiceID.String(),
+	}
+
+	pvs, err := client.StatePhysicalVolumes(context.Background(), in)
+
+	if err != nil {
+		b.ErrorC <- err
+	}
+
+	vgs, err := client.StateVolumeGroups(context.Background(), in)
+
+	if err != nil {
+		b.ErrorC <- err
+	}
+
+	lvs, err := client.StateLogicalVolumes(context.Background(), in)
+
+	if err != nil {
+		b.ErrorC <- err
+	}
+
+	for {
+		pv, err := pvs.Recv()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			logrus.Error(err)
+		}
+
+		logrus.Print(pv)
+	}
+
+	for {
+		vg, err := vgs.Recv()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			logrus.Error(err)
+		}
+
+		logrus.Print(vg)
+	}
+
+	for {
+		lv, err := lvs.Recv()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			logrus.Error(err)
+		}
+
+		logrus.Print(lv)
+	}
+}
+
+func (b *Block) restart() error {
+	apiserverAddr := b.Flags.APIServerAddr
+
+	if apiserverAddr == nil {
+		return errors.New("invalid_apiserver_addr")
+	}
+
+	conn := service.NewClientConnTCP(apiserverAddr.String())
+
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), service.ContextTimeout)
+
+	defer cancel()
+
+	c := api.NewAPIServerClient(conn)
+
+	serviceOptions := &api.RequestService{
+		ServiceID: b.Key.ServiceID.String(),
+	}
+
+	service, err := c.GetService(ctx, serviceOptions)
+
+	if err != nil {
+		return err
+	}
+
+	if service == nil {
+		return errors.New("invalid_service_id")
+	}
+
+	go b.stateListeners()
+
+	return nil
 }

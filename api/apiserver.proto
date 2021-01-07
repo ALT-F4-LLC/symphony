@@ -28,6 +28,10 @@ service APIServer {
   rpc RemovePhysicalVolume(RequestPhysicalVolume) returns (ResponseStatus) {}
   rpc RemoveService(RequestService) returns (ResponseStatus) {}
   rpc RemoveVolumeGroup(RequestVolumeGroup) returns (ResponseStatus) {}
+
+  rpc StatePhysicalVolumes(RequestState) returns (stream PhysicalVolume) {}
+  rpc StateVolumeGroups(RequestState) returns (stream VolumeGroup) {}
+  rpc StateLogicalVolumes(RequestState) returns (stream LogicalVolume) {}
 }
 
 message RequestLogicalVolume {
@@ -80,6 +84,10 @@ message RequestServices {}
 
 message ResponseServices {
   repeated Service Results = 1;
+}
+
+message RequestState {
+  string ServiceID = 1;
 }
 
 message RequestVolumeGroup {

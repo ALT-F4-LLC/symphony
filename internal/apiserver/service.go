@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 
@@ -15,10 +16,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ResourceC : resource event channels
+type ResourceC struct {
+	LogicalVolume  chan *api.LogicalVolume
+	PhysicalVolume chan *api.PhysicalVolume
+	VolumeGroup    chan *api.VolumeGroup
+}
+
 // APIServer : defines apiserver service
 type APIServer struct {
-	ErrorC chan string
-	Flags  *Flags
+	ErrorC    chan error
+	ResourceC *ResourceC
+
+	Flags *Flags
 }
 
 // New : creates a new apiserver instance
@@ -33,9 +43,17 @@ func New() (*APIServer, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
+	resourceC := &ResourceC{
+		LogicalVolume:  make(chan *api.LogicalVolume),
+		PhysicalVolume: make(chan *api.PhysicalVolume),
+		VolumeGroup:    make(chan *api.VolumeGroup),
+	}
+
 	apiserver := &APIServer{
-		ErrorC: make(chan string),
-		Flags:  flags,
+		ErrorC:    make(chan error),
+		ResourceC: resourceC,
+
+		Flags: flags,
 	}
 
 	return apiserver, nil
@@ -46,7 +64,7 @@ func (apiserver *APIServer) Start() {
 	listen, err := net.Listen("tcp", apiserver.Flags.ListenAddr.String())
 
 	if err != nil {
-		apiserver.ErrorC <- err.Error()
+		apiserver.ErrorC <- err
 	}
 
 	grpcServer := grpc.NewServer()
@@ -62,7 +80,7 @@ func (apiserver *APIServer) Start() {
 	serveErr := grpcServer.Serve(listen)
 
 	if serveErr != nil {
-		apiserver.ErrorC <- serveErr.Error()
+		apiserver.ErrorC <- serveErr
 	}
 }
 
@@ -198,28 +216,41 @@ func (apiserver *APIServer) getServices() ([]*api.Service, error) {
 	return services, nil
 }
 
-func (apiserver *APIServer) getServiceByID(name uuid.UUID) (*api.Service, error) {
-	key := fmt.Sprintf("service/%s", name.String())
-
-	// TODO: replace with lookup in agent.Services
-
-	result, err := apiserver.getResource(key)
+func (apiserver *APIServer) getServiceByID(id uuid.UUID) (*api.Service, error) {
+	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
+		return nil, err
 	}
 
-	var s *api.Service
+	agent := client.Agent()
 
-	jsonErr := json.Unmarshal(result.Value, &s)
+	serviceOpts := &consul.QueryOptions{}
 
-	if jsonErr != nil {
-		st := status.New(codes.Internal, err.Error())
+	service, _, err := agent.Service(id.String(), serviceOpts)
 
-		return nil, st.Err()
+	if err != nil {
+		return nil, err
 	}
+
+	var serviceType api.ServiceType
+
+	switch service.Meta["ServiceType"] {
+	case "BLOCK":
+		serviceType = api.ServiceType_BLOCK
+	}
+
+	if serviceType == api.ServiceType_UNKNOWN_SERVICE_TYPE {
+		err := errors.New("invalid_service_type")
+
+		return nil, err
+	}
+
+	s := &api.Service{
+		ID:   service.ID,
+		Type: serviceType,
+	}
+
 	return s, nil
 }
 
