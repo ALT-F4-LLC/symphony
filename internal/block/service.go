@@ -7,19 +7,28 @@ import (
 	"io"
 	"net"
 	"os"
+	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/service"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Block : block service
 type Block struct {
 	ErrorC chan error
-	Flags  *Flags
-	Key    *service.Key
+
+	Flags *Flags
+	Key   *service.Key
 }
+
+const (
+	GRPC_RECONNECT_MAX_ATTEMPTS    = 3
+	GRPC_RECONNECT_TIMEOUT_SECONDS = 5
+)
 
 // New : creates new block service
 func New() (*Block, error) {
@@ -61,6 +70,20 @@ func (b *Block) Start() {
 	go b.startControl()
 
 	go b.startHealth()
+}
+
+func (b *Block) handleGRPCReconnect(attempt int, err error) {
+	st, ok := status.FromError(err)
+
+	if ok && codes.Code(st.Code()) == codes.Unavailable {
+		go b.listenGRPC(attempt + 1)
+
+		return
+	}
+
+	b.ErrorC <- err
+
+	return
 }
 
 func (b *Block) startControl() {
@@ -117,8 +140,28 @@ func (b *Block) startHealth() {
 	}
 }
 
-func (b *Block) stateListeners() {
+func (b *Block) listenGRPC(reconnAttempt int) {
+	if reconnAttempt >= 1 && reconnAttempt <= GRPC_RECONNECT_MAX_ATTEMPTS {
+		timeout := time.Duration(reconnAttempt * GRPC_RECONNECT_TIMEOUT_SECONDS)
+
+		time.Sleep(timeout * time.Second)
+
+		output := fmt.Sprintf("Service reconnection to APIServer attempt %d...", reconnAttempt)
+
+		logrus.Info(output)
+	}
+
+	if reconnAttempt > GRPC_RECONNECT_MAX_ATTEMPTS {
+		err := errors.New("Service unable to connect to APIServer")
+
+		b.ErrorC <- err
+
+		return
+	}
+
 	conn := service.NewClientConnTCP(b.Flags.APIServerAddr.String())
+
+	defer conn.Close()
 
 	client := api.NewAPIServerClient(conn)
 
@@ -128,8 +171,16 @@ func (b *Block) stateListeners() {
 
 	pvs, err := client.StatePhysicalVolumes(context.Background(), in)
 
+	if err != nil && reconnAttempt <= GRPC_RECONNECT_MAX_ATTEMPTS {
+		b.handleGRPCReconnect(reconnAttempt, err)
+
+		return
+	}
+
 	if err != nil {
 		b.ErrorC <- err
+
+		return
 	}
 
 	vgs, err := client.StateVolumeGroups(context.Background(), in)
@@ -144,6 +195,8 @@ func (b *Block) stateListeners() {
 		b.ErrorC <- err
 	}
 
+	logrus.Info("Service successfully connected to APIServer")
+
 	for {
 		pv, err := pvs.Recv()
 
@@ -152,10 +205,14 @@ func (b *Block) stateListeners() {
 		}
 
 		if err != nil {
-			logrus.Error(err)
+			b.handleGRPCReconnect(reconnAttempt, err)
+
+			return
 		}
 
-		logrus.Print(pv)
+		if pv != nil {
+			logrus.Print(pv)
+		}
 	}
 
 	for {
@@ -166,10 +223,14 @@ func (b *Block) stateListeners() {
 		}
 
 		if err != nil {
-			logrus.Error(err)
+			b.handleGRPCReconnect(reconnAttempt, err)
+
+			return
 		}
 
-		logrus.Print(vg)
+		if vg != nil {
+			logrus.Print(vg)
+		}
 	}
 
 	for {
@@ -180,10 +241,14 @@ func (b *Block) stateListeners() {
 		}
 
 		if err != nil {
-			logrus.Error(err)
+			b.handleGRPCReconnect(reconnAttempt, err)
+
+			return
 		}
 
-		logrus.Print(lv)
+		if lv != nil {
+			logrus.Print(lv)
+		}
 	}
 }
 
@@ -218,7 +283,7 @@ func (b *Block) restart() error {
 		return errors.New("invalid_service_id")
 	}
 
-	go b.stateListeners()
+	go b.listenGRPC(0)
 
 	return nil
 }
