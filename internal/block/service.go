@@ -30,6 +30,8 @@ const (
 	GRPC_RECONNECT_TIMEOUT_SECONDS = 5
 )
 
+var GRPC_RECONNECT_ATTEMPTS = 0
+
 // New : creates new block service
 func New() (*Block, error) {
 	flags, err := getFlags()
@@ -72,11 +74,13 @@ func (b *Block) Start() {
 	go b.startHealth()
 }
 
-func (b *Block) handleGRPCReconnect(attempt int, err error) {
+func (b *Block) handleGRPCReconnect(err error) {
 	st, ok := status.FromError(err)
 
 	if ok && codes.Code(st.Code()) == codes.Unavailable {
-		go b.listenGRPC(attempt + 1)
+		GRPC_RECONNECT_ATTEMPTS = GRPC_RECONNECT_ATTEMPTS + 1
+
+		go b.listenGRPC()
 
 		return
 	}
@@ -140,18 +144,18 @@ func (b *Block) startHealth() {
 	}
 }
 
-func (b *Block) listenGRPC(reconnAttempt int) {
-	if reconnAttempt >= 1 && reconnAttempt <= GRPC_RECONNECT_MAX_ATTEMPTS {
-		timeout := time.Duration(reconnAttempt * GRPC_RECONNECT_TIMEOUT_SECONDS)
+func (b *Block) listenGRPC() {
+	if GRPC_RECONNECT_ATTEMPTS >= 1 && GRPC_RECONNECT_ATTEMPTS <= GRPC_RECONNECT_MAX_ATTEMPTS {
+		timeout := time.Duration(GRPC_RECONNECT_ATTEMPTS * GRPC_RECONNECT_TIMEOUT_SECONDS)
 
 		time.Sleep(timeout * time.Second)
 
-		output := fmt.Sprintf("Service reconnection to APIServer attempt %d...", reconnAttempt)
+		output := fmt.Sprintf("Service reconnection to APIServer attempt %d...", GRPC_RECONNECT_ATTEMPTS)
 
 		logrus.Info(output)
 	}
 
-	if reconnAttempt > GRPC_RECONNECT_MAX_ATTEMPTS {
+	if GRPC_RECONNECT_ATTEMPTS > GRPC_RECONNECT_MAX_ATTEMPTS {
 		err := errors.New("Service unable to connect to APIServer")
 
 		b.ErrorC <- err
@@ -171,29 +175,29 @@ func (b *Block) listenGRPC(reconnAttempt int) {
 
 	pvs, err := client.StatePhysicalVolumes(context.Background(), in)
 
-	if err != nil && reconnAttempt <= GRPC_RECONNECT_MAX_ATTEMPTS {
-		b.handleGRPCReconnect(reconnAttempt, err)
-
-		return
-	}
-
-	if err != nil {
-		b.ErrorC <- err
+	if err != nil && GRPC_RECONNECT_ATTEMPTS <= GRPC_RECONNECT_MAX_ATTEMPTS {
+		b.handleGRPCReconnect(err)
 
 		return
 	}
 
 	vgs, err := client.StateVolumeGroups(context.Background(), in)
 
-	if err != nil {
-		b.ErrorC <- err
+	if err != nil && GRPC_RECONNECT_ATTEMPTS <= GRPC_RECONNECT_MAX_ATTEMPTS {
+		b.handleGRPCReconnect(err)
+
+		return
 	}
 
 	lvs, err := client.StateLogicalVolumes(context.Background(), in)
 
-	if err != nil {
-		b.ErrorC <- err
+	if err != nil && GRPC_RECONNECT_ATTEMPTS <= GRPC_RECONNECT_MAX_ATTEMPTS {
+		b.handleGRPCReconnect(err)
+
+		return
 	}
+
+	GRPC_RECONNECT_ATTEMPTS = 0
 
 	logrus.Info("Service successfully connected to APIServer")
 
@@ -205,7 +209,7 @@ func (b *Block) listenGRPC(reconnAttempt int) {
 		}
 
 		if err != nil {
-			b.handleGRPCReconnect(reconnAttempt, err)
+			b.handleGRPCReconnect(err)
 
 			return
 		}
@@ -223,7 +227,7 @@ func (b *Block) listenGRPC(reconnAttempt int) {
 		}
 
 		if err != nil {
-			b.handleGRPCReconnect(reconnAttempt, err)
+			b.handleGRPCReconnect(err)
 
 			return
 		}
@@ -241,7 +245,7 @@ func (b *Block) listenGRPC(reconnAttempt int) {
 		}
 
 		if err != nil {
-			b.handleGRPCReconnect(reconnAttempt, err)
+			b.handleGRPCReconnect(err)
 
 			return
 		}
@@ -283,7 +287,7 @@ func (b *Block) restart() error {
 		return errors.New("invalid_service_id")
 	}
 
-	go b.listenGRPC(0)
+	go b.listenGRPC()
 
 	return nil
 }

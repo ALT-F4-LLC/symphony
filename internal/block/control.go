@@ -81,7 +81,7 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 		ServiceID: newService.ID,
 	}
 
-	go s.Block.listenGRPC(0)
+	go s.Block.listenGRPC()
 
 	return res, nil
 }
