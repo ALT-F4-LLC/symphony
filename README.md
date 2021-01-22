@@ -6,7 +6,7 @@ Developed weekly live at [The Alt-F4 Stream](https://www.twitch.tv/thealtf4strea
 
 > NOTE: Everything below is a work-in-progress and subject to change at any time.
 
-## Archecture
+## Architecture
 
 Below is an overiew of the current architecture design of Symphony.
 
