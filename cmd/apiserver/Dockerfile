@@ -1,6 +1,6 @@
 # Base stage
 
-FROM golang:1.14-alpine as base_manager
+FROM golang:1.14-alpine
 
 RUN apk add --no-cache git protobuf
 
@@ -17,12 +17,11 @@ COPY ./api ./api
 RUN protoc --proto_path="$(pwd)" api/*.proto --go_out=plugins=grpc:../../../
 
 COPY ./cmd/cli ./cmd/cli
-COPY ./cmd/manager ./cmd/manager
 COPY ./internal/cli ./internal/cli
-COPY ./internal/manager ./internal/manager
-COPY ./internal/pkg/cluster ./internal/pkg/cluster
-COPY ./internal/pkg/config ./internal/pkg/config
-COPY ./internal/pkg/state ./internal/pkg/state
+
+COPY ./cmd/apiserver ./cmd/apiserver
+COPY ./internal/apiserver ./internal/apiserver
+COPY ./internal/service ./internal/service
 
 RUN go install -v ./...
 
@@ -34,7 +33,7 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /usr/local/bin
 
-COPY --from=base_manager /go/bin/cli .
-COPY --from=base_manager /go/bin/manager .
+COPY --from=0 /go/bin/cli .
+COPY --from=0 /go/bin/apiserver .
 
-CMD [ "manager" ]
+CMD [ "apiserver" ]

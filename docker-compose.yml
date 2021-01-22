@@ -1,147 +1,49 @@
 networks:
-  symphony:
-
+  services:
 services:
-  block_01:
+  apiserver:
+    build:
+      context: .
+      dockerfile: cmd/apiserver/Dockerfile
+    command: >
+      apiserver
+      --bind-interface="eth0"
+      --config-dir="/config"
+      --consul-addr="http://consul:8500"
+      --verbose
+    depends_on:
+      - consul
+    networks:
+      - services
+    volumes:
+      - apiserver:/config
+  block:
     build:
       context: .
       dockerfile: cmd/block/Dockerfile
     command: >
       block
+      --apiserver-addr="apiserver:15760"
+      --bind-interface="eth0"
       --config-dir="/config"
       --verbose
     depends_on:
-      - manager_01
-      - manager_02
-      - manager_03
+      - apiserver
     networks:
-      - symphony
+      - services
+    volumes:
+      - block:/config
+  consul:
+    command: agent -bind '{{ GetInterfaceIP "eth0" }}' -client '{{ GetInterfaceIP "eth0" }}' -dev
+    image: consul:1.9
+    networks:
+      - services
     ports:
-      - 15763:15760
+      - 8500:8500
     volumes:
-      - block_01:/config
-
-  etcd_01:
-    command: >-
-      etcd
-      -advertise-client-urls http://etcd_01:2379,http://etcd_01:4001
-      -initial-advertise-peer-urls http://etcd_01:2380
-      -initial-cluster etcd_01=http://etcd_01:2380,etcd_02=http://etcd_02:2380,etcd_03=http://etcd_03:2380
-      -initial-cluster-state new
-      -initial-cluster-token etcd-cluster-1
-      -listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001
-      -listen-peer-urls http://0.0.0.0:2380
-      -name etcd_01
-    image: quay.io/coreos/etcd:v3.4.9
-    networks:
-      - symphony
-    volumes:
-      - /usr/share/ca-certificates/:/etc/ssl/certs
-      - etcd_01:/etcd_01.etcd
-
-  etcd_02:
-    command: >-
-      etcd
-      -advertise-client-urls http://etcd_02:2379,http://etcd_02:4001
-      -initial-advertise-peer-urls http://etcd_02:2380
-      -initial-cluster etcd_01=http://etcd_01:2380,etcd_02=http://etcd_02:2380,etcd_03=http://etcd_03:2380
-      -initial-cluster-state new
-      -initial-cluster-token etcd-cluster-1
-      -listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001
-      -listen-peer-urls http://0.0.0.0:2380
-      -name etcd_02
-    image: quay.io/coreos/etcd:v3.4.9
-    networks:
-      - symphony
-    volumes:
-      - /usr/share/ca-certificates/:/etc/ssl/certs
-      - etcd_02:/etcd_02.etcd
-
-  etcd_03:
-    command: >-
-      etcd
-      -advertise-client-urls http://etcd_03:2379,http://etcd_03:4001
-      -initial-advertise-peer-urls http://etcd_03:2380
-      -initial-cluster etcd_01=http://etcd_01:2380,etcd_02=http://etcd_02:2380,etcd_03=http://etcd_03:2380
-      -initial-cluster-state new
-      -initial-cluster-token etcd-cluster-1
-      -listen-client-urls http://0.0.0.0:2379,http://0.0.0.0:4001
-      -listen-peer-urls http://0.0.0.0:2380
-      -name etcd_03
-    image: quay.io/coreos/etcd:v3.4.9
-    networks:
-      - symphony
-    volumes:
-      - /usr/share/ca-certificates/:/etc/ssl/certs
-      - etcd_03:/etcd_03.etcd
-
-  manager_01:
-    build:
-      context: .
-      dockerfile: cmd/manager/Dockerfile
-    command: >
-      manager
-      --config-dir="/config"
-      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
-      --verbose
-    depends_on:
-      - etcd_01
-      - etcd_02
-      - etcd_03
-    networks:
-      - symphony
-    ports:
-      - 15760:15760
-    volumes:
-      - manager_01:/config
-
-  manager_02:
-    build:
-      context: .
-      dockerfile: cmd/manager/Dockerfile
-    command: >
-      manager
-      --config-dir="/config"
-      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
-      --verbose
-    depends_on:
-      - etcd_01
-      - etcd_02
-      - etcd_03
-    networks:
-      - symphony
-    ports:
-      - 15761:15760
-    volumes:
-      - manager_02:/config
-
-  manager_03:
-    build:
-      context: .
-      dockerfile: cmd/manager/Dockerfile
-    command: >
-      manager
-      --config-dir="/config"
-      --etcd-endpoints="http://etcd_01:2379,http://etcd_02:2379,http://etcd_03:2379"
-      --verbose
-    depends_on:
-      - etcd_01
-      - etcd_02
-      - etcd_03
-    networks:
-      - symphony
-    ports:
-      - 15762:15760
-    volumes:
-      - manager_03:/config
-
+      - consul:/consul/data
 version: "3.7"
-
 volumes:
-  block_01:
-  etcd_01:
-  etcd_02:
-  etcd_03:
-  manager_01:
-  manager_02:
-  manager_03:
+  apiserver:
+  block:
+  consul:

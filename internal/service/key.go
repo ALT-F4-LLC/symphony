@@ -1,4 +1,4 @@
-package config
+package service
 
 import (
 	"encoding/json"
@@ -13,15 +13,19 @@ import (
 
 // Key : key used for initialization and authentication of nodes
 type Key struct {
-	ClusterID *uuid.UUID `json:"cluster_id"`
-	Endpoints []string
 	ServiceID *uuid.UUID `json:"service_id"`
 
 	mu sync.Mutex
 }
 
-// NewKey : gets contents of key.json file
-func NewKey(configDir string) (*Key, error) {
+// SaveKeyOptions : used for saving a new key locally
+type SaveKeyOptions struct {
+	ConfigDir string
+	ServiceID uuid.UUID
+}
+
+// GetKey : gets contents of key.json file
+func GetKey(configDir string) (*Key, error) {
 	keyPath := fmt.Sprintf("%s/%s", configDir, "key.json")
 
 	keyFile, err := os.OpenFile(keyPath, os.O_RDONLY|os.O_CREATE, 0666)
@@ -38,7 +42,7 @@ func NewKey(configDir string) (*Key, error) {
 		return nil, err
 	}
 
-	var key Key
+	var key *Key
 
 	if len(data) > 0 {
 		keyErr := json.Unmarshal(data, &key)
@@ -48,12 +52,20 @@ func NewKey(configDir string) (*Key, error) {
 		}
 	}
 
-	return &key, nil
+	if key == nil {
+		key = &Key{}
+	}
+
+	logrus.Debug("Successfully loaded key.json")
+
+	return key, nil
 }
 
 // Save : save the key.json file
-func (k *Key) Save(configDir string) error {
+func (k *Key) Save(opts SaveKeyOptions) error {
 	k.mu.Lock()
+
+	k.ServiceID = &opts.ServiceID
 
 	keyJSON, err := json.Marshal(k)
 
@@ -61,7 +73,7 @@ func (k *Key) Save(configDir string) error {
 		return err
 	}
 
-	path := fmt.Sprintf("%s/key.json", configDir)
+	path := fmt.Sprintf("%s/key.json", opts.ConfigDir)
 
 	writeErr := ioutil.WriteFile(path, keyJSON, 0644)
 
@@ -72,9 +84,7 @@ func (k *Key) Save(configDir string) error {
 	defer k.mu.Unlock()
 
 	fields := logrus.Fields{
-		"cluster_id": k.ClusterID.String(),
-		"endpoints":  k.Endpoints,
-		"service_id": k.ServiceID.String(),
+		"ServiceID": k.ServiceID.String(),
 	}
 
 	logrus.WithFields(fields).Debug("Updated key.json file")

@@ -1,12 +1,12 @@
 package main
 
 import (
-	"github.com/erkrnt/symphony/internal/block"
+	"github.com/erkrnt/symphony/internal/apiserver"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	s, err := block.New()
+	s, err := apiserver.New()
 
 	if err != nil {
 		logrus.Fatal(err)
@@ -14,7 +14,7 @@ func main() {
 
 	go s.Start()
 
-	startErr := <-s.ErrorC
+	errorC := <-s.ErrorC
 
-	logrus.Fatal(startErr)
+	logrus.Fatal(errorC)
 }

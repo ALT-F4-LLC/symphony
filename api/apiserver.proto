@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+option go_package = "github.com/erkrnt/symphony/api";
+
+package api;
+
+import "api/resource.proto";
+import "api/status.proto";
+
+// 0.0.0.0:15760
+service APIServer {
+  rpc GetLogicalVolume(RequestLogicalVolume) returns (LogicalVolume) {}
+  rpc GetPhysicalVolume(RequestPhysicalVolume) returns (PhysicalVolume) {}
+  rpc GetService(RequestService) returns (Service) {}
+  rpc GetVolumeGroup(RequestVolumeGroup) returns (VolumeGroup) {}
+
+  rpc GetLogicalVolumes(RequestLogicalVolumes) returns (ResponseLogicalVolumes) {}
+  rpc GetPhysicalVolumes(RequestPhysicalVolumes) returns (ResponsePhysicalVolumes) {}
+  rpc GetServices(RequestServices) returns (ResponseServices) {}
+  rpc GetVolumeGroups(RequestVolumeGroups) returns (ResponseVolumeGroups) {}
+
+  rpc NewLogicalVolume(RequestNewLogicalVolume) returns (LogicalVolume) {}
+  rpc NewPhysicalVolume(RequestNewPhysicalVolume) returns (PhysicalVolume) {}
+  rpc NewService(RequestNewService) returns (Service) {}
+  rpc NewVolumeGroup(RequestNewVolumeGroup) returns (VolumeGroup) {}
+
+  rpc RemoveLogicalVolume(RequestLogicalVolume) returns (ResponseStatus) {}
+  rpc RemovePhysicalVolume(RequestPhysicalVolume) returns (ResponseStatus) {}
+  rpc RemoveService(RequestService) returns (ResponseStatus) {}
+  rpc RemoveVolumeGroup(RequestVolumeGroup) returns (ResponseStatus) {}
+
+  rpc StatePhysicalVolumes(RequestState) returns (stream PhysicalVolume) {}
+  rpc StateVolumeGroups(RequestState) returns (stream VolumeGroup) {}
+  rpc StateLogicalVolumes(RequestState) returns (stream LogicalVolume) {}
+}
+
+message RequestLogicalVolume {
+  string ID = 1;
+}
+
+message RequestLogicalVolumes {}
+
+message ResponseLogicalVolumes {
+  repeated LogicalVolume Results = 1;
+}
+
+message RequestNewLogicalVolume {
+  int64 Size = 1;
+  ResourceStatus Status = 2;
+  string VolumeGroupID = 3;
+}
+
+message RequestNewPhysicalVolume {
+  string DeviceName = 1;
+  string ServiceID = 2;
+  ResourceStatus Status = 3;
+}
+
+message RequestNewService {
+  string HealthServiceAddr = 1;
+  ServiceType ServiceType = 2;
+}
+
+message RequestNewVolumeGroup {
+  string PhysicalVolumeID = 1;
+  ResourceStatus Status = 2;
+}
+
+message RequestPhysicalVolume {
+  string ID = 1;
+}
+
+message RequestPhysicalVolumes {}
+
+message ResponsePhysicalVolumes {
+  repeated PhysicalVolume Results = 1;
+}
+
+message RequestService {
+  string ServiceID = 1;
+}
+
+message RequestServices {}
+
+message ResponseServices {
+  repeated Service Results = 1;
+}
+
+message RequestState {
+  string ServiceID = 1;
+}
+
+message RequestVolumeGroup {
+  string ID = 1;
+}
+
+message RequestVolumeGroups {}
+
+message ResponseVolumeGroups {
+  repeated VolumeGroup Results = 1;
+}

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option go_package = "github.com/erkrnt/symphony/api";
+
+package api;
+
+// socket://control.sock
+service Control {
+  rpc ServiceNew(RequestServiceNew) returns (ResponseServiceNew) {}
+}
+
+message RequestServiceNew {}
+
+message ResponseServiceNew {
+  string ServiceID = 1;
+}
