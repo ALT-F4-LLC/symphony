@@ -6,6 +6,14 @@ Developed weekly live at [The Alt-F4 Stream](https://www.twitch.tv/thealtf4strea
 
 > NOTE: Everything below is a work-in-progress and subject to change at any time.
 
+## Archecture
+
+Below is an overiew of the current architecture design of Symphony.
+
+Services in orange implemented and gray are unimplemented.
+
+![Overiew - Archecture][preview]
+
 ## Concepts
 
 Below describes the basic requirements of a Symphony environment.
@@ -39,3 +47,5 @@ docker-compose exec block ./cli --socket-path="/config/control.sock" service new
 ```
 
 The service should be registered healty in Consul at `http://localhost:8500`.
+
+[preview]: overview-architecture.png "Overview - Archecture"
