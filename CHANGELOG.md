@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Added
+
+- Adds flowchart of the current architecture to README
+
 ### Changed
 
 - Replaced `etcd` with `consul` for service discovery and state storage.
