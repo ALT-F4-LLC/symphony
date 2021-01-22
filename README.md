@@ -8,19 +8,15 @@ Developed weekly live at [The Alt-F4 Stream](https://www.twitch.tv/thealtf4strea
 
 ## Concepts
 
-Below describes basic concepts of a Symphony environment.
+Below describes the basic requirements of a Symphony environment.
 
-### Consul
+- Consul: used for service discovery and replicated key-value storage of state.
 
-Consul is used for service discovery and replicated key-value storage of state.
+- APIServer: used for all internal state changes and messages to services.
 
-### APIServer
+Below describes the optional cloud services and their functions.
 
-APIServer handles all internal state changes and processes messages to services.
-
-### Block
-
-Block service handles provisioning of logical volumes to be used for other resources.
+- Block: used for provisioning logical volumes to be used with other resources.
 
 ## Development
 
