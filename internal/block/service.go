@@ -7,53 +7,29 @@ import (
 	"io"
 	"net"
 	"os"
-	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/service"
+	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Block : block service
 type Block struct {
-	ErrorC chan error
-
-	Flags *Flags
-	Key   *service.Key
+	Service *service.Service
 }
-
-const (
-	GRPC_RECONNECT_MAX_ATTEMPTS    = 3
-	GRPC_RECONNECT_TIMEOUT_SECONDS = 5
-)
-
-var GRPC_RECONNECT_ATTEMPTS = 0
 
 // New : creates new block service
 func New() (*Block, error) {
-	flags, err := getFlags()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if flags.Verbose {
-		logrus.SetLevel(logrus.DebugLevel)
-	}
-
-	key, err := service.GetKey(flags.ConfigDir)
+	service, err := service.New()
 
 	if err != nil {
 		return nil, err
 	}
 
 	block := &Block{
-		ErrorC: make(chan error),
-		Flags:  flags,
-		Key:    key,
+		Service: service,
 	}
 
 	return block, nil
@@ -61,46 +37,32 @@ func New() (*Block, error) {
 
 // Start : handles start of block service
 func (b *Block) Start() {
-	if b.Key.ServiceID != nil {
+	if b.Service.Key.ServiceID != nil {
 		err := b.restart()
 
 		if err != nil {
-			b.ErrorC <- err
+			b.Service.ErrorC <- err
 		}
 	}
 
-	go b.startControl()
+	go b.listenControl()
 
-	go b.startHealth()
+	go b.listenHealth()
 }
 
-func (b *Block) handleGRPCReconnect(err error) {
-	st, ok := status.FromError(err)
+func (b *Block) listenControl() {
+	configDir := b.Service.Flags.ConfigDir
 
-	if ok && codes.Code(st.Code()) == codes.Unavailable {
-		GRPC_RECONNECT_ATTEMPTS = GRPC_RECONNECT_ATTEMPTS + 1
-
-		go b.listenGRPC()
-
-		return
-	}
-
-	b.ErrorC <- err
-
-	return
-}
-
-func (b *Block) startControl() {
-	socketPath := fmt.Sprintf("%s/control.sock", b.Flags.ConfigDir)
+	socketPath := fmt.Sprintf("%s/control.sock", configDir)
 
 	if err := os.RemoveAll(socketPath); err != nil {
-		b.ErrorC <- err
+		b.Service.ErrorC <- err
 	}
 
-	lis, err := net.Listen("unix", socketPath)
+	listen, err := net.Listen("unix", socketPath)
 
 	if err != nil {
-		b.ErrorC <- err
+		b.Service.ErrorC <- err
 	}
 
 	grpcServer := grpc.NewServer()
@@ -113,20 +75,20 @@ func (b *Block) startControl() {
 
 	logrus.Info("Started block control gRPC socket server.")
 
-	serveErr := grpcServer.Serve(lis)
+	serveErr := grpcServer.Serve(listen)
 
 	if serveErr != nil {
-		b.ErrorC <- serveErr
+		b.Service.ErrorC <- serveErr
 	}
 }
 
-func (b *Block) startHealth() {
-	listenAddr := b.Flags.HealthServiceAddr.String()
+func (b *Block) listenHealth() {
+	listenAddr := b.Service.Flags.HealthServiceAddr.String()
 
 	listen, err := net.Listen("tcp", listenAddr)
 
 	if err != nil {
-		b.ErrorC <- err
+		b.Service.ErrorC <- err
 	}
 
 	grpcServer := grpc.NewServer()
@@ -135,146 +97,176 @@ func (b *Block) startHealth() {
 
 	api.RegisterHealthServer(grpcServer, healthServer)
 
-	logrus.Info("Started health grpc server.")
+	logrus.Info("Started health gRPC server.")
 
 	serveErr := grpcServer.Serve(listen)
 
 	if serveErr != nil {
-		b.ErrorC <- serveErr
+		b.Service.ErrorC <- serveErr
 	}
 }
 
-func (b *Block) listenGRPC() {
-	if GRPC_RECONNECT_ATTEMPTS >= 1 && GRPC_RECONNECT_ATTEMPTS <= GRPC_RECONNECT_MAX_ATTEMPTS {
-		timeout := time.Duration(GRPC_RECONNECT_ATTEMPTS * GRPC_RECONNECT_TIMEOUT_SECONDS)
-
-		time.Sleep(timeout * time.Second)
-
-		output := fmt.Sprintf("Service reconnection to APIServer attempt %d...", GRPC_RECONNECT_ATTEMPTS)
-
-		logrus.Info(output)
-	}
-
-	if GRPC_RECONNECT_ATTEMPTS > GRPC_RECONNECT_MAX_ATTEMPTS {
-		err := errors.New("Service unable to connect to APIServer")
-
-		b.ErrorC <- err
-
-		return
-	}
-
-	conn := service.NewClientConnTCP(b.Flags.APIServerAddr.String())
-
-	defer conn.Close()
-
-	client := api.NewAPIServerClient(conn)
+func (b *Block) listenLogicalVolumes(client api.APIServerClient) (func() error, error) {
+	serviceID := b.Service.Key.ServiceID.String()
 
 	in := &api.RequestState{
-		ServiceID: b.Key.ServiceID.String(),
-	}
-
-	pvs, err := client.StatePhysicalVolumes(context.Background(), in)
-
-	if err != nil && GRPC_RECONNECT_ATTEMPTS <= GRPC_RECONNECT_MAX_ATTEMPTS {
-		b.handleGRPCReconnect(err)
-
-		return
-	}
-
-	vgs, err := client.StateVolumeGroups(context.Background(), in)
-
-	if err != nil && GRPC_RECONNECT_ATTEMPTS <= GRPC_RECONNECT_MAX_ATTEMPTS {
-		b.handleGRPCReconnect(err)
-
-		return
+		ServiceID: serviceID,
 	}
 
 	lvs, err := client.StateLogicalVolumes(context.Background(), in)
 
-	if err != nil && GRPC_RECONNECT_ATTEMPTS <= GRPC_RECONNECT_MAX_ATTEMPTS {
-		b.handleGRPCReconnect(err)
-
-		return
+	if err != nil {
+		return nil, err
 	}
 
-	GRPC_RECONNECT_ATTEMPTS = 0
+	listener := func() error {
+		for {
+			lv, err := lvs.Recv()
 
-	logrus.Info("Service successfully connected to APIServer")
+			if err == io.EOF {
+				break
+			}
 
-	for {
-		pv, err := pvs.Recv()
+			if err != nil {
+				return err
+			}
 
-		if err == io.EOF {
-			break
+			if lv != nil {
+				logrus.Print(lv)
+			}
 		}
 
-		if err != nil {
-			b.handleGRPCReconnect(err)
-
-			return
-		}
-
-		if pv != nil {
-			logrus.Print(pv)
-		}
+		return nil
 	}
 
-	for {
-		vg, err := vgs.Recv()
+	return listener, nil
+}
 
-		if err == io.EOF {
-			break
-		}
+func (b *Block) listenPhysicalVolumes(client api.APIServerClient) (func() error, error) {
+	serviceID := b.Service.Key.ServiceID.String()
 
-		if err != nil {
-			b.handleGRPCReconnect(err)
-
-			return
-		}
-
-		if vg != nil {
-			logrus.Print(vg)
-		}
+	in := &api.RequestState{
+		ServiceID: serviceID,
 	}
 
-	for {
-		lv, err := lvs.Recv()
+	pvs, err := client.StatePhysicalVolumes(context.Background(), in)
 
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			b.handleGRPCReconnect(err)
-
-			return
-		}
-
-		if lv != nil {
-			logrus.Print(lv)
-		}
+	if err != nil {
+		return nil, err
 	}
+
+	listener := func() error {
+		for {
+			pv, err := pvs.Recv()
+
+			if err == io.EOF {
+				break
+			}
+
+			if err != nil {
+				return err
+			}
+
+			if pv != nil {
+				logrus.Print(pv)
+			}
+		}
+
+		return nil
+	}
+
+	return listener, nil
+}
+
+func (b *Block) listenResources() {
+	apiserverAddr := b.Service.Flags.APIServerAddr.String()
+
+	logicalVolumes := service.APIServerConn{
+		Address: apiserverAddr,
+		ErrorC:  b.Service.ErrorC,
+		Handler: b.listenLogicalVolumes,
+	}
+
+	physicalVolumes := service.APIServerConn{
+		Address: apiserverAddr,
+		ErrorC:  b.Service.ErrorC,
+		Handler: b.listenPhysicalVolumes,
+	}
+
+	volumeGroups := service.APIServerConn{
+		Address: apiserverAddr,
+		ErrorC:  b.Service.ErrorC,
+		Handler: b.listenVolumeGroups,
+	}
+
+	go logicalVolumes.Listen()
+
+	go physicalVolumes.Listen()
+
+	go volumeGroups.Listen()
+}
+
+func (b *Block) listenVolumeGroups(client api.APIServerClient) (func() error, error) {
+	serviceID := b.Service.Key.ServiceID.String()
+
+	in := &api.RequestState{
+		ServiceID: serviceID,
+	}
+
+	vgs, err := client.StateVolumeGroups(context.Background(), in)
+
+	if err != nil {
+		return nil, err
+	}
+
+	listener := func() error {
+		for {
+			vg, err := vgs.Recv()
+
+			if err == io.EOF {
+				break
+			}
+
+			if err != nil {
+				return err
+			}
+
+			if vg != nil {
+				logrus.Print(vg)
+			}
+		}
+
+		return nil
+	}
+
+	return listener, nil
 }
 
 func (b *Block) restart() error {
-	apiserverAddr := b.Flags.APIServerAddr
+	apiserverAddr := b.Service.Flags.APIServerAddr
 
 	if apiserverAddr == nil {
 		return errors.New("invalid_apiserver_addr")
 	}
 
-	conn := service.NewClientConnTCP(apiserverAddr.String())
+	conn, err := utils.NewClientConnTcp(apiserverAddr.String())
+
+	if err != nil {
+		return err
+	}
 
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), service.ContextTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), utils.ContextTimeout)
 
 	defer cancel()
 
 	c := api.NewAPIServerClient(conn)
 
+	serviceID := b.Service.Key.ServiceID.String()
+
 	serviceOptions := &api.RequestService{
-		ServiceID: b.Key.ServiceID.String(),
+		ServiceID: serviceID,
 	}
 
 	service, err := c.GetService(ctx, serviceOptions)
@@ -287,7 +279,7 @@ func (b *Block) restart() error {
 		return errors.New("invalid_service_id")
 	}
 
-	go b.listenGRPC()
+	b.listenResources()
 
 	return nil
 }

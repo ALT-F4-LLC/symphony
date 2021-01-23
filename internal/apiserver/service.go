@@ -7,7 +7,7 @@ import (
 	"net"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/service"
+	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/google/uuid"
 	consul "github.com/hashicorp/consul/api"
 	"github.com/sirupsen/logrus"
@@ -217,7 +217,7 @@ func (apiserver *APIServer) getServices() ([]*api.Service, error) {
 }
 
 func (apiserver *APIServer) getServiceByID(id uuid.UUID) (*api.Service, error) {
-	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
+	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
 		return nil, err
@@ -255,7 +255,7 @@ func (apiserver *APIServer) getServiceByID(id uuid.UUID) (*api.Service, error) {
 }
 
 func (apiserver *APIServer) getResource(key string) (*consul.KVPair, error) {
-	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
+	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
 		return nil, err
@@ -273,7 +273,7 @@ func (apiserver *APIServer) getResource(key string) (*consul.KVPair, error) {
 }
 
 func (apiserver *APIServer) getResources(key string) (consul.KVPairs, error) {
-	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
+	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
 		return nil, err
@@ -342,7 +342,7 @@ func (apiserver *APIServer) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, 
 }
 
 func (apiserver *APIServer) removeResource(key string) error {
-	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
+	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -364,7 +364,7 @@ func (apiserver *APIServer) removeResource(key string) error {
 }
 
 func (apiserver *APIServer) saveLogicalVolume(lv *api.LogicalVolume) error {
-	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
+	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -397,7 +397,7 @@ func (apiserver *APIServer) saveLogicalVolume(lv *api.LogicalVolume) error {
 }
 
 func (apiserver *APIServer) savePhysicalVolume(pv *api.PhysicalVolume) error {
-	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
+	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -430,7 +430,7 @@ func (apiserver *APIServer) savePhysicalVolume(pv *api.PhysicalVolume) error {
 }
 
 func (apiserver *APIServer) saveVolumeGroup(vg *api.VolumeGroup) error {
-	client, err := service.NewConsulClient(apiserver.Flags.ConsulAddr)
+	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())

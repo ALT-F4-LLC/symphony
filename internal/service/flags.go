@@ -1,66 +1,77 @@
 package service
 
 import (
-	"fmt"
+	"errors"
 	"net"
-	"os"
-	"path/filepath"
-	"time"
+
+	"github.com/erkrnt/symphony/internal/utils"
+	"github.com/hashicorp/go-sockaddr"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-const (
-	// ContextTimeout : default context timeout
-	ContextTimeout = 5 * time.Second
-
-	// DialTimeout : default dial timeout
-	DialTimeout = 5 * time.Second
-)
-
-// GetDirPath : resolves full path for directory
-func GetDirPath(dir *string) (*string, error) {
-	path, err := filepath.Abs(*dir)
-
-	if err != nil {
-		return nil, err
-	}
-
-	_, statErr := os.Stat(path)
-
-	if statErr != nil {
-		if err := os.MkdirAll(path, 0750); err != nil {
-			return nil, err
-		}
-	}
-
-	return &path, nil
+// Flags : service flags
+type Flags struct {
+	APIServerAddr     *net.TCPAddr
+	ConfigDir         string
+	HealthServiceAddr *net.TCPAddr
+	Verbose           bool
 }
 
-// GetListenAddr : returns the TCP listen addr
-func GetListenAddr(ipAddr string, port int) (*net.TCPAddr, error) {
-	listenAddr := fmt.Sprintf("%s:%d", ipAddr, port)
+// GetFlags : retrieves flags from CLI
+func GetFlags() (*Flags, error) {
+	var (
+		apiserverAddrFlag = kingpin.Flag("apiserver-addr", "Sets the API server instance to communicate with.").Required().String()
+		bindInterfaceFlag = kingpin.Flag("bind-interface", "Sets the bind interface for listening services.").Required().String()
+		configDirFlag     = kingpin.Flag("config-dir", "Sets configuration directory for block service.").Default(".").String()
+		verboseFlag       = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
+	)
 
-	listenAddrTCP, err := net.ResolveTCPAddr("tcp", listenAddr)
+	kingpin.Parse()
+
+	if bindInterfaceFlag == nil {
+		return nil, errors.New("invalid_bind_interface")
+	}
+
+	configDirPath, err := utils.GetDirPath(configDirFlag)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return listenAddrTCP, nil
-}
-
-// GetOutboundIP : get preferred outbound ip of this machine
-func GetOutboundIP() (*net.IP, error) {
-	conn, err := net.Dial("udp", "1.1.1.1:80")
+	listenIPAddr, err := sockaddr.GetInterfaceIP(*bindInterfaceFlag)
 
 	if err != nil {
 		return nil, err
 	}
 
-	defer conn.Close()
+	healthServiceAddr, err := utils.GetListenAddr(listenIPAddr, 15761)
 
-	addr := conn.LocalAddr().(*net.UDPAddr)
+	if err != nil {
+		return nil, err
+	}
 
-	ip := addr.IP
+	apiserverAddr, err := net.ResolveTCPAddr("tcp", *apiserverAddrFlag)
 
-	return &ip, nil
+	if err != nil {
+		return nil, err
+	}
+
+	flags := &Flags{
+		APIServerAddr:     apiserverAddr,
+		ConfigDir:         *configDirPath,
+		HealthServiceAddr: healthServiceAddr,
+		Verbose:           *verboseFlag,
+	}
+
+	fields := logrus.Fields{
+		"APIServerAddr":     flags.APIServerAddr.String(),
+		"ConfigDir":         flags.ConfigDir,
+		"HealthServiceAddr": flags.HealthServiceAddr.String(),
+		"Verbose":           flags.Verbose,
+	}
+
+	logrus.WithFields(fields).Info("Service command-line flags loaded.")
+
+	return flags, nil
 }

@@ -17,11 +17,11 @@ COPY ./api ./api
 RUN protoc --proto_path="$(pwd)" api/*.proto --go_out=plugins=grpc:../../../
 
 COPY ./cmd/cli ./cmd/cli
-COPY ./internal/cli ./internal/cli
-
 COPY ./cmd/block ./cmd/block
 COPY ./internal/block ./internal/block
+COPY ./internal/cli ./internal/cli
 COPY ./internal/service ./internal/service
+COPY ./internal/utils ./internal/utils
 
 RUN go install -v ./...
 

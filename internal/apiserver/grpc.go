@@ -6,7 +6,7 @@ import (
 	"net"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/service"
+	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/google/uuid"
 	consul "github.com/hashicorp/consul/api"
 	"github.com/sirupsen/logrus"
@@ -310,7 +310,7 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 
 // NewService : creates a new service in state
 func (s *GRPCServerAPIServer) NewService(ctx context.Context, in *api.RequestNewService) (*api.Service, error) {
-	client, err := service.NewConsulClient(s.APIServer.Flags.ConsulAddr)
+	client, err := utils.NewConsulClient(s.APIServer.Flags.ConsulAddr)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())

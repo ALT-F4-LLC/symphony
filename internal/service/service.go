@@ -1,24 +1,41 @@
 package service
 
-import "github.com/hashicorp/consul/api"
+import (
+	"github.com/sirupsen/logrus"
+)
 
-// Service : service member
+// Service : cloud service definition
 type Service struct {
-	ErrorC chan string
-	Key    *Key
+	ErrorC chan error
+
+	Flags *Flags
+	Key   *Key
 }
 
-// NewConsulClient : creates a new Consul client
-func NewConsulClient(address string) (*api.Client, error) {
-	config := api.DefaultConfig()
-
-	config.Address = address
-
-	client, err := api.NewClient(config)
+// New : create a new cloud service
+func New() (*Service, error) {
+	flags, err := GetFlags()
 
 	if err != nil {
 		return nil, err
 	}
 
-	return client, nil
+	if flags.Verbose {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+
+	key, err := GetKey(flags.ConfigDir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	service := &Service{
+		ErrorC: make(chan error),
+
+		Flags: flags,
+		Key:   key,
+	}
+
+	return service, nil
 }

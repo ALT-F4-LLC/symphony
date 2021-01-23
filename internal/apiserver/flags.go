@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net"
 
-	"github.com/erkrnt/symphony/internal/service"
+	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/hashicorp/go-sockaddr"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -32,7 +32,7 @@ func getFlags() (*Flags, error) {
 		return nil, errors.New("invalid_bind_interface")
 	}
 
-	configDirPath, err := service.GetDirPath(configDir)
+	configDirPath, err := utils.GetDirPath(configDir)
 
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func getFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	listenAddr, err := service.GetListenAddr(ipAddr, 15760)
+	listenAddr, err := utils.GetListenAddr(ipAddr, 15760)
 
 	if err != nil {
 		return nil, err
