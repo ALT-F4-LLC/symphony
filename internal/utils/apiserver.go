@@ -1,4 +1,4 @@
-package service
+package utils
 
 import (
 	"errors"
@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -34,7 +33,7 @@ const (
 
 // Listen : starts listener for resource grpc stream
 func (rm *APIServerConn) Listen() {
-	conn, err := utils.NewClientConnTcp(rm.Address)
+	conn, err := NewClientConnTcp(rm.Address)
 
 	if err != nil {
 		rm.handleGrpcReconnect(err)

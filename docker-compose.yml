@@ -42,6 +42,19 @@ services:
       - 8500:8500
     volumes:
       - consul:/consul/data
+  scheduler:
+    build:
+      context: .
+      dockerfile: cmd/scheduler/Dockerfile
+    command: >
+      scheduler
+      --apiserver-addr="apiserver:15760"
+      --bind-interface="eth0"
+      --verbose
+    depends_on:
+      - apiserver
+    networks:
+      - services
 version: "3.7"
 volumes:
   apiserver:

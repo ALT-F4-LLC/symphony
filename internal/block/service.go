@@ -181,19 +181,19 @@ func (b *Block) listenPhysicalVolumes(client api.APIServerClient) (func() error,
 func (b *Block) listenResources() {
 	apiserverAddr := b.Service.Flags.APIServerAddr.String()
 
-	logicalVolumes := service.APIServerConn{
+	logicalVolumes := utils.APIServerConn{
 		Address: apiserverAddr,
 		ErrorC:  b.Service.ErrorC,
 		Handler: b.listenLogicalVolumes,
 	}
 
-	physicalVolumes := service.APIServerConn{
+	physicalVolumes := utils.APIServerConn{
 		Address: apiserverAddr,
 		ErrorC:  b.Service.ErrorC,
 		Handler: b.listenPhysicalVolumes,
 	}
 
-	volumeGroups := service.APIServerConn{
+	volumeGroups := utils.APIServerConn{
 		Address: apiserverAddr,
 		ErrorC:  b.Service.ErrorC,
 		Handler: b.listenVolumeGroups,
