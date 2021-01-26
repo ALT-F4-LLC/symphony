@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"os"
 
@@ -106,142 +105,6 @@ func (b *Block) listenHealth() {
 	}
 }
 
-func (b *Block) listenLogicalVolumes(client api.APIServerClient) (func() error, error) {
-	serviceID := b.Service.Key.ServiceID.String()
-
-	in := &api.RequestState{
-		ServiceID: serviceID,
-	}
-
-	lvs, err := client.StateLogicalVolumes(context.Background(), in)
-
-	if err != nil {
-		return nil, err
-	}
-
-	listener := func() error {
-		for {
-			lv, err := lvs.Recv()
-
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				return err
-			}
-
-			if lv != nil {
-				logrus.Print(lv)
-			}
-		}
-
-		return nil
-	}
-
-	return listener, nil
-}
-
-func (b *Block) listenPhysicalVolumes(client api.APIServerClient) (func() error, error) {
-	serviceID := b.Service.Key.ServiceID.String()
-
-	in := &api.RequestState{
-		ServiceID: serviceID,
-	}
-
-	pvs, err := client.StatePhysicalVolumes(context.Background(), in)
-
-	if err != nil {
-		return nil, err
-	}
-
-	listener := func() error {
-		for {
-			pv, err := pvs.Recv()
-
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				return err
-			}
-
-			if pv != nil {
-				logrus.Print(pv)
-			}
-		}
-
-		return nil
-	}
-
-	return listener, nil
-}
-
-func (b *Block) listenResources() {
-	apiserverAddr := b.Service.Flags.APIServerAddr.String()
-
-	logicalVolumes := utils.APIServerConn{
-		Address: apiserverAddr,
-		ErrorC:  b.Service.ErrorC,
-		Handler: b.listenLogicalVolumes,
-	}
-
-	physicalVolumes := utils.APIServerConn{
-		Address: apiserverAddr,
-		ErrorC:  b.Service.ErrorC,
-		Handler: b.listenPhysicalVolumes,
-	}
-
-	volumeGroups := utils.APIServerConn{
-		Address: apiserverAddr,
-		ErrorC:  b.Service.ErrorC,
-		Handler: b.listenVolumeGroups,
-	}
-
-	go logicalVolumes.Listen()
-
-	go physicalVolumes.Listen()
-
-	go volumeGroups.Listen()
-}
-
-func (b *Block) listenVolumeGroups(client api.APIServerClient) (func() error, error) {
-	serviceID := b.Service.Key.ServiceID.String()
-
-	in := &api.RequestState{
-		ServiceID: serviceID,
-	}
-
-	vgs, err := client.StateVolumeGroups(context.Background(), in)
-
-	if err != nil {
-		return nil, err
-	}
-
-	listener := func() error {
-		for {
-			vg, err := vgs.Recv()
-
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				return err
-			}
-
-			if vg != nil {
-				logrus.Print(vg)
-			}
-		}
-
-		return nil
-	}
-
-	return listener, nil
-}
-
 func (b *Block) restart() error {
 	apiserverAddr := b.Service.Flags.APIServerAddr
 
@@ -278,8 +141,6 @@ func (b *Block) restart() error {
 	if service == nil {
 		return errors.New("invalid_service_id")
 	}
-
-	b.listenResources()
 
 	return nil
 }

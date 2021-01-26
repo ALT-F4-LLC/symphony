@@ -53,8 +53,14 @@ func main() {
 	//cli.ManagerListLogicalVolumes()
 	//case blockLvRemove.FullCommand():
 	//cli.ManagerRemoveLogicalVolume(blockLvRemoveID)
-	//case blockPvCreate.FullCommand():
-	//cli.ManagerNewPhysicalVolume(blockPvCreateDeviceName, blockPvCreateServiceID)
+
+	case blockPvCreate.FullCommand():
+		cli.BlockNewPhysicalVolume(cli.BlockNewPhysicalVolumeOptions{
+			APIServerAddr: apiserverAddr,
+			DeviceName:    blockPvCreateDeviceName,
+			ServiceID:     blockPvCreateServiceID,
+		})
+
 	//case blockPvGet.FullCommand():
 	//cli.ManagerGetPhysicalVolume(blockPvGetID)
 	//case blockPvList.FullCommand():

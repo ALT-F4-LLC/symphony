@@ -276,36 +276,6 @@ func ManagerNewLogicalVolume(size *int64, volumeGroupID *string, socket *string)
 	log.Print(*lv)
 }
 
-// ManagerNewPhysicalVolume : handles creation of new physical volume
-func ManagerNewPhysicalVolume(deviceName *string, serviceID *string, socket *string) {
-	if *deviceName == "" || *serviceID == "" || *socket == "" {
-		log.Fatal("invalid_device_parameter")
-	}
-
-	conn := NewConnControl(socket)
-
-	defer conn.Close()
-
-	c := api.NewManagerClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	opts := &api.ManagerNewPhysicalVolumeRequest{
-		DeviceName: *deviceName,
-		ServiceID:  *serviceID,
-	}
-
-	pv, err := c.NewPhysicalVolume(ctx, opts)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Print(*pv)
-}
-
 // ManagerNewVolumeGroup : handles creation of new volume group
 func ManagerNewVolumeGroup(physicalVolumeID *string, socket *string) {
 	if *physicalVolumeID == "" || *socket == "" {

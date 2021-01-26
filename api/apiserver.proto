@@ -5,6 +5,7 @@ option go_package = "github.com/erkrnt/symphony/api";
 package api;
 
 import "api/resource.proto";
+import "api/service.proto";
 import "api/status.proto";
 
 // 0.0.0.0:15760
@@ -28,10 +29,6 @@ service APIServer {
   rpc RemovePhysicalVolume(RequestPhysicalVolume) returns (ResponseStatus) {}
   rpc RemoveService(RequestService) returns (ResponseStatus) {}
   rpc RemoveVolumeGroup(RequestVolumeGroup) returns (ResponseStatus) {}
-
-  rpc StatePhysicalVolumes(RequestState) returns (stream PhysicalVolume) {}
-  rpc StateVolumeGroups(RequestState) returns (stream VolumeGroup) {}
-  rpc StateLogicalVolumes(RequestState) returns (stream LogicalVolume) {}
 }
 
 message RequestLogicalVolume {
@@ -84,10 +81,6 @@ message RequestServices {}
 
 message ResponseServices {
   repeated Service Results = 1;
-}
-
-message RequestState {
-  string ServiceID = 1;
 }
 
 message RequestVolumeGroup {

@@ -9,7 +9,6 @@ import (
 	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/google/uuid"
 	consul "github.com/hashicorp/consul/api"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -305,6 +304,8 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 		return nil, saveErr
 	}
 
+	// TODO : send message to available scheduler for processing
+
 	return pv, nil
 }
 
@@ -596,52 +597,4 @@ func (s *GRPCServerAPIServer) RemoveVolumeGroup(ctx context.Context, in *api.Req
 	res := &api.ResponseStatus{SUCCESS: true}
 
 	return res, nil
-}
-
-func (s *GRPCServerAPIServer) StateLogicalVolumes(in *api.RequestState, stream api.APIServer_StateLogicalVolumesServer) error {
-	logicalVolumeC := s.APIServer.ResourceC.LogicalVolume
-
-	logrus.Debug("Service connected to StateLogicalVolumes")
-
-	for lv := range logicalVolumeC {
-		err := stream.Send(lv)
-
-		if err != nil {
-			logrus.Error(err)
-		}
-	}
-
-	return nil
-}
-
-func (s *GRPCServerAPIServer) StatePhysicalVolumes(in *api.RequestState, stream api.APIServer_StatePhysicalVolumesServer) error {
-	physicalVolumesC := s.APIServer.ResourceC.PhysicalVolume
-
-	logrus.Debug("Service connected to StatePhysicalVolumes")
-
-	for pv := range physicalVolumesC {
-		err := stream.Send(pv)
-
-		if err != nil {
-			logrus.Error(err)
-		}
-	}
-
-	return nil
-}
-
-func (s *GRPCServerAPIServer) StateVolumeGroups(in *api.RequestState, stream api.APIServer_StateVolumeGroupsServer) error {
-	volumeGroupsC := s.APIServer.ResourceC.VolumeGroup
-
-	logrus.Debug("Service connected to StateVolumeGroups")
-
-	for vg := range volumeGroupsC {
-		err := stream.Send(vg)
-
-		if err != nil {
-			logrus.Error(err)
-		}
-	}
-
-	return nil
 }

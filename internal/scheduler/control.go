@@ -1,4 +1,4 @@
-package block
+package scheduler
 
 import (
 	"context"
@@ -13,12 +13,12 @@ import (
 
 // GRPCServerControl : control service struct
 type GRPCServerControl struct {
-	Block *Block
+	Scheduler *Scheduler
 }
 
 // ServiceNew : handles creating a new service definition
 func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServiceNew) (*api.ResponseServiceNew, error) {
-	serviceID := s.Block.Service.Key.ServiceID
+	serviceID := s.Scheduler.Service.Key.ServiceID
 
 	if serviceID != nil {
 		st := status.New(codes.AlreadyExists, "service_already_exists")
@@ -26,7 +26,7 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 		return nil, st.Err()
 	}
 
-	apiserverAddr := s.Block.Service.Flags.APIServerAddr
+	apiserverAddr := s.Scheduler.Service.Flags.APIServerAddr
 
 	if apiserverAddr == nil {
 		st := status.New(codes.InvalidArgument, "invalid_apiserver_addr")
@@ -50,11 +50,11 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 
 	c := api.NewAPIServerClient(conn)
 
-	healthServiceAddr := s.Block.Service.Flags.HealthServiceAddr.String()
+	healthServiceAddr := s.Scheduler.Service.Flags.HealthServiceAddr.String()
 
 	newServiceOptions := &api.RequestNewService{
 		HealthServiceAddr: healthServiceAddr,
-		ServiceType:       api.ServiceType_BLOCK,
+		ServiceType:       api.ServiceType_SCHEDULER,
 	}
 
 	newService, err := c.NewService(ctx, newServiceOptions)
@@ -74,11 +74,11 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 	}
 
 	saveKeyOptions := service.SaveKeyOptions{
-		ConfigDir: s.Block.Service.Flags.ConfigDir,
+		ConfigDir: s.Scheduler.Service.Flags.ConfigDir,
 		ServiceID: newServiceID,
 	}
 
-	saveErr := s.Block.Service.Key.Save(saveKeyOptions)
+	saveErr := s.Scheduler.Service.Key.Save(saveKeyOptions)
 
 	if saveErr != nil {
 		st := status.New(codes.Internal, saveErr.Error())

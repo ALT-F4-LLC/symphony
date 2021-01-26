@@ -50,13 +50,17 @@ services:
       scheduler
       --apiserver-addr="apiserver:15760"
       --bind-interface="eth0"
+      --config-dir="/config"
       --verbose
     depends_on:
       - apiserver
     networks:
       - services
+    volumes:
+      - scheduler:/config
 version: "3.7"
 volumes:
   apiserver:
   block:
   consul:
+  scheduler:

@@ -33,6 +33,12 @@ func GetFlags() (*Flags, error) {
 		return nil, errors.New("invalid_bind_interface")
 	}
 
+	apiserverAddr, err := net.ResolveTCPAddr("tcp", *apiserverAddrFlag)
+
+	if err != nil {
+		return nil, err
+	}
+
 	configDirPath, err := utils.GetDirPath(configDirFlag)
 
 	if err != nil {
@@ -46,12 +52,6 @@ func GetFlags() (*Flags, error) {
 	}
 
 	healthServiceAddr, err := utils.GetListenAddr(listenIPAddr, 15761)
-
-	if err != nil {
-		return nil, err
-	}
-
-	apiserverAddr, err := net.ResolveTCPAddr("tcp", *apiserverAddrFlag)
 
 	if err != nil {
 		return nil, err

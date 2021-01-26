@@ -2,163 +2,145 @@ package scheduler
 
 import (
 	"context"
-	"io"
+	"errors"
+	"fmt"
+	"net"
+	"os"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/service"
 	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 // Scheduler : scheduler service
 type Scheduler struct {
-	ErrorC chan error
-	Flags  *Flags
+	Service *service.Service
 }
 
 // New : creates new scheduler service
 func New() (*Scheduler, error) {
-	flags, err := getFlags()
+	service, err := service.New()
 
 	if err != nil {
 		return nil, err
 	}
 
-	if flags.Verbose {
-		logrus.SetLevel(logrus.DebugLevel)
-	}
-
 	scheduler := &Scheduler{
-		Flags: flags,
+		Service: service,
 	}
 
 	return scheduler, nil
 }
 
-// Start : handles start of scheduler service
+// Start : handles start of block service
 func (s *Scheduler) Start() {
-	s.listenResources()
+	if s.Service.Key.ServiceID != nil {
+		err := s.restart()
+
+		if err != nil {
+			s.Service.ErrorC <- err
+		}
+	}
+
+	go s.listenControl()
+
+	go s.listenHealth()
 }
 
-func (s *Scheduler) listenLogicalVolumes(client api.APIServerClient) (func() error, error) {
-	in := &api.RequestState{}
+func (s *Scheduler) listenControl() {
+	configDir := s.Service.Flags.ConfigDir
 
-	lvs, err := client.StateLogicalVolumes(context.Background(), in)
+	socketPath := fmt.Sprintf("%s/control.sock", configDir)
+
+	if err := os.RemoveAll(socketPath); err != nil {
+		s.Service.ErrorC <- err
+	}
+
+	listen, err := net.Listen("unix", socketPath)
 
 	if err != nil {
-		return nil, err
+		s.Service.ErrorC <- err
 	}
 
-	listener := func() error {
-		for {
-			lv, err := lvs.Recv()
+	grpcServer := grpc.NewServer()
 
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				return err
-			}
-
-			if lv != nil {
-				logrus.Print(lv)
-			}
-		}
-
-		return nil
+	controlServer := &GRPCServerControl{
+		Scheduler: s,
 	}
 
-	return listener, nil
+	api.RegisterControlServer(grpcServer, controlServer)
+
+	logrus.Info("Started scheduler control gRPC server")
+
+	serveErr := grpcServer.Serve(listen)
+
+	if serveErr != nil {
+		s.Service.ErrorC <- serveErr
+	}
 }
 
-func (s *Scheduler) listenPhysicalVolumes(client api.APIServerClient) (func() error, error) {
-	in := &api.RequestState{}
+func (s *Scheduler) listenHealth() {
+	listenAddr := s.Service.Flags.HealthServiceAddr.String()
 
-	pvs, err := client.StatePhysicalVolumes(context.Background(), in)
+	listen, err := net.Listen("tcp", listenAddr)
 
 	if err != nil {
-		return nil, err
+		s.Service.ErrorC <- err
 	}
 
-	listener := func() error {
-		for {
-			pv, err := pvs.Recv()
+	grpcServer := grpc.NewServer()
 
-			if err == io.EOF {
-				break
-			}
+	healthServer := &service.GRPCServerHealth{}
 
-			if err != nil {
-				return err
-			}
+	api.RegisterHealthServer(grpcServer, healthServer)
 
-			if pv != nil {
-				logrus.Print(pv)
-			}
-		}
+	logrus.Info("Started scheduler health gRPC server")
 
-		return nil
+	serveErr := grpcServer.Serve(listen)
+
+	if serveErr != nil {
+		s.Service.ErrorC <- serveErr
 	}
-
-	return listener, nil
 }
 
-func (s *Scheduler) listenResources() {
-	apiserverAddr := s.Flags.APIServerAddr.String()
+func (s *Scheduler) restart() error {
+	apiserverAddr := s.Service.Flags.APIServerAddr
 
-	logicalVolumes := utils.APIServerConn{
-		Address: apiserverAddr,
-		ErrorC:  s.ErrorC,
-		Handler: s.listenLogicalVolumes,
+	if apiserverAddr == nil {
+		return errors.New("invalid_apiserver_addr")
 	}
 
-	physicalVolumes := utils.APIServerConn{
-		Address: apiserverAddr,
-		ErrorC:  s.ErrorC,
-		Handler: s.listenPhysicalVolumes,
-	}
-
-	volumeGroups := utils.APIServerConn{
-		Address: apiserverAddr,
-		ErrorC:  s.ErrorC,
-		Handler: s.listenVolumeGroups,
-	}
-
-	go logicalVolumes.Listen()
-
-	go physicalVolumes.Listen()
-
-	go volumeGroups.Listen()
-}
-
-func (s *Scheduler) listenVolumeGroups(client api.APIServerClient) (func() error, error) {
-	in := &api.RequestState{}
-
-	vgs, err := client.StateVolumeGroups(context.Background(), in)
+	conn, err := utils.NewClientConnTcp(apiserverAddr.String())
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	listener := func() error {
-		for {
-			vg, err := vgs.Recv()
+	defer conn.Close()
 
-			if err == io.EOF {
-				break
-			}
+	ctx, cancel := context.WithTimeout(context.Background(), utils.ContextTimeout)
 
-			if err != nil {
-				return err
-			}
+	defer cancel()
 
-			if vg != nil {
-				logrus.Print(vg)
-			}
-		}
+	c := api.NewAPIServerClient(conn)
 
-		return nil
+	serviceID := s.Service.Key.ServiceID.String()
+
+	serviceOptions := &api.RequestService{
+		ServiceID: serviceID,
 	}
 
-	return listener, nil
+	service, err := c.GetService(ctx, serviceOptions)
+
+	if err != nil {
+		return err
+	}
+
+	if service == nil {
+		return errors.New("invalid_service_id")
+	}
+
+	return nil
 }

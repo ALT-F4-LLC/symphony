@@ -20,6 +20,7 @@ COPY ./cmd/cli ./cmd/cli
 COPY ./cmd/scheduler ./cmd/scheduler
 COPY ./internal/scheduler ./internal/scheduler
 COPY ./internal/cli ./internal/cli
+COPY ./internal/service ./internal/service
 COPY ./internal/utils ./internal/utils
 
 RUN go install -v ./...
@@ -28,7 +29,7 @@ RUN go install -v ./...
 
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates lvm2 open-iscsi
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /usr/local/bin
 

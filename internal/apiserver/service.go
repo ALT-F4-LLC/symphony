@@ -16,19 +16,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ResourceC : resource event channels
-type ResourceC struct {
-	LogicalVolume  chan *api.LogicalVolume
-	PhysicalVolume chan *api.PhysicalVolume
-	VolumeGroup    chan *api.VolumeGroup
-}
-
 // APIServer : defines apiserver service
 type APIServer struct {
-	ErrorC    chan error
-	ResourceC *ResourceC
-
-	Flags *Flags
+	Consul *consul.Client
+	ErrorC chan error
+	Flags  *Flags
 }
 
 // New : creates a new apiserver instance
@@ -43,17 +35,18 @@ func New() (*APIServer, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	resourceC := &ResourceC{
-		LogicalVolume:  make(chan *api.LogicalVolume),
-		PhysicalVolume: make(chan *api.PhysicalVolume),
-		VolumeGroup:    make(chan *api.VolumeGroup),
+	consulClient, err := utils.NewConsulClient(flags.ConsulAddr)
+
+	if err != nil {
+		logrus.Fatal(err)
 	}
 
-	apiserver := &APIServer{
-		ErrorC:    make(chan error),
-		ResourceC: resourceC,
+	errorC := make(chan error)
 
-		Flags: flags,
+	apiserver := &APIServer{
+		Consul: consulClient,
+		ErrorC: errorC,
+		Flags:  flags,
 	}
 
 	return apiserver, nil
@@ -61,27 +54,7 @@ func New() (*APIServer, error) {
 
 // Start : handles start of apiserver service
 func (apiserver *APIServer) Start() {
-	listen, err := net.Listen("tcp", apiserver.Flags.ListenAddr.String())
-
-	if err != nil {
-		apiserver.ErrorC <- err
-	}
-
-	grpcServer := grpc.NewServer()
-
-	apiserverServer := &GRPCServerAPIServer{
-		APIServer: apiserver,
-	}
-
-	api.RegisterAPIServerServer(grpcServer, apiserverServer)
-
-	logrus.Info("Started apiserver grpc server.")
-
-	serveErr := grpcServer.Serve(listen)
-
-	if serveErr != nil {
-		apiserver.ErrorC <- serveErr
-	}
+	go apiserver.listenGRPC()
 }
 
 func (apiserver *APIServer) getLogicalVolumes() ([]*api.LogicalVolume, error) {
@@ -217,13 +190,7 @@ func (apiserver *APIServer) getServices() ([]*api.Service, error) {
 }
 
 func (apiserver *APIServer) getServiceByID(id uuid.UUID) (*api.Service, error) {
-	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
-
-	if err != nil {
-		return nil, err
-	}
-
-	agent := client.Agent()
+	agent := apiserver.Consul.Agent()
 
 	serviceOpts := &consul.QueryOptions{}
 
@@ -255,13 +222,7 @@ func (apiserver *APIServer) getServiceByID(id uuid.UUID) (*api.Service, error) {
 }
 
 func (apiserver *APIServer) getResource(key string) (*consul.KVPair, error) {
-	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
-
-	if err != nil {
-		return nil, err
-	}
-
-	kv := client.KV()
+	kv := apiserver.Consul.KV()
 
 	results, _, err := kv.Get(key, nil)
 
@@ -273,13 +234,7 @@ func (apiserver *APIServer) getResource(key string) (*consul.KVPair, error) {
 }
 
 func (apiserver *APIServer) getResources(key string) (consul.KVPairs, error) {
-	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
-
-	if err != nil {
-		return nil, err
-	}
-
-	kv := client.KV()
+	kv := apiserver.Consul.KV()
 
 	results, _, err := kv.List(key, nil)
 
@@ -338,19 +293,40 @@ func (apiserver *APIServer) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, 
 
 		return nil, st.Err()
 	}
+
 	return vg, nil
 }
 
-func (apiserver *APIServer) removeResource(key string) error {
-	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
+func (apiserver *APIServer) listenGRPC() {
+	listen, err := net.Listen("tcp", apiserver.Flags.ListenAddr.String())
 
 	if err != nil {
-		st := status.New(codes.Internal, err.Error())
+		apiserver.ErrorC <- err
 
-		return st.Err()
+		return
 	}
 
-	kv := client.KV()
+	grpcServer := grpc.NewServer()
+
+	apiserverServer := &GRPCServerAPIServer{
+		APIServer: apiserver,
+	}
+
+	api.RegisterAPIServerServer(grpcServer, apiserverServer)
+
+	logrus.Info("Started apiserver grpc server.")
+
+	serveErr := grpcServer.Serve(listen)
+
+	if serveErr != nil {
+		apiserver.ErrorC <- serveErr
+
+		return
+	}
+}
+
+func (apiserver *APIServer) removeResource(key string) error {
+	kv := apiserver.Consul.KV()
 
 	_, resErr := kv.Delete(key, nil)
 
@@ -364,15 +340,7 @@ func (apiserver *APIServer) removeResource(key string) error {
 }
 
 func (apiserver *APIServer) saveLogicalVolume(lv *api.LogicalVolume) error {
-	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return st.Err()
-	}
-
-	kv := client.KV()
+	kv := apiserver.Consul.KV()
 
 	lvKey := fmt.Sprintf("logicalvolume/%s", lv.ID)
 
@@ -397,15 +365,7 @@ func (apiserver *APIServer) saveLogicalVolume(lv *api.LogicalVolume) error {
 }
 
 func (apiserver *APIServer) savePhysicalVolume(pv *api.PhysicalVolume) error {
-	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return st.Err()
-	}
-
-	kv := client.KV()
+	kv := apiserver.Consul.KV()
 
 	pvKey := fmt.Sprintf("physicalvolume/%s", pv.ID)
 
@@ -430,15 +390,7 @@ func (apiserver *APIServer) savePhysicalVolume(pv *api.PhysicalVolume) error {
 }
 
 func (apiserver *APIServer) saveVolumeGroup(vg *api.VolumeGroup) error {
-	client, err := utils.NewConsulClient(apiserver.Flags.ConsulAddr)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return st.Err()
-	}
-
-	kv := client.KV()
+	kv := apiserver.Consul.KV()
 
 	vgKey := fmt.Sprintf("volumegroup/%s", vg.ID)
 

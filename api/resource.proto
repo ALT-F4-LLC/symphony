@@ -6,11 +6,6 @@ package api;
 
 import "api/status.proto";
 
-enum ServiceType {
-  UNKNOWN_SERVICE_TYPE = 0;
-  BLOCK = 1;
-}
-
 message LogicalVolume {
   string ID = 1;
   string ServiceID = 2;
@@ -49,11 +44,6 @@ message PhysicalVolumeMetadata {
   string PvAttr = 4;
   string PvSize = 5;
   string PvFree = 6;
-}
-
-message Service {
-  string ID = 1;
-  ServiceType Type = 2;
 }
 
 message VolumeGroup {
