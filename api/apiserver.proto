@@ -54,7 +54,7 @@ message RequestNewPhysicalVolume {
 }
 
 message RequestNewService {
-  string HealthServiceAddr = 1;
+  string ServiceAddr = 1;
   ServiceType ServiceType = 2;
 }
 

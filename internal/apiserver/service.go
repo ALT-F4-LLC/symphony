@@ -1,10 +1,13 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
+	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/utils"
@@ -21,6 +24,51 @@ type APIServer struct {
 	Consul *consul.Client
 	ErrorC chan error
 	Flags  *Flags
+}
+
+type scheduleResourceStatusOptions struct {
+	serviceID      string
+	resourceID     string
+	resourceStatus api.ResourceStatus
+	resourceType   api.ResourceType
+}
+
+func GetService(agentService *consul.AgentService) (*api.Service, error) {
+	var serviceType api.ServiceType
+
+	switch agentService.Meta["ServiceType"] {
+	case "BLOCK":
+		serviceType = api.ServiceType_BLOCK
+	case "SCHEDULER":
+		serviceType = api.ServiceType_SCHEDULER
+	}
+
+	if serviceType == api.ServiceType_UNKNOWN_SERVICE_TYPE {
+		return nil, errors.New("invalid_service_type")
+	}
+
+	service := &api.Service{
+		ID:   agentService.ID,
+		Type: serviceType,
+	}
+
+	return service, nil
+}
+
+func GetServices(agentServices map[string]*consul.AgentService) ([]*api.Service, error) {
+	services := make([]*api.Service, 0)
+
+	for _, ev := range agentServices {
+		s, err := GetService(ev)
+
+		if err != nil {
+			return nil, err
+		}
+
+		services = append(services, s)
+	}
+
+	return services, nil
 }
 
 // New : creates a new apiserver instance
@@ -55,6 +103,50 @@ func New() (*APIServer, error) {
 // Start : handles start of apiserver service
 func (apiserver *APIServer) Start() {
 	go apiserver.listenGRPC()
+}
+
+func (apiserver *APIServer) getAgentServices() (map[string]*consul.AgentService, error) {
+	agent := apiserver.Consul.Agent()
+
+	services, err := agent.Services()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return services, nil
+}
+
+func (apiserver *APIServer) getAgentServiceByID(id uuid.UUID) (*consul.AgentService, error) {
+	agent := apiserver.Consul.Agent()
+
+	serviceOpts := &consul.QueryOptions{}
+
+	service, _, err := agent.Service(id.String(), serviceOpts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if service == nil {
+		return nil, errors.New("invalid_service_id")
+	}
+
+	return service, nil
+}
+
+func (apiserver *APIServer) getAgentServicesByType(serviceType api.ServiceType) (map[string]*consul.AgentService, error) {
+	agent := apiserver.Consul.Agent()
+
+	filter := fmt.Sprintf("Meta.ServiceType==%s", serviceType.String())
+
+	services, err := agent.ServicesWithFilter(filter)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return services, nil
 }
 
 func (apiserver *APIServer) getLogicalVolumes() ([]*api.LogicalVolume, error) {
@@ -161,66 +253,6 @@ func (apiserver *APIServer) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVo
 	return pv, nil
 }
 
-func (apiserver *APIServer) getServices() ([]*api.Service, error) {
-	results, err := apiserver.getResources("service/")
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	services := make([]*api.Service, 0)
-
-	for _, ev := range results {
-		var s *api.Service
-
-		err := json.Unmarshal(ev.Value, &s)
-
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-
-		services = append(services, s)
-	}
-
-	return services, nil
-}
-
-func (apiserver *APIServer) getServiceByID(id uuid.UUID) (*api.Service, error) {
-	agent := apiserver.Consul.Agent()
-
-	serviceOpts := &consul.QueryOptions{}
-
-	service, _, err := agent.Service(id.String(), serviceOpts)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var serviceType api.ServiceType
-
-	switch service.Meta["ServiceType"] {
-	case "BLOCK":
-		serviceType = api.ServiceType_BLOCK
-	}
-
-	if serviceType == api.ServiceType_UNKNOWN_SERVICE_TYPE {
-		err := errors.New("invalid_service_type")
-
-		return nil, err
-	}
-
-	s := &api.Service{
-		ID:   service.ID,
-		Type: serviceType,
-	}
-
-	return s, nil
-}
-
 func (apiserver *APIServer) getResource(key string) (*consul.KVPair, error) {
 	kv := apiserver.Consul.KV()
 
@@ -314,7 +346,7 @@ func (apiserver *APIServer) listenGRPC() {
 
 	api.RegisterAPIServerServer(grpcServer, apiserverServer)
 
-	logrus.Info("Started apiserver grpc server.")
+	logrus.Info("Started TCP server")
 
 	serveErr := grpcServer.Serve(listen)
 
@@ -412,4 +444,69 @@ func (apiserver *APIServer) saveVolumeGroup(vg *api.VolumeGroup) error {
 	}
 
 	return nil
+}
+
+func (apiserver *APIServer) scheduleResourceStatus(opts scheduleResourceStatusOptions) {
+	schedulers, err := apiserver.getAgentServicesByType(api.ServiceType_SCHEDULER)
+
+	if err != nil {
+		logrus.Error(err)
+
+		return
+	}
+
+	schedulersKeys := make([]string, 0)
+
+	for key := range schedulers {
+		schedulersKeys = append(schedulersKeys, key)
+	}
+
+	rand.Seed(time.Now().Unix())
+
+	schedulerKey := schedulersKeys[rand.Intn(len(schedulersKeys))]
+
+	as := schedulers[schedulerKey]
+
+	if as == nil {
+		logrus.Error("No available scheduler for changes")
+
+		return
+	}
+
+	asAddr := fmt.Sprintf("%s:%d", as.Address, as.Port)
+
+	conn, err := utils.NewClientConnTcp(asAddr)
+
+	if err != nil {
+		logrus.Error(err)
+
+		return
+	}
+
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), utils.ContextTimeout)
+
+	defer cancel()
+
+	scheduler := api.NewSchedulerClient(conn)
+
+	resourceStatusOptions := &api.RequestResourceStatus{
+		ServiceID:      opts.serviceID,
+		ResourceID:     opts.resourceID,
+		ResourceStatus: opts.resourceStatus,
+		ResourceType:   opts.resourceType,
+	}
+
+	resourceStatus, err := scheduler.ResourceStatus(ctx, resourceStatusOptions)
+
+	if err != nil {
+		logrus.Error(err)
+
+		return
+	}
+
+	if !resourceStatus.SUCCESS {
+		logrus.Error("Scheduler returned failed status on change")
+	}
 }

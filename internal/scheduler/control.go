@@ -50,11 +50,11 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 
 	c := api.NewAPIServerClient(conn)
 
-	healthServiceAddr := s.Scheduler.Service.Flags.HealthServiceAddr.String()
+	serviceAddr := s.Scheduler.Service.Flags.ServiceAddr.String()
 
 	newServiceOptions := &api.RequestNewService{
-		HealthServiceAddr: healthServiceAddr,
-		ServiceType:       api.ServiceType_SCHEDULER,
+		ServiceAddr: serviceAddr,
+		ServiceType: api.ServiceType_SCHEDULER,
 	}
 
 	newService, err := c.NewService(ctx, newServiceOptions)

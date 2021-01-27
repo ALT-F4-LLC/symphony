@@ -46,7 +46,7 @@ func (s *Scheduler) Start() {
 
 	go s.listenControl()
 
-	go s.listenHealth()
+	go s.listenGRPC()
 }
 
 func (s *Scheduler) listenControl() {
@@ -72,7 +72,7 @@ func (s *Scheduler) listenControl() {
 
 	api.RegisterControlServer(grpcServer, controlServer)
 
-	logrus.Info("Started scheduler control gRPC server")
+	logrus.Info("Started socket server")
 
 	serveErr := grpcServer.Serve(listen)
 
@@ -81,8 +81,8 @@ func (s *Scheduler) listenControl() {
 	}
 }
 
-func (s *Scheduler) listenHealth() {
-	listenAddr := s.Service.Flags.HealthServiceAddr.String()
+func (s *Scheduler) listenGRPC() {
+	listenAddr := s.Service.Flags.ServiceAddr.String()
 
 	listen, err := net.Listen("tcp", listenAddr)
 
@@ -94,9 +94,15 @@ func (s *Scheduler) listenHealth() {
 
 	healthServer := &service.GRPCServerHealth{}
 
+	schedulerServer := &GRPCServerScheduler{
+		Scheduler: s,
+	}
+
 	api.RegisterHealthServer(grpcServer, healthServer)
 
-	logrus.Info("Started scheduler health gRPC server")
+	api.RegisterSchedulerServer(grpcServer, schedulerServer)
+
+	logrus.Info("Started TCP server")
 
 	serveErr := grpcServer.Serve(listen)
 

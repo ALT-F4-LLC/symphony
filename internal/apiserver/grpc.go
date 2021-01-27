@@ -115,7 +115,7 @@ func (s *GRPCServerAPIServer) GetService(ctx context.Context, in *api.RequestSer
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.getServiceByID(serviceID)
+	agentService, err := s.APIServer.getAgentServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -123,18 +123,34 @@ func (s *GRPCServerAPIServer) GetService(ctx context.Context, in *api.RequestSer
 		return nil, st.Err()
 	}
 
-	if service == nil {
+	if agentService == nil {
 		st := status.New(codes.NotFound, "invalid_service")
 
 		return nil, st.Err()
 	}
 
-	return service, nil
+	res, resError := GetService(agentService)
+
+	if resError != nil {
+		st := status.New(codes.Internal, resError.Error())
+
+		return nil, st.Err()
+	}
+
+	return res, nil
 }
 
 // GetServices : retrieves all services from state
 func (s *GRPCServerAPIServer) GetServices(ctx context.Context, in *api.RequestServices) (*api.ResponseServices, error) {
-	services, err := s.APIServer.getServices()
+	agentServices, err := s.APIServer.getAgentServices()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	services, err := GetServices(agentServices)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -250,6 +266,15 @@ func (s *GRPCServerAPIServer) NewLogicalVolume(ctx context.Context, in *api.Requ
 		return nil, saveErr
 	}
 
+	statusOpts := scheduleResourceStatusOptions{
+		serviceID:      lv.ServiceID,
+		resourceID:     lv.ID,
+		resourceStatus: lv.Status,
+		resourceType:   api.ResourceType_LOGICAL_VOLUME,
+	}
+
+	go s.APIServer.scheduleResourceStatus(statusOpts)
+
 	return lv, nil
 }
 
@@ -259,13 +284,15 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 
 	if err != nil {
 		st := status.New(codes.InvalidArgument, err.Error())
+
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.getServiceByID(serviceID)
+	agentService, err := s.APIServer.getAgentServiceByID(serviceID)
 
-	if service == nil {
-		st := status.New(codes.NotFound, "invalid_service_id")
+	if err != nil {
+		st := status.New(codes.NotFound, err.Error())
+
 		return nil, st.Err()
 	}
 
@@ -273,19 +300,21 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
+
 		return nil, st.Err()
 	}
 
 	var volume *api.PhysicalVolume
 
 	for _, v := range volumes {
-		if in.DeviceName == v.DeviceName && service.ID == v.ServiceID {
+		if in.DeviceName == v.DeviceName && agentService.ID == v.ServiceID {
 			volume = v
 		}
 	}
 
 	if volume != nil {
 		st := status.New(codes.AlreadyExists, "physical_volume_exists")
+
 		return nil, st.Err()
 	}
 
@@ -294,17 +323,26 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 	pv := &api.PhysicalVolume{
 		DeviceName: in.DeviceName,
 		ID:         pvID.String(),
-		ServiceID:  service.ID,
+		ServiceID:  agentService.ID,
 		Status:     api.ResourceStatus_REVIEW_IN_PROGRESS,
 	}
 
 	saveErr := s.APIServer.savePhysicalVolume(pv)
 
 	if saveErr != nil {
-		return nil, saveErr
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return nil, st.Err()
 	}
 
-	// TODO : send message to available scheduler for processing
+	statusOpts := scheduleResourceStatusOptions{
+		serviceID:      pv.ServiceID,
+		resourceID:     pv.ID,
+		resourceStatus: pv.Status,
+		resourceType:   api.ResourceType_PHYSICAL_VOLUME,
+	}
+
+	go s.APIServer.scheduleResourceStatus(statusOpts)
 
 	return pv, nil
 }
@@ -323,7 +361,7 @@ func (s *GRPCServerAPIServer) NewService(ctx context.Context, in *api.RequestNew
 
 	regName := uuid.New()
 
-	regCheckGRPC, err := net.ResolveTCPAddr("tcp", in.HealthServiceAddr)
+	regAddr, err := net.ResolveTCPAddr("tcp", in.ServiceAddr)
 
 	if err != nil {
 		st := status.New(codes.InvalidArgument, err.Error())
@@ -333,7 +371,7 @@ func (s *GRPCServerAPIServer) NewService(ctx context.Context, in *api.RequestNew
 
 	regCheck := &consul.AgentServiceCheck{
 		CheckID:    regName.String(),
-		GRPC:       regCheckGRPC.String(),
+		GRPC:       regAddr.String(),
 		GRPCUseTLS: false,
 		Interval:   "10s",
 		Name:       regName.String(),
@@ -344,10 +382,11 @@ func (s *GRPCServerAPIServer) NewService(ctx context.Context, in *api.RequestNew
 	regMeta["ServiceType"] = in.ServiceType.String()
 
 	reg := &consul.AgentServiceRegistration{
-		Address: regCheckGRPC.IP.String(),
+		Address: regAddr.IP.String(),
 		Check:   regCheck,
 		Meta:    regMeta,
 		Name:    regName.String(),
+		Port:    regAddr.Port,
 	}
 
 	regErr := agent.ServiceRegister(reg)
@@ -404,10 +443,11 @@ func (s *GRPCServerAPIServer) NewVolumeGroup(ctx context.Context, in *api.Reques
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.getServiceByID(physicalVolumeServiceID)
+	agentService, err := s.APIServer.getAgentServiceByID(physicalVolumeServiceID)
 
-	if service == nil {
-		st := status.New(codes.NotFound, "invalid_service_id")
+	if err != nil {
+		st := status.New(codes.NotFound, err.Error())
+
 		return nil, st.Err()
 	}
 
@@ -416,6 +456,7 @@ func (s *GRPCServerAPIServer) NewVolumeGroup(ctx context.Context, in *api.Reques
 	vg := &api.VolumeGroup{
 		ID:               volumeGroupID.String(),
 		PhysicalVolumeID: physicalVolume.ID,
+		ServiceID:        agentService.ID,
 		Status:           api.ResourceStatus_REVIEW_IN_PROGRESS,
 	}
 
@@ -424,6 +465,15 @@ func (s *GRPCServerAPIServer) NewVolumeGroup(ctx context.Context, in *api.Reques
 	if saveErr != nil {
 		return nil, saveErr
 	}
+
+	statusOpts := scheduleResourceStatusOptions{
+		serviceID:      vg.ServiceID,
+		resourceID:     vg.ID,
+		resourceStatus: vg.Status,
+		resourceType:   api.ResourceType_VOLUME_GROUP,
+	}
+
+	go s.APIServer.scheduleResourceStatus(statusOpts)
 
 	return vg, nil
 }
@@ -449,7 +499,7 @@ func (s *GRPCServerAPIServer) RemoveLogicalVolume(ctx context.Context, in *api.R
 		return nil, st.Err()
 	}
 
-	resourceKey := fmt.Sprintf("/LogicalVolume/%s", lv.ID)
+	resourceKey := fmt.Sprintf("/logicalvolume/%s", lv.ID)
 
 	delErr := s.APIServer.removeResource(resourceKey)
 
@@ -498,21 +548,15 @@ func (s *GRPCServerAPIServer) RemovePhysicalVolume(ctx context.Context, in *api.
 		return nil, st.Err()
 	}
 
-	service, err := s.APIServer.getServiceByID(serviceID)
+	_, agentServiceErr := s.APIServer.getAgentServiceByID(serviceID)
 
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	if service == nil {
-		st := status.New(codes.NotFound, "invalid_service_id")
+	if agentServiceErr != nil {
+		st := status.New(codes.NotFound, agentServiceErr.Error())
 
 		return nil, st.Err()
 	}
 
-	resourceKey := fmt.Sprintf("/PhysicalVolume/%s", pv.ID)
+	resourceKey := fmt.Sprintf("physicalvolume/%s", pv.ID)
 
 	delRes := s.APIServer.removeResource(resourceKey)
 
@@ -537,23 +581,15 @@ func (s *GRPCServerAPIServer) RemoveService(ctx context.Context, in *api.Request
 		return nil, st.Err()
 	}
 
-	srvc, err := s.APIServer.getServiceByID(serviceID)
+	_, agentServiceErr := s.APIServer.getAgentServiceByID(serviceID)
 
 	if err != nil {
-		st := status.New(codes.Internal, err.Error())
+		st := status.New(codes.Internal, agentServiceErr.Error())
 
 		return nil, st.Err()
 	}
 
-	resourceKey := fmt.Sprintf("/Service/%s", srvc.ID)
-
-	delErr := s.APIServer.removeResource(resourceKey)
-
-	if delErr != nil {
-		st := status.New(codes.Internal, delErr.Error())
-
-		return nil, st.Err()
-	}
+	// TODO : deregister service
 
 	res := &api.ResponseStatus{SUCCESS: true}
 
@@ -584,7 +620,7 @@ func (s *GRPCServerAPIServer) RemoveVolumeGroup(ctx context.Context, in *api.Req
 		return nil, st.Err()
 	}
 
-	resourceKey := fmt.Sprintf("/VolumeGroup/%s", vg.ID)
+	resourceKey := fmt.Sprintf("volumegroup/%s", vg.ID)
 
 	delErr := s.APIServer.removeResource(resourceKey)
 

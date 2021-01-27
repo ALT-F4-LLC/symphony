@@ -12,10 +12,10 @@ import (
 
 // Flags : service flags
 type Flags struct {
-	APIServerAddr     *net.TCPAddr
-	ConfigDir         string
-	HealthServiceAddr *net.TCPAddr
-	Verbose           bool
+	APIServerAddr *net.TCPAddr
+	ConfigDir     string
+	ServiceAddr   *net.TCPAddr
+	Verbose       bool
 }
 
 // GetFlags : retrieves flags from CLI
@@ -51,24 +51,24 @@ func GetFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	healthServiceAddr, err := utils.GetListenAddr(listenIPAddr, 15761)
+	serviceAddr, err := utils.GetListenAddr(listenIPAddr, 15760)
 
 	if err != nil {
 		return nil, err
 	}
 
 	flags := &Flags{
-		APIServerAddr:     apiserverAddr,
-		ConfigDir:         *configDirPath,
-		HealthServiceAddr: healthServiceAddr,
-		Verbose:           *verboseFlag,
+		APIServerAddr: apiserverAddr,
+		ConfigDir:     *configDirPath,
+		ServiceAddr:   serviceAddr,
+		Verbose:       *verboseFlag,
 	}
 
 	fields := logrus.Fields{
-		"APIServerAddr":     flags.APIServerAddr.String(),
-		"ConfigDir":         flags.ConfigDir,
-		"HealthServiceAddr": flags.HealthServiceAddr.String(),
-		"Verbose":           flags.Verbose,
+		"APIServerAddr": flags.APIServerAddr.String(),
+		"ConfigDir":     flags.ConfigDir,
+		"ServiceAddr":   flags.ServiceAddr.String(),
+		"Verbose":       flags.Verbose,
 	}
 
 	logrus.WithFields(fields).Info("Service command-line flags loaded.")

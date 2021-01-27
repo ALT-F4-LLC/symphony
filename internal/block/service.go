@@ -44,12 +44,36 @@ func (b *Block) Start() {
 		}
 	}
 
-	go b.listenControl()
+	go b.listenGRPC()
 
-	go b.listenHealth()
+	go b.listenSocket()
 }
 
-func (b *Block) listenControl() {
+func (b *Block) listenGRPC() {
+	listenAddr := b.Service.Flags.ServiceAddr.String()
+
+	listen, err := net.Listen("tcp", listenAddr)
+
+	if err != nil {
+		b.Service.ErrorC <- err
+	}
+
+	grpcServer := grpc.NewServer()
+
+	healthServer := &service.GRPCServerHealth{}
+
+	api.RegisterHealthServer(grpcServer, healthServer)
+
+	logrus.Info("Started TCP server")
+
+	serveErr := grpcServer.Serve(listen)
+
+	if serveErr != nil {
+		b.Service.ErrorC <- serveErr
+	}
+}
+
+func (b *Block) listenSocket() {
 	configDir := b.Service.Flags.ConfigDir
 
 	socketPath := fmt.Sprintf("%s/control.sock", configDir)
@@ -72,31 +96,7 @@ func (b *Block) listenControl() {
 
 	api.RegisterControlServer(grpcServer, controlServer)
 
-	logrus.Info("Started block control gRPC socket server.")
-
-	serveErr := grpcServer.Serve(listen)
-
-	if serveErr != nil {
-		b.Service.ErrorC <- serveErr
-	}
-}
-
-func (b *Block) listenHealth() {
-	listenAddr := b.Service.Flags.HealthServiceAddr.String()
-
-	listen, err := net.Listen("tcp", listenAddr)
-
-	if err != nil {
-		b.Service.ErrorC <- err
-	}
-
-	grpcServer := grpc.NewServer()
-
-	healthServer := &service.GRPCServerHealth{}
-
-	api.RegisterHealthServer(grpcServer, healthServer)
-
-	logrus.Info("Started health gRPC server.")
+	logrus.Info("Started socket server")
 
 	serveErr := grpcServer.Serve(listen)
 

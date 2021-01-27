@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option go_package = "github.com/erkrnt/symphony/api";
+
+package api;
+
+import "api/resource.proto";
+import "api/status.proto";
+
+service Scheduler {
+  rpc ResourceStatus(RequestResourceStatus) returns (ResponseStatus) {}
+}
+
+message RequestResourceStatus {
+  string ResourceID = 1;
+  string ServiceID = 2;
+  ResourceType ResourceType = 3;
+  ResourceStatus ResourceStatus = 4;
+}
