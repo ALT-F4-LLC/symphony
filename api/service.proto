@@ -6,8 +6,7 @@ package api;
 
 enum ServiceType {
   UNKNOWN_SERVICE_TYPE = 0;
-  SCHEDULER = 1;
-  BLOCK = 2;
+  BLOCK = 1;
 }
 
 message Service {

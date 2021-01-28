@@ -1,13 +1,10 @@
 package apiserver
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
-	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/utils"
@@ -39,8 +36,6 @@ func GetService(agentService *consul.AgentService) (*api.Service, error) {
 	switch agentService.Meta["ServiceType"] {
 	case "BLOCK":
 		serviceType = api.ServiceType_BLOCK
-	case "SCHEDULER":
-		serviceType = api.ServiceType_SCHEDULER
 	}
 
 	if serviceType == api.ServiceType_UNKNOWN_SERVICE_TYPE {
@@ -444,69 +439,4 @@ func (apiserver *APIServer) saveVolumeGroup(vg *api.VolumeGroup) error {
 	}
 
 	return nil
-}
-
-func (apiserver *APIServer) scheduleResourceStatus(opts scheduleResourceStatusOptions) {
-	schedulers, err := apiserver.getAgentServicesByType(api.ServiceType_SCHEDULER)
-
-	if err != nil {
-		logrus.Error(err)
-
-		return
-	}
-
-	schedulersKeys := make([]string, 0)
-
-	for key := range schedulers {
-		schedulersKeys = append(schedulersKeys, key)
-	}
-
-	rand.Seed(time.Now().Unix())
-
-	schedulerKey := schedulersKeys[rand.Intn(len(schedulersKeys))]
-
-	as := schedulers[schedulerKey]
-
-	if as == nil {
-		logrus.Error("No available scheduler for changes")
-
-		return
-	}
-
-	asAddr := fmt.Sprintf("%s:%d", as.Address, as.Port)
-
-	conn, err := utils.NewClientConnTcp(asAddr)
-
-	if err != nil {
-		logrus.Error(err)
-
-		return
-	}
-
-	defer conn.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), utils.ContextTimeout)
-
-	defer cancel()
-
-	scheduler := api.NewSchedulerClient(conn)
-
-	resourceStatusOptions := &api.RequestResourceStatus{
-		ServiceID:      opts.serviceID,
-		ResourceID:     opts.resourceID,
-		ResourceStatus: opts.resourceStatus,
-		ResourceType:   opts.resourceType,
-	}
-
-	resourceStatus, err := scheduler.ResourceStatus(ctx, resourceStatusOptions)
-
-	if err != nil {
-		logrus.Error(err)
-
-		return
-	}
-
-	if !resourceStatus.SUCCESS {
-		logrus.Error("Scheduler returned failed status on change")
-	}
 }

@@ -266,14 +266,7 @@ func (s *GRPCServerAPIServer) NewLogicalVolume(ctx context.Context, in *api.Requ
 		return nil, saveErr
 	}
 
-	statusOpts := scheduleResourceStatusOptions{
-		serviceID:      lv.ServiceID,
-		resourceID:     lv.ID,
-		resourceStatus: lv.Status,
-		resourceType:   api.ResourceType_LOGICAL_VOLUME,
-	}
-
-	go s.APIServer.scheduleResourceStatus(statusOpts)
+	// TODO : schedule status
 
 	return lv, nil
 }
@@ -335,14 +328,7 @@ func (s *GRPCServerAPIServer) NewPhysicalVolume(ctx context.Context, in *api.Req
 		return nil, st.Err()
 	}
 
-	statusOpts := scheduleResourceStatusOptions{
-		serviceID:      pv.ServiceID,
-		resourceID:     pv.ID,
-		resourceStatus: pv.Status,
-		resourceType:   api.ResourceType_PHYSICAL_VOLUME,
-	}
-
-	go s.APIServer.scheduleResourceStatus(statusOpts)
+	// TODO : schedule status
 
 	return pv, nil
 }
@@ -466,14 +452,7 @@ func (s *GRPCServerAPIServer) NewVolumeGroup(ctx context.Context, in *api.Reques
 		return nil, saveErr
 	}
 
-	statusOpts := scheduleResourceStatusOptions{
-		serviceID:      vg.ServiceID,
-		resourceID:     vg.ID,
-		resourceStatus: vg.Status,
-		resourceType:   api.ResourceType_VOLUME_GROUP,
-	}
-
-	go s.APIServer.scheduleResourceStatus(statusOpts)
+	// TODO : schedule status
 
 	return vg, nil
 }
