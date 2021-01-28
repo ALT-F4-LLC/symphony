@@ -23,13 +23,6 @@ type APIServer struct {
 	Flags  *Flags
 }
 
-type scheduleResourceStatusOptions struct {
-	serviceID      string
-	resourceID     string
-	resourceStatus api.ResourceStatus
-	resourceType   api.ResourceType
-}
-
 func GetService(agentService *consul.AgentService) (*api.Service, error) {
 	var serviceType api.ServiceType
 
@@ -55,7 +48,6 @@ func GetServices(agentServices map[string]*consul.AgentService) ([]*api.Service,
 
 	for _, ev := range agentServices {
 		s, err := GetService(ev)
-
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +228,6 @@ func (apiserver *APIServer) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVo
 	}
 
 	var pv *api.PhysicalVolume
-
 	jsonErr := json.Unmarshal(result.Value, &pv)
 
 	if jsonErr != nil {
