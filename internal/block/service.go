@@ -106,7 +106,7 @@ func (b *Block) listenSocket() {
 }
 
 func (b *Block) restart() error {
-	apiserverAddr := b.Service.Flags.APIServerAddr
+	apiserverAddr := b.Service.Flags.ManagerAddr
 
 	if apiserverAddr == nil {
 		return errors.New("invalid_apiserver_addr")
@@ -124,7 +124,7 @@ func (b *Block) restart() error {
 
 	defer cancel()
 
-	c := api.NewAPIServerClient(conn)
+	c := api.NewManagerClient(conn)
 
 	serviceID := b.Service.Key.ServiceID.String()
 

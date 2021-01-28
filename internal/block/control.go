@@ -26,7 +26,7 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 		return nil, st.Err()
 	}
 
-	apiserverAddr := s.Block.Service.Flags.APIServerAddr
+	apiserverAddr := s.Block.Service.Flags.ManagerAddr
 
 	if apiserverAddr == nil {
 		st := status.New(codes.InvalidArgument, "invalid_apiserver_addr")
@@ -48,7 +48,7 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 
 	defer cancel()
 
-	c := api.NewAPIServerClient(conn)
+	c := api.NewManagerClient(conn)
 
 	serviceAddr := s.Block.Service.Flags.ServiceAddr.String()
 

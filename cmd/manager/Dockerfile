@@ -17,8 +17,8 @@ COPY ./api ./api
 RUN protoc --proto_path="$(pwd)" api/*.proto --go_out=plugins=grpc:../../../
 
 COPY ./cmd/cli ./cmd/cli
-COPY ./cmd/apiserver ./cmd/apiserver
-COPY ./internal/apiserver ./internal/apiserver
+COPY ./cmd/manager ./cmd/manager
+COPY ./internal/manager ./internal/manager
 COPY ./internal/cli ./internal/cli
 COPY ./internal/utils ./internal/utils
 
@@ -33,6 +33,6 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /usr/local/bin
 
 COPY --from=0 /go/bin/cli .
-COPY --from=0 /go/bin/apiserver .
+COPY --from=0 /go/bin/manager .
 
-CMD [ "apiserver" ]
+CMD [ "manager" ]

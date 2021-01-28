@@ -11,22 +11,22 @@ import (
 
 // BlockNewPhysicalVolumeOptions : options for initializing a service
 type BlockNewPhysicalVolumeOptions struct {
-	APIServerAddr *string
-	DeviceName    *string
-	ServiceID     *string
+	DeviceName  *string
+	ManagerAddr *string
+	ServiceID   *string
 }
 
 // BlockNewPhysicalVolume : handles creation of new physical volume
 func BlockNewPhysicalVolume(opts BlockNewPhysicalVolumeOptions) {
-	if opts.APIServerAddr == nil {
-		logrus.Fatal("Missing --apiserver-addr option. Check --help for more.")
+	if opts.ManagerAddr == nil {
+		logrus.Fatal("Missing --manager-addr option. Check --help for more.")
 	}
 
 	if *opts.DeviceName == "" || *opts.ServiceID == "" {
 		logrus.Fatal("Missing --device-name or --service-id option. Check --help for more.")
 	}
 
-	conn, err := utils.NewClientConnTcp(*opts.APIServerAddr)
+	conn, err := utils.NewClientConnTcp(*opts.ManagerAddr)
 
 	if err != nil {
 		logrus.Fatal(err)
@@ -38,7 +38,7 @@ func BlockNewPhysicalVolume(opts BlockNewPhysicalVolumeOptions) {
 
 	defer cancel()
 
-	c := api.NewAPIServerClient(conn)
+	c := api.NewManagerClient(conn)
 
 	physicalVolumeOpts := &api.RequestNewPhysicalVolume{
 		DeviceName: *opts.DeviceName,

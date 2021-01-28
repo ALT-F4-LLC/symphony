@@ -1,4 +1,4 @@
-package apiserver
+package manager
 
 import (
 	"errors"
@@ -12,10 +12,10 @@ import (
 
 // Flags : command line flags
 type Flags struct {
-	ConfigDir  string
-	ConsulAddr string
-	ListenAddr *net.TCPAddr
-	Verbose    bool
+	ConfigDir   string
+	ConsulAddr  string
+	ServiceAddr *net.TCPAddr
+	Verbose     bool
 }
 
 var (
@@ -44,24 +44,24 @@ func getFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	listenAddr, err := utils.GetListenAddr(ipAddr, 15760)
+	serviceAddr, err := utils.GetListenAddr(ipAddr, 15760)
 
 	if err != nil {
 		return nil, err
 	}
 
 	flags := &Flags{
-		ConfigDir:  *configDirPath,
-		ConsulAddr: *consulAddr,
-		ListenAddr: listenAddr,
-		Verbose:    *verbose,
+		ConfigDir:   *configDirPath,
+		ConsulAddr:  *consulAddr,
+		ServiceAddr: serviceAddr,
+		Verbose:     *verbose,
 	}
 
 	fields := logrus.Fields{
-		"ConfigDir":  flags.ConfigDir,
-		"ConsulAddr": flags.ConsulAddr,
-		"ListenAddr": flags.ListenAddr.String(),
-		"Verbose":    flags.Verbose,
+		"ConfigDir":   flags.ConfigDir,
+		"ConsulAddr":  flags.ConsulAddr,
+		"ServiceAddr": flags.ServiceAddr.String(),
+		"Verbose":     flags.Verbose,
 	}
 
 	logrus.WithFields(fields).Info("Service command-line flags loaded.")

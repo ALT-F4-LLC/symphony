@@ -9,7 +9,7 @@ import "api/service.proto";
 import "api/status.proto";
 
 // 0.0.0.0:15760
-service APIServer {
+service Manager {
   rpc GetLogicalVolume(RequestLogicalVolume) returns (LogicalVolume) {}
   rpc GetPhysicalVolume(RequestPhysicalVolume) returns (PhysicalVolume) {}
   rpc GetService(RequestService) returns (Service) {}
