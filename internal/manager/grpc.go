@@ -13,13 +13,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// GRPCServerManager : APIServer GRPC endpoints
-type GRPCServerManager struct {
-	Manager *Manager
+type grpcServerManager struct {
+	manager *Manager
 }
 
 // GetLogicalVolume : retrieves a logical volume from state
-func (s *GRPCServerManager) GetLogicalVolume(ctx context.Context, in *api.RequestLogicalVolume) (*api.LogicalVolume, error) {
+func (s *grpcServerManager) GetLogicalVolume(ctx context.Context, in *api.RequestLogicalVolume) (*api.LogicalVolume, error) {
 	lvID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -28,7 +27,7 @@ func (s *GRPCServerManager) GetLogicalVolume(ctx context.Context, in *api.Reques
 		return nil, st.Err()
 	}
 
-	lv, err := s.Manager.getLogicalVolumeByID(lvID)
+	lv, err := s.manager.logicalVolumeByID(lvID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -46,8 +45,8 @@ func (s *GRPCServerManager) GetLogicalVolume(ctx context.Context, in *api.Reques
 }
 
 // GetLogicalVolumes : retrieves all logical volumes from state
-func (s *GRPCServerManager) GetLogicalVolumes(ctx context.Context, in *api.RequestLogicalVolumes) (*api.ResponseLogicalVolumes, error) {
-	lvs, err := s.Manager.getLogicalVolumes()
+func (s *grpcServerManager) GetLogicalVolumes(ctx context.Context, in *api.RequestLogicalVolumes) (*api.ResponseLogicalVolumes, error) {
+	lvs, err := s.manager.logicalVolumes()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -63,7 +62,7 @@ func (s *GRPCServerManager) GetLogicalVolumes(ctx context.Context, in *api.Reque
 }
 
 // GetPhysicalVolume : retrieves a physical volume from state
-func (s *GRPCServerManager) GetPhysicalVolume(ctx context.Context, in *api.RequestPhysicalVolume) (*api.PhysicalVolume, error) {
+func (s *grpcServerManager) GetPhysicalVolume(ctx context.Context, in *api.RequestPhysicalVolume) (*api.PhysicalVolume, error) {
 	pvID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -72,7 +71,7 @@ func (s *GRPCServerManager) GetPhysicalVolume(ctx context.Context, in *api.Reque
 		return nil, st.Err()
 	}
 
-	pv, err := s.Manager.getPhysicalVolumeByID(pvID)
+	pv, err := s.manager.physicalVolumeByID(pvID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -90,8 +89,8 @@ func (s *GRPCServerManager) GetPhysicalVolume(ctx context.Context, in *api.Reque
 }
 
 // GetPhysicalVolumes : retrieves all physical volumes from state
-func (s *GRPCServerManager) GetPhysicalVolumes(ctx context.Context, in *api.RequestPhysicalVolumes) (*api.ResponsePhysicalVolumes, error) {
-	pvs, err := s.Manager.getPhysicalVolumes()
+func (s *grpcServerManager) GetPhysicalVolumes(ctx context.Context, in *api.RequestPhysicalVolumes) (*api.ResponsePhysicalVolumes, error) {
+	pvs, err := s.manager.physicalVolumes()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -106,7 +105,7 @@ func (s *GRPCServerManager) GetPhysicalVolumes(ctx context.Context, in *api.Requ
 }
 
 // GetService : retrieves a service from state
-func (s *GRPCServerManager) GetService(ctx context.Context, in *api.RequestService) (*api.Service, error) {
+func (s *grpcServerManager) GetService(ctx context.Context, in *api.RequestService) (*api.Service, error) {
 	serviceID, err := uuid.Parse(in.ServiceID)
 
 	if err != nil {
@@ -115,7 +114,7 @@ func (s *GRPCServerManager) GetService(ctx context.Context, in *api.RequestServi
 		return nil, st.Err()
 	}
 
-	agentService, err := s.Manager.getAgentServiceByID(serviceID)
+	agentService, err := s.manager.agentServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -129,7 +128,7 @@ func (s *GRPCServerManager) GetService(ctx context.Context, in *api.RequestServi
 		return nil, st.Err()
 	}
 
-	res, resError := GetService(agentService)
+	res, resError := s.manager.service(agentService)
 
 	if resError != nil {
 		st := status.New(codes.Internal, resError.Error())
@@ -141,8 +140,8 @@ func (s *GRPCServerManager) GetService(ctx context.Context, in *api.RequestServi
 }
 
 // GetServices : retrieves all services from state
-func (s *GRPCServerManager) GetServices(ctx context.Context, in *api.RequestServices) (*api.ResponseServices, error) {
-	agentServices, err := s.Manager.getAgentServices()
+func (s *grpcServerManager) GetServices(ctx context.Context, in *api.RequestServices) (*api.ResponseServices, error) {
+	agentServices, err := s.manager.agentServices()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -150,7 +149,7 @@ func (s *GRPCServerManager) GetServices(ctx context.Context, in *api.RequestServ
 		return nil, st.Err()
 	}
 
-	services, err := GetServices(agentServices)
+	services, err := s.manager.services(agentServices)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -166,7 +165,7 @@ func (s *GRPCServerManager) GetServices(ctx context.Context, in *api.RequestServ
 }
 
 // GetVolumeGroup : retrieves a volume group from state
-func (s *GRPCServerManager) GetVolumeGroup(ctx context.Context, in *api.RequestVolumeGroup) (*api.VolumeGroup, error) {
+func (s *grpcServerManager) GetVolumeGroup(ctx context.Context, in *api.RequestVolumeGroup) (*api.VolumeGroup, error) {
 	vgID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -174,7 +173,7 @@ func (s *GRPCServerManager) GetVolumeGroup(ctx context.Context, in *api.RequestV
 		return nil, st.Err()
 	}
 
-	vg, err := s.Manager.getVolumeGroupByID(vgID)
+	vg, err := s.manager.volumeGroupByID(vgID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -190,8 +189,8 @@ func (s *GRPCServerManager) GetVolumeGroup(ctx context.Context, in *api.RequestV
 }
 
 // GetVolumeGroups : retrieves all volume groups from state
-func (s *GRPCServerManager) GetVolumeGroups(ctx context.Context, in *api.RequestVolumeGroups) (*api.ResponseVolumeGroups, error) {
-	vgs, err := s.Manager.getVolumeGroups()
+func (s *grpcServerManager) GetVolumeGroups(ctx context.Context, in *api.RequestVolumeGroups) (*api.ResponseVolumeGroups, error) {
+	vgs, err := s.manager.volumeGroups()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -206,7 +205,7 @@ func (s *GRPCServerManager) GetVolumeGroups(ctx context.Context, in *api.Request
 }
 
 // NewLogicalVolume : creates a new logical volume in state
-func (s *GRPCServerManager) NewLogicalVolume(ctx context.Context, in *api.RequestNewLogicalVolume) (*api.LogicalVolume, error) {
+func (s *grpcServerManager) NewLogicalVolume(ctx context.Context, in *api.RequestNewLogicalVolume) (*api.LogicalVolume, error) {
 	vgID, err := uuid.Parse(in.VolumeGroupID)
 
 	if err != nil {
@@ -215,7 +214,7 @@ func (s *GRPCServerManager) NewLogicalVolume(ctx context.Context, in *api.Reques
 		return nil, st.Err()
 	}
 
-	vg, err := s.Manager.getVolumeGroupByID(vgID)
+	vg, err := s.manager.volumeGroupByID(vgID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -237,7 +236,7 @@ func (s *GRPCServerManager) NewLogicalVolume(ctx context.Context, in *api.Reques
 		return nil, st.Err()
 	}
 
-	pv, err := s.Manager.getPhysicalVolumeByID(pvID)
+	pv, err := s.manager.physicalVolumeByID(pvID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -256,23 +255,23 @@ func (s *GRPCServerManager) NewLogicalVolume(ctx context.Context, in *api.Reques
 	lv := &api.LogicalVolume{
 		ID:            lvID.String(),
 		Size:          in.Size,
-		Status:        api.ResourceStatus_REVIEW_IN_PROGRESS,
+		Status:        api.ResourceStatus_CREATE_IN_PROGRESS,
 		VolumeGroupID: vg.ID,
 	}
 
-	saveErr := s.Manager.saveLogicalVolume(lv)
+	saveErr := s.manager.saveLogicalVolume(lv)
 
 	if saveErr != nil {
 		return nil, saveErr
 	}
 
-	// TODO : schedule status
+	go s.manager.lvCreate(lvID)
 
 	return lv, nil
 }
 
 // NewPhysicalVolume : creates a new physical volume in state
-func (s *GRPCServerManager) NewPhysicalVolume(ctx context.Context, in *api.RequestNewPhysicalVolume) (*api.PhysicalVolume, error) {
+func (s *grpcServerManager) NewPhysicalVolume(ctx context.Context, in *api.RequestNewPhysicalVolume) (*api.PhysicalVolume, error) {
 	serviceID, err := uuid.Parse(in.ServiceID)
 
 	if err != nil {
@@ -281,7 +280,7 @@ func (s *GRPCServerManager) NewPhysicalVolume(ctx context.Context, in *api.Reque
 		return nil, st.Err()
 	}
 
-	agentService, err := s.Manager.getAgentServiceByID(serviceID)
+	as, err := s.manager.agentServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.NotFound, err.Error())
@@ -289,7 +288,7 @@ func (s *GRPCServerManager) NewPhysicalVolume(ctx context.Context, in *api.Reque
 		return nil, st.Err()
 	}
 
-	volumes, err := s.Manager.getPhysicalVolumes()
+	volumes, err := s.manager.physicalVolumes()
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -300,7 +299,7 @@ func (s *GRPCServerManager) NewPhysicalVolume(ctx context.Context, in *api.Reque
 	var volume *api.PhysicalVolume
 
 	for _, v := range volumes {
-		if in.DeviceName == v.DeviceName && agentService.ID == v.ServiceID {
+		if in.DeviceName == v.DeviceName && as.ID == v.ServiceID {
 			volume = v
 		}
 	}
@@ -316,11 +315,11 @@ func (s *GRPCServerManager) NewPhysicalVolume(ctx context.Context, in *api.Reque
 	pv := &api.PhysicalVolume{
 		DeviceName: in.DeviceName,
 		ID:         pvID.String(),
-		ServiceID:  agentService.ID,
-		Status:     api.ResourceStatus_REVIEW_IN_PROGRESS,
+		ServiceID:  as.ID,
+		Status:     api.ResourceStatus_CREATE_IN_PROGRESS,
 	}
 
-	saveErr := s.Manager.savePhysicalVolume(pv)
+	saveErr := s.manager.savePhysicalVolume(pv)
 
 	if saveErr != nil {
 		st := status.New(codes.Internal, saveErr.Error())
@@ -328,14 +327,14 @@ func (s *GRPCServerManager) NewPhysicalVolume(ctx context.Context, in *api.Reque
 		return nil, st.Err()
 	}
 
-	// TODO : schedule status
+	go s.manager.pvCreate(as, pv)
 
 	return pv, nil
 }
 
 // NewService : creates a new service in state
-func (s *GRPCServerManager) NewService(ctx context.Context, in *api.RequestNewService) (*api.Service, error) {
-	client, err := utils.NewConsulClient(s.Manager.Flags.ConsulAddr)
+func (s *grpcServerManager) NewService(ctx context.Context, in *api.RequestNewService) (*api.Service, error) {
+	client, err := utils.NewConsulClient(s.manager.flags.ConsulAddr)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -402,7 +401,7 @@ func (s *GRPCServerManager) NewService(ctx context.Context, in *api.RequestNewSe
 }
 
 // NewVolumeGroup : creates a new volume group in state
-func (s *GRPCServerManager) NewVolumeGroup(ctx context.Context, in *api.RequestNewVolumeGroup) (*api.VolumeGroup, error) {
+func (s *grpcServerManager) NewVolumeGroup(ctx context.Context, in *api.RequestNewVolumeGroup) (*api.VolumeGroup, error) {
 	physicalVolumeID, err := uuid.Parse(in.PhysicalVolumeID)
 
 	if err != nil {
@@ -410,7 +409,7 @@ func (s *GRPCServerManager) NewVolumeGroup(ctx context.Context, in *api.RequestN
 		return nil, st.Err()
 	}
 
-	physicalVolume, err := s.Manager.getPhysicalVolumeByID(physicalVolumeID)
+	physicalVolume, err := s.manager.physicalVolumeByID(physicalVolumeID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -422,43 +421,27 @@ func (s *GRPCServerManager) NewVolumeGroup(ctx context.Context, in *api.RequestN
 		return nil, st.Err()
 	}
 
-	physicalVolumeServiceID, err := uuid.Parse(physicalVolume.ID)
-
-	if err != nil {
-		st := status.New(codes.InvalidArgument, "invalid_service_id")
-		return nil, st.Err()
-	}
-
-	agentService, err := s.Manager.getAgentServiceByID(physicalVolumeServiceID)
-
-	if err != nil {
-		st := status.New(codes.NotFound, err.Error())
-
-		return nil, st.Err()
-	}
-
-	volumeGroupID := uuid.New()
+	vgID := uuid.New()
 
 	vg := &api.VolumeGroup{
-		ID:               volumeGroupID.String(),
+		ID:               vgID.String(),
 		PhysicalVolumeID: physicalVolume.ID,
-		ServiceID:        agentService.ID,
-		Status:           api.ResourceStatus_REVIEW_IN_PROGRESS,
+		Status:           api.ResourceStatus_CREATE_IN_PROGRESS,
 	}
 
-	saveErr := s.Manager.saveVolumeGroup(vg)
+	saveErr := s.manager.saveVolumeGroup(vg)
 
 	if saveErr != nil {
 		return nil, saveErr
 	}
 
-	// TODO : schedule status
+	go s.manager.vgCreate(vgID)
 
 	return vg, nil
 }
 
 // RemoveLogicalVolume : removes a logical volume from state
-func (s *GRPCServerManager) RemoveLogicalVolume(ctx context.Context, in *api.RequestLogicalVolume) (*api.ResponseStatus, error) {
+func (s *grpcServerManager) RemoveLogicalVolume(ctx context.Context, in *api.RequestLogicalVolume) (*api.ResponseStatus, error) {
 	logicalVolumeID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -466,7 +449,7 @@ func (s *GRPCServerManager) RemoveLogicalVolume(ctx context.Context, in *api.Req
 		return nil, st.Err()
 	}
 
-	lv, err := s.Manager.getLogicalVolumeByID(logicalVolumeID)
+	lv, err := s.manager.logicalVolumeByID(logicalVolumeID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -480,7 +463,7 @@ func (s *GRPCServerManager) RemoveLogicalVolume(ctx context.Context, in *api.Req
 
 	resourceKey := fmt.Sprintf("/logicalvolume/%s", lv.ID)
 
-	delErr := s.Manager.removeResource(resourceKey)
+	delErr := s.manager.deleteResource(resourceKey)
 
 	if delErr != nil {
 		st := status.New(codes.Internal, delErr.Error())
@@ -496,7 +479,7 @@ func (s *GRPCServerManager) RemoveLogicalVolume(ctx context.Context, in *api.Req
 }
 
 // RemovePhysicalVolume : removes a physical volume from state
-func (s *GRPCServerManager) RemovePhysicalVolume(ctx context.Context, in *api.RequestPhysicalVolume) (*api.ResponseStatus, error) {
+func (s *grpcServerManager) RemovePhysicalVolume(ctx context.Context, in *api.RequestPhysicalVolume) (*api.ResponseStatus, error) {
 	physicalVolumeID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -505,7 +488,7 @@ func (s *GRPCServerManager) RemovePhysicalVolume(ctx context.Context, in *api.Re
 		return nil, st.Err()
 	}
 
-	pv, err := s.Manager.getPhysicalVolumeByID(physicalVolumeID)
+	pv, err := s.manager.physicalVolumeByID(physicalVolumeID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -527,7 +510,7 @@ func (s *GRPCServerManager) RemovePhysicalVolume(ctx context.Context, in *api.Re
 		return nil, st.Err()
 	}
 
-	_, agentServiceErr := s.Manager.getAgentServiceByID(serviceID)
+	_, agentServiceErr := s.manager.agentServiceByID(serviceID)
 
 	if agentServiceErr != nil {
 		st := status.New(codes.NotFound, agentServiceErr.Error())
@@ -537,7 +520,7 @@ func (s *GRPCServerManager) RemovePhysicalVolume(ctx context.Context, in *api.Re
 
 	resourceKey := fmt.Sprintf("physicalvolume/%s", pv.ID)
 
-	delRes := s.Manager.removeResource(resourceKey)
+	delRes := s.manager.deleteResource(resourceKey)
 
 	if delRes != nil {
 		st := status.New(codes.Internal, delRes.Error())
@@ -551,7 +534,7 @@ func (s *GRPCServerManager) RemovePhysicalVolume(ctx context.Context, in *api.Re
 }
 
 // RemoveService : removes a service from state
-func (s *GRPCServerManager) RemoveService(ctx context.Context, in *api.RequestService) (*api.ResponseStatus, error) {
+func (s *grpcServerManager) RemoveService(ctx context.Context, in *api.RequestService) (*api.ResponseStatus, error) {
 	serviceID, err := uuid.Parse(in.ServiceID)
 
 	if err != nil {
@@ -560,7 +543,7 @@ func (s *GRPCServerManager) RemoveService(ctx context.Context, in *api.RequestSe
 		return nil, st.Err()
 	}
 
-	_, agentServiceErr := s.Manager.getAgentServiceByID(serviceID)
+	_, agentServiceErr := s.manager.agentServiceByID(serviceID)
 
 	if err != nil {
 		st := status.New(codes.Internal, agentServiceErr.Error())
@@ -576,7 +559,7 @@ func (s *GRPCServerManager) RemoveService(ctx context.Context, in *api.RequestSe
 }
 
 // RemoveVolumeGroup : removes a volume group from state
-func (s *GRPCServerManager) RemoveVolumeGroup(ctx context.Context, in *api.RequestVolumeGroup) (*api.ResponseStatus, error) {
+func (s *grpcServerManager) RemoveVolumeGroup(ctx context.Context, in *api.RequestVolumeGroup) (*api.ResponseStatus, error) {
 	volumeGroupID, err := uuid.Parse(in.ID)
 
 	if err != nil {
@@ -585,7 +568,7 @@ func (s *GRPCServerManager) RemoveVolumeGroup(ctx context.Context, in *api.Reque
 		return nil, st.Err()
 	}
 
-	vg, err := s.Manager.getVolumeGroupByID(volumeGroupID)
+	vg, err := s.manager.volumeGroupByID(volumeGroupID)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -601,7 +584,7 @@ func (s *GRPCServerManager) RemoveVolumeGroup(ctx context.Context, in *api.Reque
 
 	resourceKey := fmt.Sprintf("volumegroup/%s", vg.ID)
 
-	delErr := s.Manager.removeResource(resourceKey)
+	delErr := s.manager.deleteResource(resourceKey)
 
 	if delErr != nil {
 		st := status.New(codes.Internal, delErr.Error())

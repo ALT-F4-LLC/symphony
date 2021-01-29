@@ -60,7 +60,13 @@ func (b *Block) listenGRPC() {
 
 	grpcServer := grpc.NewServer()
 
+	blockServer := &GRPCServerBlock{
+		Block: b,
+	}
+
 	healthServer := &service.GRPCServerHealth{}
+
+	api.RegisterBlockServer(grpcServer, blockServer)
 
 	api.RegisterHealthServer(grpcServer, healthServer)
 

@@ -18,44 +18,10 @@ import (
 
 // Manager : defines manager service
 type Manager struct {
-	Consul *consul.Client
 	ErrorC chan error
-	Flags  *Flags
-}
 
-func GetService(agentService *consul.AgentService) (*api.Service, error) {
-	var serviceType api.ServiceType
-
-	switch agentService.Meta["ServiceType"] {
-	case "BLOCK":
-		serviceType = api.ServiceType_BLOCK
-	}
-
-	if serviceType == api.ServiceType_UNKNOWN_SERVICE_TYPE {
-		return nil, errors.New("invalid_service_type")
-	}
-
-	service := &api.Service{
-		ID:   agentService.ID,
-		Type: serviceType,
-	}
-
-	return service, nil
-}
-
-func GetServices(agentServices map[string]*consul.AgentService) ([]*api.Service, error) {
-	services := make([]*api.Service, 0)
-
-	for _, ev := range agentServices {
-		s, err := GetService(ev)
-		if err != nil {
-			return nil, err
-		}
-
-		services = append(services, s)
-	}
-
-	return services, nil
+	consul *consul.Client
+	flags  *flags
 }
 
 // New : creates a new apiserver instance
@@ -79,9 +45,10 @@ func New() (*Manager, error) {
 	errorC := make(chan error)
 
 	manager := &Manager{
-		Consul: consulClient,
 		ErrorC: errorC,
-		Flags:  flags,
+
+		consul: consulClient,
+		flags:  flags,
 	}
 
 	return manager, nil
@@ -89,11 +56,35 @@ func New() (*Manager, error) {
 
 // Start : handles start of apiserver service
 func (m *Manager) Start() {
-	go m.listenGRPC()
+	listen, err := net.Listen("tcp", m.flags.ServiceAddr.String())
+
+	if err != nil {
+		m.ErrorC <- err
+
+		return
+	}
+
+	grpcServer := grpc.NewServer()
+
+	managerServer := &grpcServerManager{
+		manager: m,
+	}
+
+	api.RegisterManagerServer(grpcServer, managerServer)
+
+	logrus.Info("Started TCP server")
+
+	serveErr := grpcServer.Serve(listen)
+
+	if serveErr != nil {
+		m.ErrorC <- serveErr
+
+		return
+	}
 }
 
-func (m *Manager) getAgentServices() (map[string]*consul.AgentService, error) {
-	agent := m.Consul.Agent()
+func (m *Manager) agentServices() (map[string]*consul.AgentService, error) {
+	agent := m.consul.Agent()
 
 	services, err := agent.Services()
 
@@ -104,8 +95,22 @@ func (m *Manager) getAgentServices() (map[string]*consul.AgentService, error) {
 	return services, nil
 }
 
-func (m *Manager) getAgentServiceByID(id uuid.UUID) (*consul.AgentService, error) {
-	agent := m.Consul.Agent()
+func (m *Manager) agentServicesByType(serviceType api.ServiceType) (map[string]*consul.AgentService, error) {
+	agent := m.consul.Agent()
+
+	filter := fmt.Sprintf("Meta.ServiceType==%s", serviceType.String())
+
+	services, err := agent.ServicesWithFilter(filter)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return services, nil
+}
+
+func (m *Manager) agentServiceByID(id uuid.UUID) (*consul.AgentService, error) {
+	agent := m.consul.Agent()
 
 	serviceOpts := &consul.QueryOptions{}
 
@@ -122,22 +127,38 @@ func (m *Manager) getAgentServiceByID(id uuid.UUID) (*consul.AgentService, error
 	return service, nil
 }
 
-func (m *Manager) getAgentServicesByType(serviceType api.ServiceType) (map[string]*consul.AgentService, error) {
-	agent := m.Consul.Agent()
+func (m *Manager) agentServiceHealth(agentServiceID string) (string, error) {
+	agent := m.consul.Agent()
 
-	filter := fmt.Sprintf("Meta.ServiceType==%s", serviceType.String())
+	status, info, err := agent.AgentHealthServiceByID(agentServiceID)
 
-	services, err := agent.ServicesWithFilter(filter)
-
-	if err != nil {
-		return nil, err
+	if status == "critical" && info == nil {
+		return status, errors.New("invalid_service_id")
 	}
 
-	return services, nil
+	if err != nil {
+		return status, err
+	}
+
+	return status, nil
 }
 
-func (m *Manager) getLogicalVolumes() ([]*api.LogicalVolume, error) {
-	results, err := m.getResources("logicalvolume/")
+func (m *Manager) deleteResource(key string) error {
+	kv := m.consul.KV()
+
+	_, resErr := kv.Delete(key, nil)
+
+	if resErr != nil {
+		st := status.New(codes.Internal, resErr.Error())
+
+		return st.Err()
+	}
+
+	return nil
+}
+
+func (m *Manager) logicalVolumes() ([]*api.LogicalVolume, error) {
+	results, err := m.resources("logicalvolume/")
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -163,11 +184,10 @@ func (m *Manager) getLogicalVolumes() ([]*api.LogicalVolume, error) {
 
 	return lvs, nil
 }
-
-func (m *Manager) getLogicalVolumeByID(id uuid.UUID) (*api.LogicalVolume, error) {
+func (m *Manager) logicalVolumeByID(id uuid.UUID) (*api.LogicalVolume, error) {
 	key := fmt.Sprintf("logicalvolume/%s", id.String())
 
-	result, err := m.getResource(key)
+	result, err := m.resource(key)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -188,8 +208,8 @@ func (m *Manager) getLogicalVolumeByID(id uuid.UUID) (*api.LogicalVolume, error)
 	return lv, nil
 }
 
-func (m *Manager) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
-	results, err := m.getResources("physicalvolume/")
+func (m *Manager) physicalVolumes() ([]*api.PhysicalVolume, error) {
+	results, err := m.resources("physicalvolume/")
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -216,10 +236,10 @@ func (m *Manager) getPhysicalVolumes() ([]*api.PhysicalVolume, error) {
 	return pvs, nil
 }
 
-func (m *Manager) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, error) {
+func (m *Manager) physicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, error) {
 	key := fmt.Sprintf("physicalvolume/%s", id.String())
 
-	result, err := m.getResource(key)
+	result, err := m.resource(key)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -228,6 +248,7 @@ func (m *Manager) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, erro
 	}
 
 	var pv *api.PhysicalVolume
+
 	jsonErr := json.Unmarshal(result.Value, &pv)
 
 	if jsonErr != nil {
@@ -239,20 +260,8 @@ func (m *Manager) getPhysicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, erro
 	return pv, nil
 }
 
-func (m *Manager) getResource(key string) (*consul.KVPair, error) {
-	kv := m.Consul.KV()
-
-	results, _, err := kv.Get(key, nil)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return results, nil
-}
-
-func (m *Manager) getResources(key string) (consul.KVPairs, error) {
-	kv := m.Consul.KV()
+func (m *Manager) resources(key string) (consul.KVPairs, error) {
+	kv := m.consul.KV()
 
 	results, _, err := kv.List(key, nil)
 
@@ -263,8 +272,130 @@ func (m *Manager) getResources(key string) (consul.KVPairs, error) {
 	return results, nil
 }
 
-func (m *Manager) getVolumeGroups() ([]*api.VolumeGroup, error) {
-	results, err := m.getResources("volumegroup/")
+func (m *Manager) resource(key string) (*consul.KVPair, error) {
+	kv := m.consul.KV()
+
+	results, _, err := kv.Get(key, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
+	kv := m.consul.KV()
+
+	lvKey := fmt.Sprintf("logicalvolume/%s", lv.ID)
+
+	lvValue, err := json.Marshal(lv)
+
+	if err != nil {
+		return err
+	}
+
+	kvPair := &consul.KVPair{
+		Key:   lvKey,
+		Value: lvValue,
+	}
+
+	_, putErr := kv.Put(kvPair, nil)
+
+	if putErr != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
+	kv := m.consul.KV()
+
+	pvKey := fmt.Sprintf("physicalvolume/%s", pv.ID)
+
+	pvValue, err := json.Marshal(pv)
+
+	if err != nil {
+		return err
+	}
+
+	kvPair := &consul.KVPair{
+		Key:   pvKey,
+		Value: pvValue,
+	}
+
+	_, putErr := kv.Put(kvPair, nil)
+
+	if putErr != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
+	kv := m.consul.KV()
+
+	vgKey := fmt.Sprintf("volumegroup/%s", vg.ID)
+
+	vgValue, err := json.Marshal(vg)
+
+	if err != nil {
+		return err
+	}
+
+	kvPair := &consul.KVPair{
+		Key:   vgKey,
+		Value: vgValue,
+	}
+
+	_, putErr := kv.Put(kvPair, nil)
+
+	if putErr != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) service(agentService *consul.AgentService) (*api.Service, error) {
+	var serviceType api.ServiceType
+
+	switch agentService.Meta["ServiceType"] {
+	case "BLOCK":
+		serviceType = api.ServiceType_BLOCK
+	}
+
+	if serviceType == api.ServiceType_UNKNOWN_SERVICE_TYPE {
+		return nil, errors.New("invalid_service_type")
+	}
+
+	service := &api.Service{
+		ID:   agentService.ID,
+		Type: serviceType,
+	}
+
+	return service, nil
+}
+
+func (m *Manager) services(agentServices map[string]*consul.AgentService) ([]*api.Service, error) {
+	services := make([]*api.Service, 0)
+
+	for _, ev := range agentServices {
+		s, err := m.service(ev)
+		if err != nil {
+			return nil, err
+		}
+
+		services = append(services, s)
+	}
+
+	return services, nil
+}
+
+func (m *Manager) volumeGroups() ([]*api.VolumeGroup, error) {
+	results, err := m.resources("volumegroup/")
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -291,10 +422,10 @@ func (m *Manager) getVolumeGroups() ([]*api.VolumeGroup, error) {
 	return vgs, nil
 }
 
-func (m *Manager) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, error) {
+func (m *Manager) volumeGroupByID(id uuid.UUID) (*api.VolumeGroup, error) {
 	key := fmt.Sprintf("volumegroup/%s", id.String())
 
-	result, err := m.getResource(key)
+	result, err := m.resource(key)
 
 	if err != nil {
 		st := status.New(codes.Internal, err.Error())
@@ -313,121 +444,4 @@ func (m *Manager) getVolumeGroupByID(id uuid.UUID) (*api.VolumeGroup, error) {
 	}
 
 	return vg, nil
-}
-
-func (m *Manager) listenGRPC() {
-	listen, err := net.Listen("tcp", m.Flags.ServiceAddr.String())
-
-	if err != nil {
-		m.ErrorC <- err
-
-		return
-	}
-
-	grpcServer := grpc.NewServer()
-
-	managerServer := &GRPCServerManager{
-		Manager: m,
-	}
-
-	api.RegisterManagerServer(grpcServer, managerServer)
-
-	logrus.Info("Started TCP server")
-
-	serveErr := grpcServer.Serve(listen)
-
-	if serveErr != nil {
-		m.ErrorC <- serveErr
-
-		return
-	}
-}
-
-func (m *Manager) removeResource(key string) error {
-	kv := m.Consul.KV()
-
-	_, resErr := kv.Delete(key, nil)
-
-	if resErr != nil {
-		st := status.New(codes.Internal, resErr.Error())
-
-		return st.Err()
-	}
-
-	return nil
-}
-
-func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
-	kv := m.Consul.KV()
-
-	lvKey := fmt.Sprintf("logicalvolume/%s", lv.ID)
-
-	lvValue, err := json.Marshal(lv)
-
-	if err != nil {
-		return err
-	}
-
-	kvPair := &consul.KVPair{
-		Key:   lvKey,
-		Value: lvValue,
-	}
-
-	_, putErr := kv.Put(kvPair, nil)
-
-	if putErr != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
-	kv := m.Consul.KV()
-
-	pvKey := fmt.Sprintf("physicalvolume/%s", pv.ID)
-
-	pvValue, err := json.Marshal(pv)
-
-	if err != nil {
-		return err
-	}
-
-	kvPair := &consul.KVPair{
-		Key:   pvKey,
-		Value: pvValue,
-	}
-
-	_, putErr := kv.Put(kvPair, nil)
-
-	if putErr != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
-	kv := m.Consul.KV()
-
-	vgKey := fmt.Sprintf("volumegroup/%s", vg.ID)
-
-	vgValue, err := json.Marshal(vg)
-
-	if err != nil {
-		return err
-	}
-
-	kvPair := &consul.KVPair{
-		Key:   vgKey,
-		Value: vgValue,
-	}
-
-	_, putErr := kv.Put(kvPair, nil)
-
-	if putErr != nil {
-		return err
-	}
-
-	return nil
 }

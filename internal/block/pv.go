@@ -27,7 +27,7 @@ type PhysicalVolumeReportResult struct {
 	PvFree string `json:"pv_free"`
 }
 
-func getPv(deviceName string) (*api.PhysicalVolumeMetadata, error) {
+func getPv(deviceName string) (*api.Pv, error) {
 	cmd := exec.Command("pvdisplay", "--columns", "--reportformat", "json", "--quiet", deviceName)
 
 	pvd, pvdErr := cmd.CombinedOutput()
@@ -60,7 +60,7 @@ func getPv(deviceName string) (*api.PhysicalVolumeMetadata, error) {
 		}
 	}
 
-	metadata := &api.PhysicalVolumeMetadata{
+	metadata := &api.Pv{
 		PvName: result.PvName,
 		VgName: result.VgName,
 		PvFmt:  result.PvFmt,
@@ -72,7 +72,7 @@ func getPv(deviceName string) (*api.PhysicalVolumeMetadata, error) {
 	return metadata, nil
 }
 
-func newPv(deviceName string) (*api.PhysicalVolumeMetadata, error) {
+func newPv(deviceName string) (*api.Pv, error) {
 	exists, _ := getPv(deviceName)
 
 	if exists != nil {

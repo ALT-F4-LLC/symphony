@@ -23,26 +23,10 @@ enum ResourceType {
 
 message LogicalVolume {
   string ID = 1;
-  string ServiceID = 2;
-  int64 Size = 3;
-  ResourceStatus Status = 4;
-  string TargetAddr = 5;
-  string VolumeGroupID = 6;
-}
-
-message LogicalVolumeMetadata {
-  string LvName = 1;
-  string VgName = 2;
-  string LvAttr = 3;
-  string LvSize = 4;
-  string PoolLv = 5;
-  string Origin = 6;
-  string DataPercent = 7;
-  string MetadataPercent = 8;
-  string MovePv = 9;
-  string MirrorLog = 10;
-  string CopyPercent = 11;
-  string ConvertLv = 12;
+  int64 Size = 2;
+  ResourceStatus Status = 3;
+  string TargetAddr = 4;
+  string VolumeGroupID = 5;
 }
 
 message PhysicalVolume {
@@ -52,28 +36,8 @@ message PhysicalVolume {
   ResourceStatus Status = 4;
 }
 
-message PhysicalVolumeMetadata {
-  string PvName = 1;
-  string VgName = 2;
-  string PvFmt = 3;
-  string PvAttr = 4;
-  string PvSize = 5;
-  string PvFree = 6;
-}
-
 message VolumeGroup {
   string ID = 1;
-  string ServiceID = 2;
-  string PhysicalVolumeID = 3;
-  ResourceStatus Status = 4;
-}
-
-message VolumeGroupMetadata {
-  string VgName = 1;
-  string PvCount = 2;
-  string LvCount = 3;
-  string SnapCount = 4;
-  string VgAttr = 5;
-  string VgSize = 6;
-  string VgFree = 7;
+  string PhysicalVolumeID = 2;
+  ResourceStatus Status = 3;
 }

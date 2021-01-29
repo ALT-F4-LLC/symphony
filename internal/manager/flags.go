@@ -10,8 +10,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-// Flags : command line flags
-type Flags struct {
+type flags struct {
 	ConfigDir   string
 	ConsulAddr  string
 	ServiceAddr *net.TCPAddr
@@ -25,7 +24,7 @@ var (
 	verbose       = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
 )
 
-func getFlags() (*Flags, error) {
+func getFlags() (*flags, error) {
 	kingpin.Parse()
 
 	if bindInterface == nil {
@@ -50,7 +49,7 @@ func getFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	flags := &Flags{
+	f := &flags{
 		ConfigDir:   *configDirPath,
 		ConsulAddr:  *consulAddr,
 		ServiceAddr: serviceAddr,
@@ -58,13 +57,13 @@ func getFlags() (*Flags, error) {
 	}
 
 	fields := logrus.Fields{
-		"ConfigDir":   flags.ConfigDir,
-		"ConsulAddr":  flags.ConsulAddr,
-		"ServiceAddr": flags.ServiceAddr.String(),
-		"Verbose":     flags.Verbose,
+		"ConfigDir":   f.ConfigDir,
+		"ConsulAddr":  f.ConsulAddr,
+		"ServiceAddr": f.ServiceAddr.String(),
+		"Verbose":     f.Verbose,
 	}
 
 	logrus.WithFields(fields).Info("Service command-line flags loaded.")
 
-	return flags, nil
+	return f, nil
 }

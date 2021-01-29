@@ -29,7 +29,7 @@ type VolumeGroupReportResult struct {
 	VgFree    string `json:"vg_free"`
 }
 
-func getVg(id uuid.UUID) (*api.VolumeGroupMetadata, error) {
+func getVg(id uuid.UUID) (*api.Vg, error) {
 	cmd := exec.Command("vgdisplay", "--columns", "--reportformat", "json", id.String())
 
 	vgd, vgdErr := cmd.CombinedOutput()
@@ -62,7 +62,7 @@ func getVg(id uuid.UUID) (*api.VolumeGroupMetadata, error) {
 		}
 	}
 
-	metadata := &api.VolumeGroupMetadata{
+	metadata := &api.Vg{
 		VgName:    result.VgName,
 		PvCount:   result.PvCount,
 		LvCount:   result.LvCount,
@@ -75,7 +75,7 @@ func getVg(id uuid.UUID) (*api.VolumeGroupMetadata, error) {
 	return metadata, nil
 }
 
-func newVg(device string, id uuid.UUID) (*api.VolumeGroupMetadata, error) {
+func newVg(device string, id uuid.UUID) (*api.Vg, error) {
 	exists, _ := getVg(id)
 
 	if exists != nil {
