@@ -1,21 +1,20 @@
-package apiserver
+package manager
 
 import (
 	"errors"
 	"net"
 
-	"github.com/erkrnt/symphony/internal/service"
+	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/hashicorp/go-sockaddr"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-// Flags : command line flags
-type Flags struct {
-	ConfigDir  string
-	ConsulAddr string
-	ListenAddr *net.TCPAddr
-	Verbose    bool
+type flags struct {
+	ConfigDir   string
+	ConsulAddr  string
+	ServiceAddr *net.TCPAddr
+	Verbose     bool
 }
 
 var (
@@ -25,14 +24,14 @@ var (
 	verbose       = kingpin.Flag("verbose", "Sets the lowest level of service output.").Bool()
 )
 
-func getFlags() (*Flags, error) {
+func getFlags() (*flags, error) {
 	kingpin.Parse()
 
 	if bindInterface == nil {
 		return nil, errors.New("invalid_bind_interface")
 	}
 
-	configDirPath, err := service.GetDirPath(configDir)
+	configDirPath, err := utils.GetDirPath(configDir)
 
 	if err != nil {
 		return nil, err
@@ -44,27 +43,27 @@ func getFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	listenAddr, err := service.GetListenAddr(ipAddr, 15760)
+	serviceAddr, err := utils.GetListenAddr(ipAddr, 15760)
 
 	if err != nil {
 		return nil, err
 	}
 
-	flags := &Flags{
-		ConfigDir:  *configDirPath,
-		ConsulAddr: *consulAddr,
-		ListenAddr: listenAddr,
-		Verbose:    *verbose,
+	f := &flags{
+		ConfigDir:   *configDirPath,
+		ConsulAddr:  *consulAddr,
+		ServiceAddr: serviceAddr,
+		Verbose:     *verbose,
 	}
 
 	fields := logrus.Fields{
-		"ConfigDir":  flags.ConfigDir,
-		"ConsulAddr": flags.ConsulAddr,
-		"ListenAddr": flags.ListenAddr.String(),
-		"Verbose":    flags.Verbose,
+		"ConfigDir":   f.ConfigDir,
+		"ConsulAddr":  f.ConsulAddr,
+		"ServiceAddr": f.ServiceAddr.String(),
+		"Verbose":     f.Verbose,
 	}
 
 	logrus.WithFields(fields).Info("Service command-line flags loaded.")
 
-	return flags, nil
+	return f, nil
 }

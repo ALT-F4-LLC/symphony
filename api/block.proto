@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+option go_package = "github.com/erkrnt/symphony/api";
+
+package api;
+
+import "api/status.proto";
+
+// 0.0.0.0:15760
+service Block {
+  rpc LvDisplay(RequestLv) returns (Lv) {}
+  rpc PvDisplay(RequestPv) returns (Pv) {}
+  rpc VgDisplay(RequestVg) returns (Vg) {}
+
+  rpc LvCreate(RequestLvCreate) returns (Lv) {}
+  rpc PvCreate(RequestPvCreate) returns (Pv) {}
+  rpc VgCreate(RequestVgCreate) returns (Vg) {}
+
+  rpc LvRemove(RequestLv) returns (ResponseStatus) {}
+  rpc PvRemove(RequestPv) returns (ResponseStatus) {}
+  rpc VgRemove(RequestVg) returns (ResponseStatus) {}
+}
+
+message Lv {
+  string LvName = 1;
+  string VgName = 2;
+  string LvAttr = 3;
+  string LvSize = 4;
+  string PoolLv = 5;
+  string Origin = 6;
+  string DataPercent = 7;
+  string MetadataPercent = 8;
+  string MovePv = 9;
+  string MirrorLog = 10;
+  string CopyPercent = 11;
+  string ConvertLv = 12;
+}
+
+message Pv {
+  string PvName = 1;
+  string VgName = 2;
+  string PvFmt = 3;
+  string PvAttr = 4;
+  string PvSize = 5;
+  string PvFree = 6;
+}
+
+message Vg {
+  string VgName = 1;
+  string PvCount = 2;
+  string LvCount = 3;
+  string SnapCount = 4;
+  string VgAttr = 5;
+  string VgSize = 6;
+  string VgFree = 7;
+}
+
+message RequestLv {
+  string ID = 1;
+  string VolumeGroupID = 2;
+}
+
+message RequestPv {
+  string DeviceName = 1;
+}
+
+message RequestVg {
+  string ID = 1;
+}
+
+message RequestLvCreate {
+  string ID = 1;
+  int64 Size = 2;
+  string VolumeGroupID = 3;
+}
+
+message RequestPvCreate {
+  string DeviceName = 1;
+}
+
+message RequestVgCreate {
+  string DeviceName = 1;
+  string ID = 2;
+}

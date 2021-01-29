@@ -2,7 +2,7 @@ package cli
 
 import (
 	"github.com/erkrnt/symphony/api"
-	"github.com/erkrnt/symphony/internal/service"
+	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
@@ -19,11 +19,11 @@ func ServiceNew(opts ServiceNewOptions) {
 		logrus.Fatal("Missing --socket-path option. Check --help for more.")
 	}
 
-	conn := service.NewClientConnSocket(*opts.SocketPath)
+	conn := utils.NewClientConnSocket(*opts.SocketPath)
 
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), service.ContextTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), utils.ContextTimeout)
 
 	defer cancel()
 

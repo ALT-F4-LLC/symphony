@@ -1,20 +1,20 @@
 package main
 
 import (
-	"github.com/erkrnt/symphony/internal/apiserver"
+	"github.com/erkrnt/symphony/internal/manager"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	s, err := apiserver.New()
+	m, err := manager.New()
 
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
-	go s.Start()
+	go m.Start()
 
-	errorC := <-s.ErrorC
+	errorC := <-m.ErrorC
 
 	logrus.Fatal(errorC)
 }

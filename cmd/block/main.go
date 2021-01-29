@@ -6,15 +6,15 @@ import (
 )
 
 func main() {
-	s, err := block.New()
+	b, err := block.New()
 
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
-	go s.Start()
+	go b.Start()
 
-	startErr := <-s.ErrorC
+	startErr := <-b.Service.ErrorC
 
 	logrus.Fatal(startErr)
 }

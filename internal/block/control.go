@@ -5,6 +5,7 @@ import (
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/service"
+	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -17,13 +18,15 @@ type GRPCServerControl struct {
 
 // ServiceNew : handles creating a new service definition
 func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServiceNew) (*api.ResponseServiceNew, error) {
-	if s.Block.Key.ServiceID != nil {
+	serviceID := s.Block.Service.Key.ServiceID
+
+	if serviceID != nil {
 		st := status.New(codes.AlreadyExists, "service_already_exists")
 
 		return nil, st.Err()
 	}
 
-	apiserverAddr := s.Block.Flags.APIServerAddr
+	apiserverAddr := s.Block.Service.Flags.ManagerAddr
 
 	if apiserverAddr == nil {
 		st := status.New(codes.InvalidArgument, "invalid_apiserver_addr")
@@ -31,21 +34,27 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 		return nil, st.Err()
 	}
 
-	conn := service.NewClientConnTCP(apiserverAddr.String())
+	conn, err := utils.NewClientConnTcp(apiserverAddr.String())
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
 
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), service.ContextTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), utils.ContextTimeout)
 
 	defer cancel()
 
-	c := api.NewAPIServerClient(conn)
+	c := api.NewManagerClient(conn)
 
-	healthServiceAddr := s.Block.Flags.HealthServiceAddr.String()
+	serviceAddr := s.Block.Service.Flags.ServiceAddr.String()
 
 	newServiceOptions := &api.RequestNewService{
-		HealthServiceAddr: healthServiceAddr,
-		ServiceType:       api.ServiceType_BLOCK,
+		ServiceAddr: serviceAddr,
+		ServiceType: api.ServiceType_BLOCK,
 	}
 
 	newService, err := c.NewService(ctx, newServiceOptions)
@@ -56,7 +65,7 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 		return nil, st.Err()
 	}
 
-	serviceID, err := uuid.Parse(newService.ID)
+	newServiceID, err := uuid.Parse(newService.ID)
 
 	if err != nil {
 		st := status.New(codes.InvalidArgument, err.Error())
@@ -65,11 +74,11 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 	}
 
 	saveKeyOptions := service.SaveKeyOptions{
-		ConfigDir: s.Block.Flags.ConfigDir,
-		ServiceID: serviceID,
+		ConfigDir: s.Block.Service.Flags.ConfigDir,
+		ServiceID: newServiceID,
 	}
 
-	saveErr := s.Block.Key.Save(saveKeyOptions)
+	saveErr := s.Block.Service.Key.Save(saveKeyOptions)
 
 	if saveErr != nil {
 		st := status.New(codes.Internal, saveErr.Error())
@@ -80,8 +89,6 @@ func (s *GRPCServerControl) ServiceNew(ctx context.Context, in *api.RequestServi
 	res := &api.ResponseServiceNew{
 		ServiceID: newService.ID,
 	}
-
-	go s.Block.listenGRPC()
 
 	return res, nil
 }

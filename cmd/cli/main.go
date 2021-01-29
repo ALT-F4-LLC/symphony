@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	apiserverAddr = kingpin.Flag("apiserver-addr", "Sets the apiserver address. Defaults to 127.0.0.1:15760").Default("127.0.0.1:15760").String()
-	socketPath    = kingpin.Flag("socket-path", "Sets the socket address. Defaults to ./control.sock").Default("./control.sock").String()
+	managerAddr = kingpin.Flag("manager-addr", "Sets the manager address. Defaults to 127.0.0.1:15760").Default("127.0.0.1:15760").String()
+	socketPath  = kingpin.Flag("socket-path", "Sets the socket address. Defaults to ./control.sock").Default("./control.sock").String()
 
 	block                         = kingpin.Command("block", "Block management commands.")
 	blockLv                       = block.Command("lv", "Block service logical volume commands.")
@@ -53,8 +53,14 @@ func main() {
 	//cli.ManagerListLogicalVolumes()
 	//case blockLvRemove.FullCommand():
 	//cli.ManagerRemoveLogicalVolume(blockLvRemoveID)
-	//case blockPvCreate.FullCommand():
-	//cli.ManagerNewPhysicalVolume(blockPvCreateDeviceName, blockPvCreateServiceID)
+
+	case blockPvCreate.FullCommand():
+		cli.BlockNewPhysicalVolume(cli.BlockNewPhysicalVolumeOptions{
+			DeviceName:  blockPvCreateDeviceName,
+			ManagerAddr: managerAddr,
+			ServiceID:   blockPvCreateServiceID,
+		})
+
 	//case blockPvGet.FullCommand():
 	//cli.ManagerGetPhysicalVolume(blockPvGetID)
 	//case blockPvList.FullCommand():

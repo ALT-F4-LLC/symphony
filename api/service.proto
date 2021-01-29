@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package = "github.com/erkrnt/symphony/api";
+
+package api;
+
+enum ServiceType {
+  UNKNOWN_SERVICE_TYPE = 0;
+  BLOCK = 1;
+}
+
+message Service {
+  string ID = 1;
+  ServiceType Type = 2;
+}

@@ -37,7 +37,7 @@ type LogicalVolumeReportResult struct {
 	ConvertLv       string `json:"convert_lv"`
 }
 
-func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*api.LogicalVolumeMetadata, error) {
+func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*api.Lv, error) {
 	path := fmt.Sprintf("/dev/%s/%s", volumeGroupID.String(), id.String())
 
 	cmd := exec.Command("lvdisplay", "--columns", "--reportformat", "json", path)
@@ -79,7 +79,7 @@ func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*api.LogicalVolumeMetadata, e
 		}
 	}
 
-	metadata := &api.LogicalVolumeMetadata{
+	metadata := &api.Lv{
 		LvName:          result.LvName,
 		VgName:          result.VgName,
 		LvAttr:          result.LvAttr,
@@ -97,7 +97,7 @@ func getLv(volumeGroupID uuid.UUID, id uuid.UUID) (*api.LogicalVolumeMetadata, e
 	return metadata, nil
 }
 
-func newLv(volumeGroupID uuid.UUID, id uuid.UUID, size int64) (*api.LogicalVolumeMetadata, error) {
+func newLv(volumeGroupID uuid.UUID, id uuid.UUID, size int64) (*api.Lv, error) {
 	exists, _ := getLv(volumeGroupID, id)
 
 	if exists != nil {
@@ -141,17 +141,20 @@ func removeLv(volumeGroupID uuid.UUID, id uuid.UUID) error {
 	return nil
 }
 
-// // lvDisplay : displays all logical volumes
-// func lvDisplay() (*LogicalVolumeReport, error) {
-// 	lvdisplay, err := exec.Command("lvdisplay", "--columns", "--reportformat", "json").Output()
-// 	if err != nil {
-// 		return nil, HandleInternalError(err)
-// 	}
-// 	// Handle output JSON
-// 	output := LogicalVolumeReport{}
-// 	if err := json.Unmarshal(lvdisplay, &output); err != nil {
-// 		return nil, HandleInternalError(err)
-// 	}
-// 	// Return JSON data
-// 	return &output, nil
-// }
+// lvDisplay : displays all logical volumes
+//func lvDisplay() (*LogicalVolumeReport, error) {
+//lvdisplay, err := exec.Command("lvdisplay", "--columns", "--reportformat", "json").Output()
+
+//if err != nil {
+//return nil, HandleInternalError(err)
+//}
+
+//// Handle output JSON
+//output := LogicalVolumeReport{}
+//if err := json.Unmarshal(lvdisplay, &output); err != nil {
+//return nil, HandleInternalError(err)
+//}
+
+//// Return JSON data
+//return &output, nil
+//}

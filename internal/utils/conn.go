@@ -1,12 +1,21 @@
-package service
+package utils
 
 import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+)
+
+const (
+	// ContextTimeout : default context timeout
+	ContextTimeout = 5 * time.Second
+
+	// DialTimeout : default dial timeout
+	DialTimeout = 5 * time.Second
 )
 
 // NewClientConnSocket : creates new socket ClientConn
@@ -26,19 +35,19 @@ func NewClientConnSocket(socket string) *grpc.ClientConn {
 	return conn
 }
 
-// NewClientConnTCP : creates new TCP ClientConn
-func NewClientConnTCP(addr string) *grpc.ClientConn {
+// NewClientConnTcp : creates new TCP ClientConn
+func NewClientConnTcp(addr string) (*grpc.ClientConn, error) {
 	a, err := net.ResolveTCPAddr("tcp", addr)
 
 	if err != nil {
-		logrus.Fatal(err)
+		return nil, err
 	}
 
 	conn, err := grpc.Dial(a.String(), grpc.WithInsecure())
 
 	if err != nil {
-		logrus.Fatal(err)
+		return nil, err
 	}
 
-	return conn
+	return conn, nil
 }

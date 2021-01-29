@@ -1,34 +1,18 @@
 networks:
   services:
 services:
-  apiserver:
-    build:
-      context: .
-      dockerfile: cmd/apiserver/Dockerfile
-    command: >
-      apiserver
-      --bind-interface="eth0"
-      --config-dir="/config"
-      --consul-addr="http://consul:8500"
-      --verbose
-    depends_on:
-      - consul
-    networks:
-      - services
-    volumes:
-      - apiserver:/config
   block:
     build:
       context: .
       dockerfile: cmd/block/Dockerfile
     command: >
       block
-      --apiserver-addr="apiserver:15760"
       --bind-interface="eth0"
       --config-dir="/config"
+      --manager-addr="manager:15760"
       --verbose
     depends_on:
-      - apiserver
+      - manager
     networks:
       - services
     volumes:
@@ -42,8 +26,24 @@ services:
       - 8500:8500
     volumes:
       - consul:/consul/data
+  manager:
+    build:
+      context: .
+      dockerfile: cmd/manager/Dockerfile
+    command: >
+      manager
+      --bind-interface="eth0"
+      --config-dir="/config"
+      --consul-addr="http://consul:8500"
+      --verbose
+    depends_on:
+      - consul
+    networks:
+      - services
+    volumes:
+      - manager:/config
 version: "3.7"
 volumes:
-  apiserver:
   block:
   consul:
+  manager:
