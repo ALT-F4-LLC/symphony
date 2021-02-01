@@ -9,6 +9,7 @@ import (
 	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/google/uuid"
 	consul "github.com/hashicorp/consul/api"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -255,7 +256,7 @@ func (s *grpcServerManager) NewLogicalVolume(ctx context.Context, in *api.Reques
 	lv := &api.LogicalVolume{
 		ID:            lvID.String(),
 		Size:          in.Size,
-		Status:        api.ResourceStatus_CREATE_IN_PROGRESS,
+		Status:        api.ResourceStatus_REVIEW_IN_PROGRESS,
 		VolumeGroupID: vg.ID,
 	}
 
@@ -265,7 +266,20 @@ func (s *grpcServerManager) NewLogicalVolume(ctx context.Context, in *api.Reques
 		return nil, saveErr
 	}
 
-	go s.manager.lvCreate(lvID)
+	eventContext := &StateEventContext{
+		Manager:      s.manager,
+		ResourceID:   pvID,
+		ResourceType: api.ResourceType_LOGICAL_VOLUME,
+	}
+
+	go s.manager.State.SendEvent(ReviewInProgressLogicalVolume, eventContext)
+
+	fields := logrus.Fields{
+		"ResourceID":   eventContext.ResourceID,
+		"ResourceType": eventContext.ResourceType.String(),
+	}
+
+	logrus.WithFields(fields).Info(lv.Status.String())
 
 	return lv, nil
 }
@@ -316,7 +330,7 @@ func (s *grpcServerManager) NewPhysicalVolume(ctx context.Context, in *api.Reque
 		DeviceName: in.DeviceName,
 		ID:         pvID.String(),
 		ServiceID:  as.ID,
-		Status:     api.ResourceStatus_CREATE_IN_PROGRESS,
+		Status:     api.ResourceStatus_REVIEW_IN_PROGRESS,
 	}
 
 	saveErr := s.manager.savePhysicalVolume(pv)
@@ -327,7 +341,20 @@ func (s *grpcServerManager) NewPhysicalVolume(ctx context.Context, in *api.Reque
 		return nil, st.Err()
 	}
 
-	go s.manager.pvCreate(as, pv)
+	eventContext := &StateEventContext{
+		Manager:      s.manager,
+		ResourceID:   pvID,
+		ResourceType: api.ResourceType_PHYSICAL_VOLUME,
+	}
+
+	go s.manager.State.SendEvent(ReviewInProgressPhysicalVolume, eventContext)
+
+	fields := logrus.Fields{
+		"ResourceID":   eventContext.ResourceID,
+		"ResourceType": eventContext.ResourceType.String(),
+	}
+
+	logrus.WithFields(fields).Info(pv.Status.String())
 
 	return pv, nil
 }
@@ -426,7 +453,7 @@ func (s *grpcServerManager) NewVolumeGroup(ctx context.Context, in *api.RequestN
 	vg := &api.VolumeGroup{
 		ID:               vgID.String(),
 		PhysicalVolumeID: physicalVolume.ID,
-		Status:           api.ResourceStatus_CREATE_IN_PROGRESS,
+		Status:           api.ResourceStatus_REVIEW_IN_PROGRESS,
 	}
 
 	saveErr := s.manager.saveVolumeGroup(vg)
@@ -435,7 +462,20 @@ func (s *grpcServerManager) NewVolumeGroup(ctx context.Context, in *api.RequestN
 		return nil, saveErr
 	}
 
-	go s.manager.vgCreate(vgID)
+	eventContext := &StateEventContext{
+		Manager:      s.manager,
+		ResourceID:   vgID,
+		ResourceType: api.ResourceType_VOLUME_GROUP,
+	}
+
+	go s.manager.State.SendEvent(ReviewInProgressPhysicalVolume, eventContext)
+
+	fields := logrus.Fields{
+		"ResourceID":   eventContext.ResourceID,
+		"ResourceType": eventContext.ResourceType.String(),
+	}
+
+	logrus.WithFields(fields).Info(vg.Status.String())
 
 	return vg, nil
 }

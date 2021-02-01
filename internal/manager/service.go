@@ -19,6 +19,7 @@ import (
 // Manager : defines manager service
 type Manager struct {
 	ErrorC chan error
+	State  *StateMachine
 
 	consul *consul.Client
 	flags  *flags
@@ -42,10 +43,9 @@ func New() (*Manager, error) {
 		logrus.Fatal(err)
 	}
 
-	errorC := make(chan error)
-
 	manager := &Manager{
-		ErrorC: errorC,
+		ErrorC: make(chan error),
+		State:  newState(),
 
 		consul: consulClient,
 		flags:  flags,
