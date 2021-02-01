@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Added
 
 - Adds flowchart of the current architecture to README
+- Adds state machine for provisioning resources
 - Adds cloud image gRPC endpoint to manager
 
 ### Changed
