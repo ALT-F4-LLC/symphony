@@ -37,6 +37,12 @@ var (
 	blockVgRemove                 = blockVg.Command("remove", "Removes a volume group.")
 	blockVgRemoveID               = blockVgRemove.Arg("id", "Sets volume group id.").Required().String()
 
+	image               = kingpin.Command("image", "Image management commands.")
+	imageNew            = image.Command("new", "Creates a new image.")
+	imageNewDescription = imageNew.Arg("description", "Sets the description of the image").Required().String()
+	imageNewName        = imageNew.Arg("name", "Sets the name of the image.").Required().String()
+	imageNewPath        = imageNew.Arg("path", "Sets the local path to the image.").Required().String()
+
 	service               = kingpin.Command("service", "Service management commands.")
 	serviceNew            = service.Command("new", "Initializes service to an existing cluster.")
 	serviceRemove         = service.Command("remove", "Removes a service from the cluster.")
@@ -75,6 +81,14 @@ func main() {
 	//cli.ManagerListVolumeGroups()
 	//case blockVgRemove.FullCommand():
 	//cli.ManagerRemoveVolumeGroup(blockVgRemoveID)
+
+	case imageNew.FullCommand():
+		cli.ImageNew(cli.ImageNewOptions{
+			Description: imageNewDescription,
+			ManagerAddr: managerAddr,
+			Name:        imageNewName,
+			Path:        imageNewPath,
+		})
 
 	case serviceNew.FullCommand():
 		cli.ServiceNew(cli.ServiceNewOptions{

@@ -6,8 +6,8 @@ import (
 )
 
 // GetDirPath : resolves full path for directory
-func GetDirPath(dir *string) (*string, error) {
-	path, err := filepath.Abs(*dir)
+func GetDirPath(dir string) (*string, error) {
+	path, err := filepath.Abs(dir)
 
 	if err != nil {
 		return nil, err

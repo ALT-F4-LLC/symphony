@@ -31,7 +31,7 @@ func getFlags() (*flags, error) {
 		return nil, errors.New("invalid_bind_interface")
 	}
 
-	configDirPath, err := utils.GetDirPath(configDir)
+	configDirPath, err := utils.GetDirPath(*configDir)
 
 	if err != nil {
 		return nil, err

@@ -40,6 +40,8 @@ services:
       - consul
     networks:
       - services
+    ports:
+      - 15760:15760
     volumes:
       - manager:/config
 version: "3.7"

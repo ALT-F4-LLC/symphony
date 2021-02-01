@@ -1,21 +1,28 @@
 package manager
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/google/uuid"
 	consul "github.com/hashicorp/consul/api"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type grpcServerManager struct {
+	image   *DiskImageStore
 	manager *Manager
 }
+
+const maxImageSize = 1000 << 20 // 1GB max
 
 // GetLogicalVolume : retrieves a logical volume from state
 func (s *grpcServerManager) GetLogicalVolume(ctx context.Context, in *api.RequestLogicalVolume) (*api.LogicalVolume, error) {
@@ -204,6 +211,123 @@ func (s *grpcServerManager) GetVolumeGroups(ctx context.Context, in *api.Request
 	return res, nil
 }
 
+// NewImage : uploads and creates image
+func (s *grpcServerManager) NewImage(stream api.Manager_NewImageServer) error {
+	req, err := stream.Recv()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return st.Err()
+	}
+
+	description := req.GetDetails().Description
+
+	file := req.GetDetails().File
+
+	name := req.GetDetails().Name
+
+	imageData := bytes.Buffer{}
+
+	imageSize := 0
+
+	fields := logrus.Fields{
+		"Description": description,
+		"File":        file,
+		"Name":        name,
+	}
+
+	logrus.WithFields(fields).Debug("NEWIMAGE_STARTED")
+
+	for {
+		req, err := stream.Recv()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return st.Err()
+		}
+
+		chunk := req.GetChunkData()
+
+		size := len(chunk)
+
+		imageSize += size
+
+		if imageSize > maxImageSize {
+			st := status.New(codes.InvalidArgument, "invalid_file_size")
+
+			return st.Err()
+		}
+
+		_, writeErr := imageData.Write(chunk)
+
+		if writeErr != nil {
+			st := status.New(codes.Internal, writeErr.Error())
+
+			return st.Err()
+		}
+	}
+
+	contentType := http.DetectContentType(imageData.Bytes())
+
+	if contentType != "application/octet-stream" {
+		st := status.New(codes.InvalidArgument, "invalid_content_type")
+
+		return st.Err()
+	}
+
+	saveOptions := ImageStoreSaveOptions{
+		Data:        imageData,
+		Description: description,
+		File:        file,
+		Name:        name,
+		Size:        int64(imageSize),
+	}
+
+	storeErr := s.image.Save(saveOptions)
+
+	if storeErr != nil {
+		st := status.New(codes.Internal, storeErr.Error())
+
+		return st.Err()
+	}
+
+	imageID := uuid.New()
+
+	image := &api.Image{
+		Description: description,
+		File:        file,
+		ID:          imageID.String(),
+		Name:        name,
+		Size:        int64(imageSize),
+	}
+
+	saveErr := s.manager.saveImage(image)
+
+	if saveErr != nil {
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return st.Err()
+	}
+
+	closeErr := stream.SendAndClose(image)
+
+	if closeErr != nil {
+		st := status.New(codes.Internal, closeErr.Error())
+
+		return st.Err()
+	}
+
+	logrus.WithFields(fields).Debug("NEWIMAGE_COMPLETED")
+
+	return nil
+}
+
 // NewLogicalVolume : creates a new logical volume in state
 func (s *grpcServerManager) NewLogicalVolume(ctx context.Context, in *api.RequestNewLogicalVolume) (*api.LogicalVolume, error) {
 	vgID, err := uuid.Parse(in.VolumeGroupID)
@@ -255,7 +379,7 @@ func (s *grpcServerManager) NewLogicalVolume(ctx context.Context, in *api.Reques
 	lv := &api.LogicalVolume{
 		ID:            lvID.String(),
 		Size:          in.Size,
-		Status:        api.ResourceStatus_CREATE_IN_PROGRESS,
+		Status:        api.ResourceStatus_REVIEW_IN_PROGRESS,
 		VolumeGroupID: vg.ID,
 	}
 
@@ -265,7 +389,20 @@ func (s *grpcServerManager) NewLogicalVolume(ctx context.Context, in *api.Reques
 		return nil, saveErr
 	}
 
-	go s.manager.lvCreate(lvID)
+	eventContext := &StateEventContext{
+		Manager:      s.manager,
+		ResourceID:   pvID,
+		ResourceType: api.ResourceType_LOGICAL_VOLUME,
+	}
+
+	go s.manager.State.SendEvent(ReviewInProgressLogicalVolume, eventContext)
+
+	fields := logrus.Fields{
+		"ResourceID":   eventContext.ResourceID,
+		"ResourceType": eventContext.ResourceType.String(),
+	}
+
+	logrus.WithFields(fields).Info(lv.Status.String())
 
 	return lv, nil
 }
@@ -316,7 +453,7 @@ func (s *grpcServerManager) NewPhysicalVolume(ctx context.Context, in *api.Reque
 		DeviceName: in.DeviceName,
 		ID:         pvID.String(),
 		ServiceID:  as.ID,
-		Status:     api.ResourceStatus_CREATE_IN_PROGRESS,
+		Status:     api.ResourceStatus_REVIEW_IN_PROGRESS,
 	}
 
 	saveErr := s.manager.savePhysicalVolume(pv)
@@ -327,7 +464,20 @@ func (s *grpcServerManager) NewPhysicalVolume(ctx context.Context, in *api.Reque
 		return nil, st.Err()
 	}
 
-	go s.manager.pvCreate(as, pv)
+	eventContext := &StateEventContext{
+		Manager:      s.manager,
+		ResourceID:   pvID,
+		ResourceType: api.ResourceType_PHYSICAL_VOLUME,
+	}
+
+	go s.manager.State.SendEvent(ReviewInProgressPhysicalVolume, eventContext)
+
+	fields := logrus.Fields{
+		"ResourceID":   eventContext.ResourceID,
+		"ResourceType": eventContext.ResourceType.String(),
+	}
+
+	logrus.WithFields(fields).Info(pv.Status.String())
 
 	return pv, nil
 }
@@ -426,7 +576,7 @@ func (s *grpcServerManager) NewVolumeGroup(ctx context.Context, in *api.RequestN
 	vg := &api.VolumeGroup{
 		ID:               vgID.String(),
 		PhysicalVolumeID: physicalVolume.ID,
-		Status:           api.ResourceStatus_CREATE_IN_PROGRESS,
+		Status:           api.ResourceStatus_REVIEW_IN_PROGRESS,
 	}
 
 	saveErr := s.manager.saveVolumeGroup(vg)
@@ -435,7 +585,20 @@ func (s *grpcServerManager) NewVolumeGroup(ctx context.Context, in *api.RequestN
 		return nil, saveErr
 	}
 
-	go s.manager.vgCreate(vgID)
+	eventContext := &StateEventContext{
+		Manager:      s.manager,
+		ResourceID:   vgID,
+		ResourceType: api.ResourceType_VOLUME_GROUP,
+	}
+
+	go s.manager.State.SendEvent(ReviewInProgressPhysicalVolume, eventContext)
+
+	fields := logrus.Fields{
+		"ResourceID":   eventContext.ResourceID,
+		"ResourceType": eventContext.ResourceType.String(),
+	}
+
+	logrus.WithFields(fields).Info(vg.Status.String())
 
 	return vg, nil
 }

@@ -20,6 +20,7 @@ service Manager {
   rpc GetServices(RequestServices) returns (ResponseServices) {}
   rpc GetVolumeGroups(RequestVolumeGroups) returns (ResponseVolumeGroups) {}
 
+  rpc NewImage(stream RequestNewImage) returns (Image) {}
   rpc NewLogicalVolume(RequestNewLogicalVolume) returns (LogicalVolume) {}
   rpc NewPhysicalVolume(RequestNewPhysicalVolume) returns (PhysicalVolume) {}
   rpc NewService(RequestNewService) returns (Service) {}
@@ -39,6 +40,19 @@ message RequestLogicalVolumes {}
 
 message ResponseLogicalVolumes {
   repeated LogicalVolume Results = 1;
+}
+
+message RequestNewImageDetails {
+  string Description = 1;
+  string File = 2;
+  string Name = 3;
+}
+
+message RequestNewImage {
+  oneof Data {
+    bytes ChunkData = 1;
+    RequestNewImageDetails Details = 2;
+  };
 }
 
 message RequestNewLogicalVolume {

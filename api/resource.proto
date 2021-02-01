@@ -16,9 +16,18 @@ enum ResourceStatus {
 
 enum ResourceType {
   UNKNOWN_RESOURCE_TYPE = 0;
-  LOGICAL_VOLUME = 1;
-  PHYSICAL_VOLUME = 2;
-  VOLUME_GROUP = 3;
+  IMAGE = 1;
+  LOGICAL_VOLUME = 2;
+  PHYSICAL_VOLUME = 3;
+  VOLUME_GROUP = 4;
+}
+
+message Image {
+  string Description = 1;
+  string File = 2;
+  string ID = 3;
+  string Name = 4;
+  int64 Size = 5;
 }
 
 message LogicalVolume {

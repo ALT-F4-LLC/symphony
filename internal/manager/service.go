@@ -19,6 +19,7 @@ import (
 // Manager : defines manager service
 type Manager struct {
 	ErrorC chan error
+	State  *StateMachine
 
 	consul *consul.Client
 	flags  *flags
@@ -42,10 +43,9 @@ func New() (*Manager, error) {
 		logrus.Fatal(err)
 	}
 
-	errorC := make(chan error)
-
 	manager := &Manager{
-		ErrorC: errorC,
+		ErrorC: make(chan error),
+		State:  newState(),
 
 		consul: consulClient,
 		flags:  flags,
@@ -66,7 +66,16 @@ func (m *Manager) Start() {
 
 	grpcServer := grpc.NewServer()
 
+	i, err := NewDiskImageStore("/data")
+
+	if err != nil {
+		m.ErrorC <- err
+
+		return
+	}
+
 	managerServer := &grpcServerManager{
+		image:   i,
 		manager: m,
 	}
 
@@ -282,6 +291,31 @@ func (m *Manager) resource(key string) (*consul.KVPair, error) {
 	}
 
 	return results, nil
+}
+
+func (m *Manager) saveImage(image *api.Image) error {
+	kv := m.consul.KV()
+
+	imageKey := fmt.Sprintf("image/%s", image.ID)
+
+	imageValue, err := json.Marshal(image)
+
+	if err != nil {
+		return err
+	}
+
+	kvPair := &consul.KVPair{
+		Key:   imageKey,
+		Value: imageValue,
+	}
+
+	_, putErr := kv.Put(kvPair, nil)
+
+	if putErr != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
