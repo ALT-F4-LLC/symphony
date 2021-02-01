@@ -9,8 +9,8 @@ import (
 
 // ServiceNewOptions : options for initializing a service
 type ServiceNewOptions struct {
-	APIServerAddr *string
-	SocketPath    *string
+	ManagerAddr *string
+	SocketPath  *string
 }
 
 // ServiceNew : initializes a service for use

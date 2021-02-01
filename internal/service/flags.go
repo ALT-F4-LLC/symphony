@@ -39,7 +39,7 @@ func GetFlags() (*Flags, error) {
 		return nil, err
 	}
 
-	configDirPath, err := utils.GetDirPath(configDirFlag)
+	configDirPath, err := utils.GetDirPath(*configDirFlag)
 
 	if err != nil {
 		return nil, err

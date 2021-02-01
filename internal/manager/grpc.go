@@ -1,9 +1,12 @@
 package manager
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/utils"
@@ -15,8 +18,11 @@ import (
 )
 
 type grpcServerManager struct {
+	image   *DiskImageStore
 	manager *Manager
 }
+
+const maxImageSize = 1000 << 20 // 1GB max
 
 // GetLogicalVolume : retrieves a logical volume from state
 func (s *grpcServerManager) GetLogicalVolume(ctx context.Context, in *api.RequestLogicalVolume) (*api.LogicalVolume, error) {
@@ -203,6 +209,123 @@ func (s *grpcServerManager) GetVolumeGroups(ctx context.Context, in *api.Request
 	}
 
 	return res, nil
+}
+
+// NewImage : uploads and creates image
+func (s *grpcServerManager) NewImage(stream api.Manager_NewImageServer) error {
+	req, err := stream.Recv()
+
+	if err != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return st.Err()
+	}
+
+	description := req.GetDetails().Description
+
+	file := req.GetDetails().File
+
+	name := req.GetDetails().Name
+
+	imageData := bytes.Buffer{}
+
+	imageSize := 0
+
+	fields := logrus.Fields{
+		"Description": description,
+		"File":        file,
+		"Name":        name,
+	}
+
+	logrus.WithFields(fields).Debug("NEWIMAGE_STARTED")
+
+	for {
+		req, err := stream.Recv()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return st.Err()
+		}
+
+		chunk := req.GetChunkData()
+
+		size := len(chunk)
+
+		imageSize += size
+
+		if imageSize > maxImageSize {
+			st := status.New(codes.InvalidArgument, "invalid_file_size")
+
+			return st.Err()
+		}
+
+		_, writeErr := imageData.Write(chunk)
+
+		if writeErr != nil {
+			st := status.New(codes.Internal, writeErr.Error())
+
+			return st.Err()
+		}
+	}
+
+	contentType := http.DetectContentType(imageData.Bytes())
+
+	if contentType != "application/octet-stream" {
+		st := status.New(codes.InvalidArgument, "invalid_content_type")
+
+		return st.Err()
+	}
+
+	saveOptions := ImageStoreSaveOptions{
+		Data:        imageData,
+		Description: description,
+		File:        file,
+		Name:        name,
+		Size:        int64(imageSize),
+	}
+
+	storeErr := s.image.Save(saveOptions)
+
+	if storeErr != nil {
+		st := status.New(codes.Internal, storeErr.Error())
+
+		return st.Err()
+	}
+
+	imageID := uuid.New()
+
+	image := &api.Image{
+		Description: description,
+		File:        file,
+		ID:          imageID.String(),
+		Name:        name,
+		Size:        int64(imageSize),
+	}
+
+	saveErr := s.manager.saveImage(image)
+
+	if saveErr != nil {
+		st := status.New(codes.Internal, saveErr.Error())
+
+		return st.Err()
+	}
+
+	closeErr := stream.SendAndClose(image)
+
+	if closeErr != nil {
+		st := status.New(codes.Internal, closeErr.Error())
+
+		return st.Err()
+	}
+
+	logrus.WithFields(fields).Debug("NEWIMAGE_COMPLETED")
+
+	return nil
 }
 
 // NewLogicalVolume : creates a new logical volume in state

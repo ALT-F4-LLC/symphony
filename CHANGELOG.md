@@ -10,11 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Added
 
 - Adds flowchart of the current architecture to README
+- Adds cloud image gRPC endpoint to manager
 
 ### Changed
 
-- Replaced `etcd` with `consul` for service discovery and state storage.
-- Replaced `APIServer` gRPC endpoints with better naming conventions.
+- Replaced `etcd` with `consul` for service discovery and state storage
+- Replaced `APIServer` gRPC endpoints with better naming conventions
+- Replaced `APIServer` with `Manager` naming conventions
 
 ## [0.2.0-alpha.0] - 2020-07-10
 
