@@ -1,10 +1,10 @@
 package manager
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
+	"math/rand"
 	"net"
+	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/utils"
@@ -12,18 +12,17 @@ import (
 	consul "github.com/hashicorp/consul/api"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Manager : defines manager service
 type Manager struct {
 	ErrorC chan error
-	State  *StateMachine
+	State  *utils.StateMachine
 
-	consul *consul.Client
-	flags  *flags
+	flags *flags
 }
+
+const maxTimeoutMs = 10000
 
 // New : creates a new apiserver instance
 func New() (*Manager, error) {
@@ -37,25 +36,28 @@ func New() (*Manager, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	consulClient, err := utils.NewConsulClient(flags.ConsulAddr)
-
-	if err != nil {
-		logrus.Fatal(err)
-	}
+	rand.Seed(time.Now().UnixNano())
 
 	manager := &Manager{
 		ErrorC: make(chan error),
-		State:  newState(),
+		State:  newState(flags.ConsulAddr),
 
-		consul: consulClient,
-		flags:  flags,
+		flags: flags,
 	}
 
 	return manager, nil
 }
 
-// Start : handles start of apiserver service
+// Start : handles start of manager service
 func (m *Manager) Start() {
+	go m.listenGRPC()
+
+	go m.watchLogicalVolumes()
+	go m.watchPhysicalVolumes()
+	go m.watchVolumeGroups()
+}
+
+func (m *Manager) listenGRPC() {
 	listen, err := net.Listen("tcp", m.flags.ServiceAddr.String())
 
 	if err != nil {
@@ -90,307 +92,6 @@ func (m *Manager) Start() {
 
 		return
 	}
-}
-
-func (m *Manager) agentServices() (map[string]*consul.AgentService, error) {
-	agent := m.consul.Agent()
-
-	services, err := agent.Services()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return services, nil
-}
-
-func (m *Manager) agentServicesByType(serviceType api.ServiceType) (map[string]*consul.AgentService, error) {
-	agent := m.consul.Agent()
-
-	filter := fmt.Sprintf("Meta.ServiceType==%s", serviceType.String())
-
-	services, err := agent.ServicesWithFilter(filter)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return services, nil
-}
-
-func (m *Manager) agentServiceByID(id uuid.UUID) (*consul.AgentService, error) {
-	agent := m.consul.Agent()
-
-	serviceOpts := &consul.QueryOptions{}
-
-	service, _, err := agent.Service(id.String(), serviceOpts)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if service == nil {
-		return nil, errors.New("invalid_service_id")
-	}
-
-	return service, nil
-}
-
-func (m *Manager) agentServiceHealth(agentServiceID string) (string, error) {
-	agent := m.consul.Agent()
-
-	status, info, err := agent.AgentHealthServiceByID(agentServiceID)
-
-	if status == "critical" && info == nil {
-		return status, errors.New("invalid_service_id")
-	}
-
-	if err != nil {
-		return status, err
-	}
-
-	return status, nil
-}
-
-func (m *Manager) deleteResource(key string) error {
-	kv := m.consul.KV()
-
-	_, resErr := kv.Delete(key, nil)
-
-	if resErr != nil {
-		st := status.New(codes.Internal, resErr.Error())
-
-		return st.Err()
-	}
-
-	return nil
-}
-
-func (m *Manager) logicalVolumes() ([]*api.LogicalVolume, error) {
-	results, err := m.resources("logicalvolume/")
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	lvs := make([]*api.LogicalVolume, 0)
-
-	for _, ev := range results {
-		var lv *api.LogicalVolume
-
-		err := json.Unmarshal(ev.Value, &lv)
-
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-
-		lvs = append(lvs, lv)
-	}
-
-	return lvs, nil
-}
-func (m *Manager) logicalVolumeByID(id uuid.UUID) (*api.LogicalVolume, error) {
-	key := fmt.Sprintf("logicalvolume/%s", id.String())
-
-	result, err := m.resource(key)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	var lv *api.LogicalVolume
-
-	jsonErr := json.Unmarshal(result.Value, &lv)
-
-	if jsonErr != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	return lv, nil
-}
-
-func (m *Manager) physicalVolumes() ([]*api.PhysicalVolume, error) {
-	results, err := m.resources("physicalvolume/")
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	pvs := make([]*api.PhysicalVolume, 0)
-
-	for _, ev := range results {
-		var s *api.PhysicalVolume
-
-		err := json.Unmarshal(ev.Value, &s)
-
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
-
-			return nil, st.Err()
-		}
-
-		pvs = append(pvs, s)
-	}
-
-	return pvs, nil
-}
-
-func (m *Manager) physicalVolumeByID(id uuid.UUID) (*api.PhysicalVolume, error) {
-	key := fmt.Sprintf("physicalvolume/%s", id.String())
-
-	result, err := m.resource(key)
-
-	if err != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	var pv *api.PhysicalVolume
-
-	jsonErr := json.Unmarshal(result.Value, &pv)
-
-	if jsonErr != nil {
-		st := status.New(codes.Internal, err.Error())
-
-		return nil, st.Err()
-	}
-
-	return pv, nil
-}
-
-func (m *Manager) resources(key string) (consul.KVPairs, error) {
-	kv := m.consul.KV()
-
-	results, _, err := kv.List(key, nil)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return results, nil
-}
-
-func (m *Manager) resource(key string) (*consul.KVPair, error) {
-	kv := m.consul.KV()
-
-	results, _, err := kv.Get(key, nil)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return results, nil
-}
-
-func (m *Manager) saveImage(image *api.Image) error {
-	kv := m.consul.KV()
-
-	imageKey := fmt.Sprintf("image/%s", image.ID)
-
-	imageValue, err := json.Marshal(image)
-
-	if err != nil {
-		return err
-	}
-
-	kvPair := &consul.KVPair{
-		Key:   imageKey,
-		Value: imageValue,
-	}
-
-	_, putErr := kv.Put(kvPair, nil)
-
-	if putErr != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *Manager) saveLogicalVolume(lv *api.LogicalVolume) error {
-	kv := m.consul.KV()
-
-	lvKey := fmt.Sprintf("logicalvolume/%s", lv.ID)
-
-	lvValue, err := json.Marshal(lv)
-
-	if err != nil {
-		return err
-	}
-
-	kvPair := &consul.KVPair{
-		Key:   lvKey,
-		Value: lvValue,
-	}
-
-	_, putErr := kv.Put(kvPair, nil)
-
-	if putErr != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *Manager) savePhysicalVolume(pv *api.PhysicalVolume) error {
-	kv := m.consul.KV()
-
-	pvKey := fmt.Sprintf("physicalvolume/%s", pv.ID)
-
-	pvValue, err := json.Marshal(pv)
-
-	if err != nil {
-		return err
-	}
-
-	kvPair := &consul.KVPair{
-		Key:   pvKey,
-		Value: pvValue,
-	}
-
-	_, putErr := kv.Put(kvPair, nil)
-
-	if putErr != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *Manager) saveVolumeGroup(vg *api.VolumeGroup) error {
-	kv := m.consul.KV()
-
-	vgKey := fmt.Sprintf("volumegroup/%s", vg.ID)
-
-	vgValue, err := json.Marshal(vg)
-
-	if err != nil {
-		return err
-	}
-
-	kvPair := &consul.KVPair{
-		Key:   vgKey,
-		Value: vgValue,
-	}
-
-	_, putErr := kv.Put(kvPair, nil)
-
-	if putErr != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (m *Manager) service(agentService *consul.AgentService) (*api.Service, error) {
@@ -428,54 +129,107 @@ func (m *Manager) services(agentServices map[string]*consul.AgentService) ([]*ap
 	return services, nil
 }
 
-func (m *Manager) volumeGroups() ([]*api.VolumeGroup, error) {
-	results, err := m.resources("volumegroup/")
+func (m *Manager) watchLogicalVolumes() {
+	status := api.ResourceStatus_REVIEW_IN_PROGRESS
+
+	lvs, err := logicalVolumes(m.flags.ConsulAddr)
 
 	if err != nil {
-		st := status.New(codes.Internal, err.Error())
+		m.ErrorC <- err
 
-		return nil, st.Err()
+		return
 	}
 
-	vgs := make([]*api.VolumeGroup, 0)
+	for _, lv := range lvs {
+		if lv.Status == status {
+			resourceID, err := uuid.Parse(lv.ID)
 
-	for _, ev := range results {
-		var s *api.VolumeGroup
+			if err != nil {
+				m.ErrorC <- err
 
-		err := json.Unmarshal(ev.Value, &s)
+				return
+			}
 
-		if err != nil {
-			st := status.New(codes.Internal, err.Error())
+			eventContext := &ReviewEventContext{
+				ResourceID:   resourceID,
+				ResourceType: api.ResourceType_LOGICAL_VOLUME,
+			}
 
-			return nil, st.Err()
+			go m.State.Send(ReviewInProgressLogicalVolume, eventContext)
 		}
-
-		vgs = append(vgs, s)
 	}
 
-	return vgs, nil
+	time.Sleep(utils.RandomTimeout(maxTimeoutMs))
+
+	m.watchLogicalVolumes()
 }
 
-func (m *Manager) volumeGroupByID(id uuid.UUID) (*api.VolumeGroup, error) {
-	key := fmt.Sprintf("volumegroup/%s", id.String())
+func (m *Manager) watchPhysicalVolumes() {
+	status := api.ResourceStatus_REVIEW_IN_PROGRESS
 
-	result, err := m.resource(key)
+	pvs, err := physicalVolumes(m.flags.ConsulAddr)
 
 	if err != nil {
-		st := status.New(codes.Internal, err.Error())
+		m.ErrorC <- err
 
-		return nil, st.Err()
+		return
 	}
 
-	var vg *api.VolumeGroup
+	for _, pv := range pvs {
+		if pv.Status == status {
+			resourceID, err := uuid.Parse(pv.ID)
 
-	jsonErr := json.Unmarshal(result.Value, &vg)
+			if err != nil {
+				m.ErrorC <- err
 
-	if jsonErr != nil {
-		st := status.New(codes.Internal, jsonErr.Error())
+				return
+			}
 
-		return nil, st.Err()
+			eventContext := &ReviewEventContext{
+				ResourceID:   resourceID,
+				ResourceType: api.ResourceType_PHYSICAL_VOLUME,
+			}
+
+			go m.State.Send(ReviewInProgressPhysicalVolume, eventContext)
+		}
 	}
 
-	return vg, nil
+	time.Sleep(utils.RandomTimeout(maxTimeoutMs))
+
+	m.watchPhysicalVolumes()
+}
+
+func (m *Manager) watchVolumeGroups() {
+	status := api.ResourceStatus_REVIEW_IN_PROGRESS
+
+	vgs, err := volumeGroups(m.flags.ConsulAddr)
+
+	if err != nil {
+		m.ErrorC <- err
+
+		return
+	}
+
+	for _, vg := range vgs {
+		if vg.Status == status {
+			resourceID, err := uuid.Parse(vg.ID)
+
+			if err != nil {
+				m.ErrorC <- err
+
+				return
+			}
+
+			eventContext := &ReviewEventContext{
+				ResourceID:   resourceID,
+				ResourceType: api.ResourceType_VOLUME_GROUP,
+			}
+
+			go m.State.Send(ReviewInProgressVolumeGroup, eventContext)
+		}
+	}
+
+	time.Sleep(utils.RandomTimeout(maxTimeoutMs))
+
+	m.watchVolumeGroups()
 }

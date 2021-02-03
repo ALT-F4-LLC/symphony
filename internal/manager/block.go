@@ -1,165 +1,180 @@
 package manager
 
 import (
-	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/google/uuid"
-	consul "github.com/hashicorp/consul/api"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-func (m *Manager) lvCreate(as *consul.AgentService, lv *api.LogicalVolume) error {
-	blockAddr := fmt.Sprintf("%s:%d", as.Address, as.Port)
+func logicalVolumes(consulAddr string) ([]*api.LogicalVolume, error) {
+	resourceType := api.ResourceType_LOGICAL_VOLUME
 
-	conn, err := utils.NewClientConnTcp(blockAddr)
+	key := fmt.Sprintf("%s/", resourceType.String())
+
+	results, err := kvPairs(consulAddr, key)
 
 	if err != nil {
-		return err
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
 	}
 
-	defer conn.Close()
+	lvs := make([]*api.LogicalVolume, 0)
 
-	ctx, cancel := context.WithTimeout(context.Background(), utils.ContextTimeout)
+	for _, ev := range results {
+		var lv *api.LogicalVolume
 
-	defer cancel()
+		err := json.Unmarshal(ev.Value, &lv)
 
-	c := api.NewBlockClient(conn)
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
 
-	lvCreateOptions := &api.RequestLvCreate{
-		ID:            lv.ID,
-		Size:          lv.Size,
-		VolumeGroupID: lv.VolumeGroupID,
+			return nil, st.Err()
+		}
+
+		lvs = append(lvs, lv)
 	}
 
-	_, lvCreateErr := c.LvCreate(ctx, lvCreateOptions)
-
-	if lvCreateErr != nil {
-		return lvCreateErr
-	}
-
-	return nil
+	return lvs, nil
 }
 
-func (m *Manager) pvCreate(as *consul.AgentService, pv *api.PhysicalVolume) error {
-	healthStatus, err := m.agentServiceHealth(as.ID)
+func logicalVolumeByID(consulAddr string, id uuid.UUID) (*api.LogicalVolume, error) {
+	key := utils.KvKey(id, api.ResourceType_LOGICAL_VOLUME)
+
+	result, err := kvPair(consulAddr, key)
 
 	if err != nil {
-		return err
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
 	}
 
-	if healthStatus == "critical" {
-		return errors.New("service_unavailable")
+	var lv *api.LogicalVolume
+
+	jsonErr := json.Unmarshal(result.Value, &lv)
+
+	if jsonErr != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
 	}
 
-	pv.Status = api.ResourceStatus_CREATE_IN_PROGRESS
-
-	inProgressErr := m.savePhysicalVolume(pv)
-
-	if inProgressErr != nil {
-		return inProgressErr
-	}
-
-	blockAddr := fmt.Sprintf("%s:%d", as.Address, as.Port)
-
-	conn, err := utils.NewClientConnTcp(blockAddr)
-
-	if err != nil {
-		return err
-	}
-
-	defer conn.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), utils.ContextTimeout)
-
-	defer cancel()
-
-	c := api.NewBlockClient(conn)
-
-	pvCreateOptions := &api.RequestPvCreate{
-		DeviceName: pv.DeviceName,
-	}
-
-	_, pvCreateErr := c.PvCreate(ctx, pvCreateOptions)
-
-	if pvCreateErr != nil {
-		return pvCreateErr
-	}
-
-	return nil
+	return lv, nil
 }
 
-func (m *Manager) vgCreate(as *consul.AgentService, vg *api.VolumeGroup) error {
-	physicalVolumeID, err := uuid.Parse(vg.PhysicalVolumeID)
+func physicalVolumes(consulAddr string) ([]*api.PhysicalVolume, error) {
+	resourceType := api.ResourceType_PHYSICAL_VOLUME
+
+	key := fmt.Sprintf("%s/", resourceType.String())
+
+	results, err := kvPairs(consulAddr, key)
 
 	if err != nil {
-		return err
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
 	}
 
-	pv, err := m.physicalVolumeByID(physicalVolumeID)
+	pvs := make([]*api.PhysicalVolume, 0)
+
+	for _, ev := range results {
+		var s *api.PhysicalVolume
+
+		err := json.Unmarshal(ev.Value, &s)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		pvs = append(pvs, s)
+	}
+
+	return pvs, nil
+}
+
+func physicalVolumeByID(consulAddr string, id uuid.UUID) (*api.PhysicalVolume, error) {
+	key := utils.KvKey(id, api.ResourceType_PHYSICAL_VOLUME)
+
+	result, err := kvPair(consulAddr, key)
 
 	if err != nil {
-		return err
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
 	}
 
-	pvServiceID, err := uuid.Parse(pv.ServiceID)
+	var pv *api.PhysicalVolume
+
+	jsonErr := json.Unmarshal(result.Value, &pv)
+
+	if jsonErr != nil {
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
+	}
+
+	return pv, nil
+}
+
+func volumeGroups(consulAddr string) ([]*api.VolumeGroup, error) {
+	resourceType := api.ResourceType_VOLUME_GROUP
+
+	key := fmt.Sprintf("%s/", resourceType.String())
+
+	results, err := kvPairs(consulAddr, key)
 
 	if err != nil {
-		return err
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
 	}
 
-	agentService, err := m.agentServiceByID(pvServiceID)
+	vgs := make([]*api.VolumeGroup, 0)
+
+	for _, ev := range results {
+		var s *api.VolumeGroup
+
+		err := json.Unmarshal(ev.Value, &s)
+
+		if err != nil {
+			st := status.New(codes.Internal, err.Error())
+
+			return nil, st.Err()
+		}
+
+		vgs = append(vgs, s)
+	}
+
+	return vgs, nil
+}
+
+func volumeGroupByID(consulAddr string, id uuid.UUID) (*api.VolumeGroup, error) {
+	key := utils.KvKey(id, api.ResourceType_VOLUME_GROUP)
+
+	result, err := kvPair(consulAddr, key)
 
 	if err != nil {
-		return err
+		st := status.New(codes.Internal, err.Error())
+
+		return nil, st.Err()
 	}
 
-	agentServiceHealth, err := m.agentServiceHealth(agentService.ID)
+	var vg *api.VolumeGroup
 
-	if err != nil {
-		return err
+	jsonErr := json.Unmarshal(result.Value, &vg)
+
+	if jsonErr != nil {
+		st := status.New(codes.Internal, jsonErr.Error())
+
+		return nil, st.Err()
 	}
 
-	if agentServiceHealth == "critical" {
-		return errors.New("service_unavailable")
-	}
-
-	vg.Status = api.ResourceStatus_CREATE_IN_PROGRESS
-
-	inProgressErr := m.saveVolumeGroup(vg)
-
-	if inProgressErr != nil {
-		return inProgressErr
-	}
-
-	blockAddr := fmt.Sprintf("%s:%d", agentService.Address, agentService.Port)
-
-	conn, err := utils.NewClientConnTcp(blockAddr)
-
-	if err != nil {
-		return err
-	}
-
-	defer conn.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), utils.ContextTimeout)
-
-	defer cancel()
-
-	c := api.NewBlockClient(conn)
-
-	vgCreateOptions := &api.RequestVgCreate{
-		DeviceName: pv.DeviceName,
-		ID:         vg.ID,
-	}
-
-	_, vgCreateErr := c.VgCreate(ctx, vgCreateOptions)
-
-	if vgCreateErr != nil {
-		return vgCreateErr
-	}
-
-	return nil
+	return vg, nil
 }

@@ -1,162 +1,108 @@
 package manager
 
 import (
-	"errors"
-	"sync"
+	"encoding/json"
 
 	"github.com/erkrnt/symphony/api"
+	"github.com/erkrnt/symphony/internal/utils"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
-type Action interface {
-	Execute(eventCtx EventContent) EventType
+type ReviewCompleteAction struct {
+	ConsulAddr string
 }
-
-type CreateLogicalVolumeAction struct{}
-type CreatePhysicalVolumeAction struct{}
-type CreateVolumeGroupAction struct{}
-
-type Events map[EventType]StateType
-type EventContent interface{}
-type EventType string
-
-type ReviewLogicalVolumeAction struct{}
-type ReviewPhysicalVolumeAction struct{}
-type ReviewVolumeGroupAction struct{}
-
-type State struct {
-	Action Action
-	Events Events
-}
-type States map[StateType]State
-type StateCreateFailAction struct{}
-type StateEventContext struct {
-	Manager      *Manager
+type ReviewEventContext struct {
 	ResourceID   uuid.UUID
 	ResourceType api.ResourceType
 }
-type StateMachine struct {
-	Current  StateType
-	Previous StateType
-	States   States
-	mutex    sync.Mutex
+type ReviewFailAction struct {
+	ConsulAddr string
 }
-type StateType string
-type StateReviewCompleteAction struct{}
-type StateReviewFailAction struct{}
-
-const (
-	Default StateType = ""
-
-	NoOp EventType = "NoOp"
-)
+type ReviewLogicalVolumeAction struct {
+	ConsulAddr string
+}
+type ReviewPhysicalVolumeAction struct {
+	ConsulAddr string
+}
+type ReviewVolumeGroupAction struct {
+	ConsulAddr string
+}
 
 var (
-	CreateCompleted                EventType = EventType(api.ResourceStatus_CREATE_COMPLETED.String())
-	CreateFailed                   EventType = EventType(api.ResourceStatus_CREATE_FAILED.String())
-	CreateInProgressLogicalVolume  EventType = EventType("CreateInProgressLogicalVolume")
-	CreateInProgressPhysicalVolume EventType = EventType("CreateInProgressPhysicalVolume")
-	CreateInProgressVolumeGroup    EventType = EventType("CreateInProgressVolumeGroup")
-	ReviewCompleted                EventType = EventType(api.ResourceStatus_REVIEW_COMPLETED.String())
-	ReviewFailed                   EventType = EventType(api.ResourceStatus_REVIEW_FAILED.String())
-	ReviewInProgressLogicalVolume  EventType = EventType("ReviewInProgressLogicalVolume")
-	ReviewInProgressPhysicalVolume EventType = EventType("ReviewInProgressPhysicalVolume")
-	ReviewInProgressVolumeGroup    EventType = EventType("ReviewInProgressVolumeGroup")
+	ReviewCompleted                utils.EventType = utils.EventType("ReviewCompleted")
+	ReviewFailed                   utils.EventType = utils.EventType("ReviewFailed")
+	ReviewInProgressLogicalVolume  utils.EventType = utils.EventType("ReviewInProgressLogicalVolume")
+	ReviewInProgressPhysicalVolume utils.EventType = utils.EventType("ReviewInProgressPhysicalVolume")
+	ReviewInProgressVolumeGroup    utils.EventType = utils.EventType("ReviewInProgressVolumeGroup")
 
-	CreateComplete       StateType = StateType("CreateComplete")
-	CreateFail           StateType = StateType("CreateFail")
-	CreateLogicalVolume  StateType = StateType("CreateLogicalVolume")
-	CreatePhysicalVolume StateType = StateType("CreatePhysicalVolume")
-	CreateVolumeGroup    StateType = StateType("CreateVolumeGroup")
-	ReviewComplete       StateType = StateType("ReviewComplete")
-	ReviewFail           StateType = StateType("ReviewFail")
-	ReviewLogicalVolume  StateType = StateType("ReviewLogicalVolume")
-	ReviewPhysicalVolume StateType = StateType("ReviewPhysicalVolume")
-	ReviewVolumeGroup    StateType = StateType("ReviewVolumeGroup")
+	ReviewComplete       utils.StateType = utils.StateType("ReviewComplete")
+	ReviewFail           utils.StateType = utils.StateType("ReviewFail")
+	ReviewLogicalVolume  utils.StateType = utils.StateType("ReviewLogicalVolume")
+	ReviewPhysicalVolume utils.StateType = utils.StateType("ReviewPhysicalVolume")
+	ReviewVolumeGroup    utils.StateType = utils.StateType("ReviewVolumeGroup")
 )
 
-func newState() *StateMachine {
-	defaultState := State{
-		Events: Events{
+func newState(consulAddr string) *utils.StateMachine {
+	defaultState := utils.State{
+		Events: utils.Events{
 			ReviewInProgressLogicalVolume:  ReviewLogicalVolume,
 			ReviewInProgressPhysicalVolume: ReviewPhysicalVolume,
 			ReviewInProgressVolumeGroup:    ReviewVolumeGroup,
 		},
 	}
 
-	createFailState := State{
-		Action: &StateCreateFailAction{},
-		Events: Events{},
-	}
-
-	createLogicalVolumeState := State{
-		Action: &CreateLogicalVolumeAction{},
-		Events: Events{
-			CreateFailed: CreateFail,
+	reviewCompleteState := utils.State{
+		Action: &ReviewCompleteAction{
+			ConsulAddr: consulAddr,
+		},
+		Events: utils.Events{
+			ReviewInProgressLogicalVolume:  ReviewLogicalVolume,
+			ReviewInProgressPhysicalVolume: ReviewPhysicalVolume,
+			ReviewInProgressVolumeGroup:    ReviewVolumeGroup,
 		},
 	}
 
-	createPhysicalVolumeState := State{
-		Action: &CreatePhysicalVolumeAction{},
-		Events: Events{
-			CreateFailed: CreateFail,
+	reviewFailState := utils.State{
+		Action: &ReviewFailAction{
+			ConsulAddr: consulAddr,
 		},
+		Events: utils.Events{},
 	}
 
-	createVolumeGroupState := State{
-		Action: &CreateVolumeGroupAction{},
-		Events: Events{
-			CreateFailed: CreateFail,
+	reviewLogicalVolumeState := utils.State{
+		Action: &ReviewLogicalVolumeAction{
+			ConsulAddr: consulAddr,
 		},
-	}
-
-	reviewCompleteState := State{
-		Action: &StateReviewCompleteAction{},
-		Events: Events{
-			CreateFailed:                   CreateFail,
-			CreateInProgressLogicalVolume:  CreateLogicalVolume,
-			CreateInProgressPhysicalVolume: CreatePhysicalVolume,
-			CreateInProgressVolumeGroup:    CreateVolumeGroup,
-		},
-	}
-
-	reviewFailState := State{
-		Action: &StateReviewFailAction{},
-		Events: Events{},
-	}
-
-	reviewLogicalVolumeState := State{
-		Action: &ReviewLogicalVolumeAction{},
-		Events: Events{
+		Events: utils.Events{
 			ReviewCompleted: ReviewComplete,
 			ReviewFailed:    ReviewFail,
 		},
 	}
 
-	reviewPhysicalVolumeState := State{
-		Action: &ReviewPhysicalVolumeAction{},
-		Events: Events{
+	reviewPhysicalVolumeState := utils.State{
+		Action: &ReviewPhysicalVolumeAction{
+			ConsulAddr: consulAddr,
+		},
+		Events: utils.Events{
 			ReviewCompleted: ReviewComplete,
 			ReviewFailed:    ReviewFail,
 		},
 	}
 
-	reviewVolumeGroupState := State{
-		Action: &ReviewVolumeGroupAction{},
-		Events: Events{
+	reviewVolumeGroupState := utils.State{
+		Action: &ReviewVolumeGroupAction{
+			ConsulAddr: consulAddr,
+		},
+		Events: utils.Events{
 			ReviewCompleted: ReviewComplete,
 			ReviewFailed:    ReviewFail,
 		},
 	}
 
-	state := &StateMachine{
-		States: States{
-			Default:              defaultState,
-			CreateFail:           createFailState,
-			CreateLogicalVolume:  createLogicalVolumeState,
-			CreatePhysicalVolume: createPhysicalVolumeState,
-			CreateVolumeGroup:    createVolumeGroupState,
+	state := &utils.StateMachine{
+		States: utils.States{
+			utils.Default:        defaultState,
 			ReviewComplete:       reviewCompleteState,
 			ReviewFail:           reviewFailState,
 			ReviewLogicalVolume:  reviewLogicalVolumeState,
@@ -168,10 +114,10 @@ func newState() *StateMachine {
 	return state
 }
 
-func saveResouceStatus(context *StateEventContext, status api.ResourceStatus) error {
+func saveResouceStatus(consulAddr string, context *ReviewEventContext, status api.ResourceStatus) error {
 	switch context.ResourceType {
 	case api.ResourceType_LOGICAL_VOLUME:
-		lv, err := context.Manager.logicalVolumeByID(context.ResourceID)
+		lv, err := logicalVolumeByID(consulAddr, context.ResourceID)
 
 		if err != nil {
 			return err
@@ -179,13 +125,21 @@ func saveResouceStatus(context *StateEventContext, status api.ResourceStatus) er
 
 		lv.Status = status
 
-		saveErr := context.Manager.saveLogicalVolume(lv)
+		key := utils.KvKey(context.ResourceID, api.ResourceType_LOGICAL_VOLUME)
+
+		value, err := json.Marshal(lv)
+
+		if err != nil {
+			return err
+		}
+
+		saveErr := putKVPair(consulAddr, key, value)
 
 		if saveErr != nil {
 			return saveErr
 		}
 	case api.ResourceType_PHYSICAL_VOLUME:
-		pv, err := context.Manager.physicalVolumeByID(context.ResourceID)
+		pv, err := physicalVolumeByID(consulAddr, context.ResourceID)
 
 		if err != nil {
 			return err
@@ -193,13 +147,21 @@ func saveResouceStatus(context *StateEventContext, status api.ResourceStatus) er
 
 		pv.Status = status
 
-		saveErr := context.Manager.savePhysicalVolume(pv)
+		key := utils.KvKey(context.ResourceID, api.ResourceType_PHYSICAL_VOLUME)
+
+		value, err := json.Marshal(pv)
+
+		if err != nil {
+			return err
+		}
+
+		saveErr := putKVPair(consulAddr, key, value)
 
 		if saveErr != nil {
 			return saveErr
 		}
 	case api.ResourceType_VOLUME_GROUP:
-		vg, err := context.Manager.volumeGroupByID(context.ResourceID)
+		vg, err := volumeGroupByID(consulAddr, context.ResourceID)
 
 		if err != nil {
 			return err
@@ -207,7 +169,15 @@ func saveResouceStatus(context *StateEventContext, status api.ResourceStatus) er
 
 		vg.Status = status
 
-		saveErr := context.Manager.saveVolumeGroup(vg)
+		key := utils.KvKey(context.ResourceID, api.ResourceType_VOLUME_GROUP)
+
+		value, err := json.Marshal(vg)
+
+		if err != nil {
+			return err
+		}
+
+		saveErr := putKVPair(consulAddr, key, value)
 
 		if saveErr != nil {
 			return saveErr
@@ -217,36 +187,17 @@ func saveResouceStatus(context *StateEventContext, status api.ResourceStatus) er
 	return nil
 }
 
-func (a *StateCreateFailAction) Execute(eventCtx EventContent) EventType {
-	context := eventCtx.(*StateEventContext)
+func (action *ReviewCompleteAction) Execute(eventCtx utils.EventContent) utils.EventType {
+	consulAddr := action.ConsulAddr
 
-	status := api.ResourceStatus_CREATE_FAILED
+	context := eventCtx.(*ReviewEventContext)
 
-	saveErr := saveResouceStatus(context, status)
+	status := api.ResourceStatus_REVIEW_COMPLETED
 
-	if saveErr != nil {
-		return NoOp
-	}
-
-	fields := logrus.Fields{
-		"ResourceID":   context.ResourceID,
-		"ResourceType": context.ResourceType.String(),
-	}
-
-	logrus.WithFields(fields).Error(status.String())
-
-	return NoOp
-}
-
-func (a *StateReviewCompleteAction) Execute(eventCtx EventContent) EventType {
-	context := eventCtx.(*StateEventContext)
-
-	status := api.ResourceStatus_CREATE_IN_PROGRESS
-
-	saveErr := saveResouceStatus(context, status)
+	saveErr := saveResouceStatus(consulAddr, context, status)
 
 	if saveErr != nil {
-		return CreateFailed
+		return ReviewFailed
 	}
 
 	fields := logrus.Fields{
@@ -256,27 +207,20 @@ func (a *StateReviewCompleteAction) Execute(eventCtx EventContent) EventType {
 
 	logrus.WithFields(fields).Info(status.String())
 
-	switch context.ResourceType {
-	case api.ResourceType_LOGICAL_VOLUME:
-		return CreateInProgressLogicalVolume
-	case api.ResourceType_PHYSICAL_VOLUME:
-		return CreateInProgressPhysicalVolume
-	case api.ResourceType_VOLUME_GROUP:
-		return CreateInProgressVolumeGroup
-	}
-
-	return CreateFailed
+	return utils.NoOp
 }
 
-func (a *StateReviewFailAction) Execute(eventCtx EventContent) EventType {
-	context := eventCtx.(*StateEventContext)
+func (action *ReviewFailAction) Execute(eventCtx utils.EventContent) utils.EventType {
+	consulAddr := action.ConsulAddr
+
+	context := eventCtx.(*ReviewEventContext)
 
 	status := api.ResourceStatus_REVIEW_FAILED
 
-	saveErr := saveResouceStatus(context, status)
+	saveErr := saveResouceStatus(consulAddr, context, status)
 
 	if saveErr != nil {
-		return NoOp
+		return utils.NoOp
 	}
 
 	fields := logrus.Fields{
@@ -286,228 +230,30 @@ func (a *StateReviewFailAction) Execute(eventCtx EventContent) EventType {
 
 	logrus.WithFields(fields).Error(status.String())
 
-	return NoOp
+	return utils.NoOp
 }
 
-func (a *CreateLogicalVolumeAction) Execute(eventCtx EventContent) EventType {
-	context := eventCtx.(*StateEventContext)
+func (action *ReviewLogicalVolumeAction) Execute(eventCtx utils.EventContent) utils.EventType {
+	consulAddr := action.ConsulAddr
 
-	m := context.Manager
-
-	lv, err := m.logicalVolumeByID(context.ResourceID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	volumeGroupID, err := uuid.Parse(lv.VolumeGroupID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	vg, err := m.volumeGroupByID(volumeGroupID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	physicalVolumeID, err := uuid.Parse(vg.PhysicalVolumeID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	pv, err := m.physicalVolumeByID(physicalVolumeID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	serviceID, err := uuid.Parse(pv.ServiceID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	agentService, err := m.agentServiceByID(serviceID)
-
-	if agentService == nil {
-		return CreateFailed
-	}
-
-	agentServiceHealth, err := m.agentServiceHealth(agentService.ID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	if agentServiceHealth == "critical" {
-		return CreateFailed
-	}
-
-	lvCreateErr := m.lvCreate(agentService, lv)
-
-	if lvCreateErr != nil {
-		return CreateFailed
-	}
-
-	status := api.ResourceStatus_CREATE_COMPLETED
-
-	lv.Status = status
-
-	saveErr := m.saveLogicalVolume(lv)
-
-	if saveErr != nil {
-		return CreateFailed
-	}
-
-	return CreateCompleted
-}
-
-func (a *CreatePhysicalVolumeAction) Execute(eventCtx EventContent) EventType {
-	context := eventCtx.(*StateEventContext)
-
-	m := context.Manager
-
-	pv, err := m.physicalVolumeByID(context.ResourceID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	if pv.Status != api.ResourceStatus_CREATE_IN_PROGRESS {
-		return CreateFailed
-	}
-
-	pvServiceID, err := uuid.Parse(pv.ServiceID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	agentService, err := m.agentServiceByID(pvServiceID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	if agentService == nil {
-		return CreateFailed
-	}
-
-	agentServiceHealth, err := m.agentServiceHealth(agentService.ID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	if agentServiceHealth == "critical" {
-		return CreateFailed
-	}
-
-	pvCreateErr := m.pvCreate(agentService, pv)
-
-	if pvCreateErr != nil {
-		return CreateFailed
-	}
-
-	status := api.ResourceStatus_CREATE_COMPLETED
-
-	pv.Status = status
-
-	saveErr := m.savePhysicalVolume(pv)
-
-	if saveErr != nil {
-		return CreateFailed
-	}
+	context := eventCtx.(*ReviewEventContext)
 
 	fields := logrus.Fields{
 		"ResourceID":   context.ResourceID,
 		"ResourceType": context.ResourceType.String(),
 	}
 
-	logrus.WithFields(fields).Error(status.String())
+	status := api.ResourceStatus_REVIEW_IN_PROGRESS
 
-	return CreateCompleted
-}
+	logrus.WithFields(fields).Info(status.String())
 
-func (a *CreateVolumeGroupAction) Execute(eventCtx EventContent) EventType {
-	context := eventCtx.(*StateEventContext)
-
-	m := context.Manager
-
-	vg, err := m.volumeGroupByID(context.ResourceID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	physicalVolumeID, err := uuid.Parse(vg.PhysicalVolumeID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	pv, err := m.physicalVolumeByID(physicalVolumeID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	serviceID, err := uuid.Parse(pv.ServiceID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	agentService, err := m.agentServiceByID(serviceID)
-
-	if agentService == nil {
-		return CreateFailed
-	}
-
-	agentServiceHealth, err := m.agentServiceHealth(agentService.ID)
-
-	if err != nil {
-		return CreateFailed
-	}
-
-	if agentServiceHealth == "critical" {
-		return CreateFailed
-	}
-
-	vgCreateErr := m.vgCreate(agentService, vg)
-
-	if vgCreateErr != nil {
-		return CreateFailed
-	}
-
-	status := api.ResourceStatus_CREATE_COMPLETED
-
-	vg.Status = status
-
-	saveErr := m.saveVolumeGroup(vg)
-
-	if saveErr != nil {
-		return CreateFailed
-	}
-
-	return CreateCompleted
-}
-
-func (a *ReviewLogicalVolumeAction) Execute(eventCtx EventContent) EventType {
-	context := eventCtx.(*StateEventContext)
-
-	m := context.Manager
-
-	lv, err := m.logicalVolumeByID(context.ResourceID)
+	lv, err := logicalVolumeByID(consulAddr, context.ResourceID)
 
 	if err != nil {
 		return ReviewFailed
 	}
 
-	if lv.Status != api.ResourceStatus_REVIEW_IN_PROGRESS {
+	if lv.Status != status {
 		return ReviewFailed
 	}
 
@@ -517,7 +263,7 @@ func (a *ReviewLogicalVolumeAction) Execute(eventCtx EventContent) EventType {
 		return ReviewFailed
 	}
 
-	vg, err := m.volumeGroupByID(volumeGroupID)
+	vg, err := volumeGroupByID(consulAddr, volumeGroupID)
 
 	if err != nil {
 		return ReviewFailed
@@ -533,7 +279,7 @@ func (a *ReviewLogicalVolumeAction) Execute(eventCtx EventContent) EventType {
 		return ReviewFailed
 	}
 
-	pv, err := m.physicalVolumeByID(physicalVolumeID)
+	pv, err := physicalVolumeByID(consulAddr, physicalVolumeID)
 
 	if err != nil {
 		return ReviewFailed
@@ -549,7 +295,7 @@ func (a *ReviewLogicalVolumeAction) Execute(eventCtx EventContent) EventType {
 		return ReviewFailed
 	}
 
-	as, err := m.agentServiceByID(serviceID)
+	as, err := agentServiceByID(consulAddr, serviceID)
 
 	if err != nil {
 		return ReviewFailed
@@ -559,38 +305,30 @@ func (a *ReviewLogicalVolumeAction) Execute(eventCtx EventContent) EventType {
 		return ReviewFailed
 	}
 
-	status := api.ResourceStatus_REVIEW_COMPLETED
+	return ReviewCompleted
+}
 
-	lv.Status = status
+func (action *ReviewPhysicalVolumeAction) Execute(eventCtx utils.EventContent) utils.EventType {
+	consulAddr := action.ConsulAddr
 
-	saveErr := m.saveLogicalVolume(lv)
-
-	if saveErr != nil {
-		return ReviewFailed
-	}
+	context := eventCtx.(*ReviewEventContext)
 
 	fields := logrus.Fields{
 		"ResourceID":   context.ResourceID,
 		"ResourceType": context.ResourceType.String(),
 	}
 
+	status := api.ResourceStatus_REVIEW_IN_PROGRESS
+
 	logrus.WithFields(fields).Info(status.String())
 
-	return ReviewCompleted
-}
-
-func (a *ReviewPhysicalVolumeAction) Execute(eventCtx EventContent) EventType {
-	context := eventCtx.(*StateEventContext)
-
-	m := context.Manager
-
-	pv, err := m.physicalVolumeByID(context.ResourceID)
+	pv, err := physicalVolumeByID(consulAddr, context.ResourceID)
 
 	if err != nil {
 		return ReviewFailed
 	}
 
-	if pv.Status != api.ResourceStatus_REVIEW_IN_PROGRESS {
+	if pv.Status != status {
 		return ReviewFailed
 	}
 
@@ -600,7 +338,7 @@ func (a *ReviewPhysicalVolumeAction) Execute(eventCtx EventContent) EventType {
 		return ReviewFailed
 	}
 
-	as, err := m.agentServiceByID(pvServiceID)
+	as, err := agentServiceByID(consulAddr, pvServiceID)
 
 	if err != nil {
 		return ReviewFailed
@@ -610,38 +348,30 @@ func (a *ReviewPhysicalVolumeAction) Execute(eventCtx EventContent) EventType {
 		return ReviewFailed
 	}
 
-	status := api.ResourceStatus_REVIEW_COMPLETED
+	return ReviewCompleted
+}
 
-	pv.Status = status
+func (action *ReviewVolumeGroupAction) Execute(eventCtx utils.EventContent) utils.EventType {
+	consulAddr := action.ConsulAddr
 
-	saveErr := m.savePhysicalVolume(pv)
-
-	if saveErr != nil {
-		return ReviewFailed
-	}
+	context := eventCtx.(*ReviewEventContext)
 
 	fields := logrus.Fields{
 		"ResourceID":   context.ResourceID,
 		"ResourceType": context.ResourceType.String(),
 	}
 
+	status := api.ResourceStatus_REVIEW_IN_PROGRESS
+
 	logrus.WithFields(fields).Info(status.String())
 
-	return ReviewCompleted
-}
-
-func (a *ReviewVolumeGroupAction) Execute(eventCtx EventContent) EventType {
-	context := eventCtx.(*StateEventContext)
-
-	m := context.Manager
-
-	vg, err := m.volumeGroupByID(context.ResourceID)
+	vg, err := volumeGroupByID(consulAddr, context.ResourceID)
 
 	if err != nil {
 		return ReviewFailed
 	}
 
-	if vg.Status != api.ResourceStatus_REVIEW_IN_PROGRESS {
+	if vg.Status != status {
 		return ReviewFailed
 	}
 
@@ -651,7 +381,7 @@ func (a *ReviewVolumeGroupAction) Execute(eventCtx EventContent) EventType {
 		return ReviewFailed
 	}
 
-	pv, err := m.physicalVolumeByID(physicalVolumeID)
+	pv, err := physicalVolumeByID(consulAddr, physicalVolumeID)
 
 	if err != nil {
 		return ReviewFailed
@@ -667,7 +397,7 @@ func (a *ReviewVolumeGroupAction) Execute(eventCtx EventContent) EventType {
 		return ReviewFailed
 	}
 
-	as, err := m.agentServiceByID(serviceID)
+	as, err := agentServiceByID(consulAddr, serviceID)
 
 	if err != nil {
 		return ReviewFailed
@@ -677,69 +407,5 @@ func (a *ReviewVolumeGroupAction) Execute(eventCtx EventContent) EventType {
 		return ReviewFailed
 	}
 
-	status := api.ResourceStatus_REVIEW_COMPLETED
-
-	vg.Status = status
-
-	saveErr := m.saveVolumeGroup(vg)
-
-	if saveErr != nil {
-		return ReviewFailed
-	}
-
-	fields := logrus.Fields{
-		"ResourceID":   context.ResourceID,
-		"ResourceType": context.ResourceType.String(),
-	}
-
-	logrus.WithFields(fields).Info(status.String())
-
 	return ReviewCompleted
-}
-
-func (s *StateMachine) getNextState(event EventType) (StateType, error) {
-	if state, ok := s.States[s.Current]; ok {
-		if state.Events != nil {
-			if next, ok := state.Events[event]; ok {
-				return next, nil
-			}
-		}
-	}
-
-	return Default, errors.New("invalid_event")
-}
-
-func (s *StateMachine) SendEvent(event EventType, eventCtx EventContent) {
-	s.mutex.Lock()
-
-	defer s.mutex.Unlock()
-
-	for {
-		nextState, err := s.getNextState(event)
-
-		if err != nil {
-			logrus.Error(err)
-
-			return
-		}
-
-		state, ok := s.States[nextState]
-
-		if !ok || state.Action == nil {
-			// configuration error
-			return
-		}
-
-		s.Previous = s.Current
-
-		s.Current = nextState
-
-		nextEvent := state.Action.Execute(eventCtx)
-
-		if nextEvent == NoOp {
-			return
-		}
-
-		event = nextEvent
-	}
 }

@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/erkrnt/symphony/api"
 	"github.com/erkrnt/symphony/internal/service"
 	"github.com/erkrnt/symphony/internal/utils"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -17,7 +19,10 @@ import (
 // Block : block service
 type Block struct {
 	Service *service.Service
+	State   *utils.StateMachine
 }
+
+const maxTimeoutMs = 10000
 
 // New : creates new block service
 func New() (*Block, error) {
@@ -27,8 +32,11 @@ func New() (*Block, error) {
 		return nil, err
 	}
 
+	state := newState(service.Flags.ManagerAddr)
+
 	block := &Block{
 		Service: service,
+		State:   state,
 	}
 
 	return block, nil
@@ -45,7 +53,6 @@ func (b *Block) Start() {
 	}
 
 	go b.listenGRPC()
-
 	go b.listenSocket()
 }
 
@@ -111,6 +118,132 @@ func (b *Block) listenSocket() {
 	}
 }
 
+func (b *Block) watchLogicalVolumes() {
+	managerAddr := b.Service.Flags.ManagerAddr
+
+	serviceID := b.Service.Key.ServiceID
+
+	status := api.ResourceStatus_REVIEW_COMPLETED
+
+	reqOpts := &api.RequestLogicalVolumes{
+		ServiceID: serviceID.String(),
+		Status:    status,
+	}
+
+	pvs, err := logicalVolumes(managerAddr, reqOpts)
+
+	if err != nil {
+		b.Service.ErrorC <- err
+
+		return
+	}
+
+	for _, lv := range pvs {
+		resourceID, err := uuid.Parse(lv.ID)
+
+		if err != nil {
+			b.Service.ErrorC <- err
+
+			return
+		}
+
+		eventContext := &CreateEventContext{
+			ResourceID:   resourceID,
+			ResourceType: api.ResourceType_LOGICAL_VOLUME,
+		}
+
+		go b.State.Send(CreateInProgressLogicalVolume, eventContext)
+	}
+
+	time.Sleep(utils.RandomTimeout(maxTimeoutMs))
+
+	b.watchLogicalVolumes()
+}
+
+func (b *Block) watchPhysicalVolumes() {
+	managerAddr := b.Service.Flags.ManagerAddr
+
+	serviceID := b.Service.Key.ServiceID
+
+	status := api.ResourceStatus_REVIEW_COMPLETED
+
+	reqOpts := &api.RequestPhysicalVolumes{
+		ServiceID: serviceID.String(),
+		Status:    status,
+	}
+
+	pvs, err := physicalVolumes(managerAddr, reqOpts)
+
+	if err != nil {
+		b.Service.ErrorC <- err
+
+		return
+	}
+
+	for _, pv := range pvs {
+		resourceID, err := uuid.Parse(pv.ID)
+
+		if err != nil {
+			b.Service.ErrorC <- err
+
+			return
+		}
+
+		eventContext := &CreateEventContext{
+			ResourceID:   resourceID,
+			ResourceType: api.ResourceType_PHYSICAL_VOLUME,
+		}
+
+		go b.State.Send(CreateInProgressPhysicalVolume, eventContext)
+	}
+
+	time.Sleep(utils.RandomTimeout(maxTimeoutMs))
+
+	b.watchPhysicalVolumes()
+}
+
+func (b *Block) watchVolumeGroups() {
+	managerAddr := b.Service.Flags.ManagerAddr
+
+	serviceID := b.Service.Key.ServiceID
+
+	status := api.ResourceStatus_REVIEW_COMPLETED
+
+	reqOpts := &api.RequestVolumeGroups{
+		ServiceID: serviceID.String(),
+		Status:    status,
+	}
+
+	vgs, err := volumeGroups(managerAddr, reqOpts)
+
+	if err != nil {
+		b.Service.ErrorC <- err
+
+		return
+	}
+
+	for _, vg := range vgs {
+		resourceID, err := uuid.Parse(vg.ID)
+
+		if err != nil {
+			b.Service.ErrorC <- err
+
+			return
+		}
+
+		eventContext := &CreateEventContext{
+			ResourceID:   resourceID,
+			ResourceType: api.ResourceType_VOLUME_GROUP,
+		}
+
+		go b.State.Send(CreateInProgressVolumeGroup, eventContext)
+	}
+
+	time.Sleep(utils.RandomTimeout(maxTimeoutMs))
+
+	b.watchVolumeGroups()
+}
+
 func (b *Block) restart() error {
 	apiserverAddr := b.Service.Flags.ManagerAddr
 
@@ -135,7 +268,7 @@ func (b *Block) restart() error {
 	serviceID := b.Service.Key.ServiceID.String()
 
 	serviceOptions := &api.RequestService{
-		ServiceID: serviceID,
+		ID: serviceID,
 	}
 
 	service, err := c.GetService(ctx, serviceOptions)
@@ -147,6 +280,10 @@ func (b *Block) restart() error {
 	if service == nil {
 		return errors.New("invalid_service_id")
 	}
+
+	go b.watchLogicalVolumes()
+	go b.watchPhysicalVolumes()
+	go b.watchVolumeGroups()
 
 	return nil
 }

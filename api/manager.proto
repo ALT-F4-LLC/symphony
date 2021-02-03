@@ -30,13 +30,20 @@ service Manager {
   rpc RemovePhysicalVolume(RequestPhysicalVolume) returns (ResponseStatus) {}
   rpc RemoveService(RequestService) returns (ResponseStatus) {}
   rpc RemoveVolumeGroup(RequestVolumeGroup) returns (ResponseStatus) {}
+  
+  rpc UpdateLogicalVolume(RequestUpdateLogicalVolume) returns (LogicalVolume) {}
+  rpc UpdatePhysicalVolume(RequestUpdatePhysicalVolume) returns (PhysicalVolume) {}
+  rpc UpdateVolumeGroup(RequestUpdateVolumeGroup) returns (VolumeGroup) {}
 }
 
 message RequestLogicalVolume {
   string ID = 1;
 }
 
-message RequestLogicalVolumes {}
+message RequestLogicalVolumes {
+  string ServiceID = 1;
+  ResourceStatus Status = 2;
+}
 
 message ResponseLogicalVolumes {
   repeated LogicalVolume Results = 1;
@@ -81,14 +88,17 @@ message RequestPhysicalVolume {
   string ID = 1;
 }
 
-message RequestPhysicalVolumes {}
+message RequestPhysicalVolumes {
+  string ServiceID = 1;
+  ResourceStatus Status = 2;
+}
 
 message ResponsePhysicalVolumes {
   repeated PhysicalVolume Results = 1;
 }
 
 message RequestService {
-  string ServiceID = 1;
+  string ID = 1;
 }
 
 message RequestServices {}
@@ -97,11 +107,29 @@ message ResponseServices {
   repeated Service Results = 1;
 }
 
+message RequestUpdateLogicalVolume {
+  string ID = 1;
+  ResourceStatus Status = 2;
+}
+
+message RequestUpdatePhysicalVolume {
+  string ID = 1;
+  ResourceStatus Status = 2;
+}
+
+message RequestUpdateVolumeGroup {
+  string ID = 1;
+  ResourceStatus Status = 2;
+}
+
 message RequestVolumeGroup {
   string ID = 1;
 }
 
-message RequestVolumeGroups {}
+message RequestVolumeGroups {
+  string ServiceID = 1;
+  ResourceStatus Status = 2;
+}
 
 message ResponseVolumeGroups {
   repeated VolumeGroup Results = 1;

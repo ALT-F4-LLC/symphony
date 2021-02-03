@@ -32,10 +32,11 @@ message Image {
 
 message LogicalVolume {
   string ID = 1;
-  int64 Size = 2;
-  ResourceStatus Status = 3;
-  string TargetAddr = 4;
-  string VolumeGroupID = 5;
+  string ServiceID = 2;
+  int64 Size = 3;
+  ResourceStatus Status = 4;
+  string TargetAddr = 5;
+  string VolumeGroupID = 6;
 }
 
 message PhysicalVolume {
@@ -48,5 +49,6 @@ message PhysicalVolume {
 message VolumeGroup {
   string ID = 1;
   string PhysicalVolumeID = 2;
-  ResourceStatus Status = 3;
+  string ServiceID = 3;
+  ResourceStatus Status = 4;
 }

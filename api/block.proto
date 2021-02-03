@@ -4,21 +4,11 @@ option go_package = "github.com/erkrnt/symphony/api";
 
 package api;
 
-import "api/status.proto";
-
 // 0.0.0.0:15760
 service Block {
   rpc LvDisplay(RequestLv) returns (Lv) {}
   rpc PvDisplay(RequestPv) returns (Pv) {}
   rpc VgDisplay(RequestVg) returns (Vg) {}
-
-  rpc LvCreate(RequestLvCreate) returns (Lv) {}
-  rpc PvCreate(RequestPvCreate) returns (Pv) {}
-  rpc VgCreate(RequestVgCreate) returns (Vg) {}
-
-  rpc LvRemove(RequestLv) returns (ResponseStatus) {}
-  rpc PvRemove(RequestPv) returns (ResponseStatus) {}
-  rpc VgRemove(RequestVg) returns (ResponseStatus) {}
 }
 
 message Lv {
@@ -66,19 +56,4 @@ message RequestPv {
 
 message RequestVg {
   string ID = 1;
-}
-
-message RequestLvCreate {
-  string ID = 1;
-  int64 Size = 2;
-  string VolumeGroupID = 3;
-}
-
-message RequestPvCreate {
-  string DeviceName = 1;
-}
-
-message RequestVgCreate {
-  string DeviceName = 1;
-  string ID = 2;
 }
